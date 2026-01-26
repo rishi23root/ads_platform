@@ -1,5 +1,6 @@
 // Export all schema files from this directory
-// Example: export * from './users';
-
-// Empty export to make this a module
-export {};
+export * from './platforms';
+export * from './ads';
+export * from './notifications';
+export * from './extension-users';
+export * from './request-logs';

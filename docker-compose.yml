@@ -21,29 +21,29 @@ services:
     volumes:
       - redis_data:/data
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: ads_app_dev
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env.local
-    volumes:
-      # Mount entire project for hot reloading (except node_modules and .next)
-      - .:/app
-      - /app/node_modules
-      - /app/.next
-      - /app/.pnpm-store
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - NODE_ENV=development
-      - CI=true
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: development
+  #   container_name: ads_app_dev
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   env_file:
+  #     - .env.local
+  #   volumes:
+  #     # Mount entire project for hot reloading (except node_modules and .next)
+  #     - .:/app
+  #     - /app/node_modules
+  #     - /app/.next
+  #     - /app/.pnpm-store
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   environment:
+  #     - NODE_ENV=development
+  #     - CI=true
 
 volumes:
   postgres_data:

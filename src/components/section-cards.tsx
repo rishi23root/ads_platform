@@ -1,4 +1,4 @@
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react"
+import { IconAd2, IconBell, IconDeviceDesktop, IconTrendingUp, IconUsers, IconChartBar } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -10,91 +10,213 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-export function SectionCards() {
+interface SectionCardsProps {
+  totalAds: number;
+  activeAds: number;
+  expiredAds: number;
+  scheduledAds: number;
+  totalPlatforms: number;
+  activePlatforms: number;
+  totalNotifications: number;
+  unreadNotifications: number;
+  totalExtensionUsers: number;
+  totalRequests: number;
+  adsServed: number;
+  notificationsSent: number;
+}
+
+export function SectionCards({
+  totalAds,
+  activeAds,
+  expiredAds,
+  scheduledAds,
+  totalPlatforms,
+  activePlatforms,
+  totalNotifications,
+  unreadNotifications,
+  totalExtensionUsers,
+  totalRequests,
+  adsServed,
+  notificationsSent,
+}: SectionCardsProps) {
+  const activeAdsPercentage = totalAds > 0 ? Math.round((activeAds / totalAds) * 100) : 0;
+
   return (
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Total Revenue</CardDescription>
+          <CardDescription>Total Ads</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            $1,250.00
+            {totalAds}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingUp />
-              +12.5%
+              <IconAd2 className="size-3" />
+              {activeAds} active
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Trending up this month <IconTrendingUp className="size-4" />
+            {scheduledAds} scheduled, {expiredAds} expired
           </div>
           <div className="text-muted-foreground">
-            Visitors for the last 6 months
+            {activeAdsPercentage}% currently active
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>New Customers</CardDescription>
+          <CardDescription>Active Ads</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            1,234
+            {activeAds}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingDown />
-              -20%
+            <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400">
+              <IconTrendingUp className="size-3" />
+              {activeAdsPercentage}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <IconTrendingDown className="size-4" />
+            Currently running campaigns
           </div>
           <div className="text-muted-foreground">
-            Acquisition needs attention
+            {totalAds - activeAds - expiredAds - scheduledAds} inactive
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Active Accounts</CardDescription>
+          <CardDescription>Platforms</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            45,678
+            {totalPlatforms}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingUp />
-              +12.5%
+              <IconDeviceDesktop className="size-3" />
+              {activePlatforms} active
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Strong user retention <IconTrendingUp className="size-4" />
+            {activePlatforms} active platforms
           </div>
-          <div className="text-muted-foreground">Engagement exceed targets</div>
+          <div className="text-muted-foreground">
+            {totalPlatforms - activePlatforms} inactive
+          </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Growth Rate</CardDescription>
+          <CardDescription>Notifications</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            4.5%
+            {totalNotifications}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              +4.5%
+            <Badge variant="outline" className={unreadNotifications > 0 ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : ""}>
+              <IconBell className="size-3" />
+              {unreadNotifications} unread
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Steady performance increase <IconTrendingUp className="size-4" />
+            {unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'All caught up'}
           </div>
-          <div className="text-muted-foreground">Meets growth projections</div>
+          <div className="text-muted-foreground">
+            {totalNotifications - unreadNotifications} read
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Extension Users</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {totalExtensionUsers}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconUsers className="size-3" />
+              {totalRequests} requests
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Total extension users
+          </div>
+          <div className="text-muted-foreground">
+            {totalRequests} total requests logged
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Total Requests</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {totalRequests}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconChartBar className="size-3" />
+              All time
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Extension requests logged
+          </div>
+          <div className="text-muted-foreground">
+            {adsServed} ads, {notificationsSent} notifications
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Ads Served</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {adsServed}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400">
+              <IconAd2 className="size-3" />
+              Served
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Total ad requests
+          </div>
+          <div className="text-muted-foreground">
+            From extension users
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Notifications Sent</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {notificationsSent}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <IconBell className="size-3" />
+              Sent
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Total notification requests
+          </div>
+          <div className="text-muted-foreground">
+            From extension users
+          </div>
         </CardFooter>
       </Card>
     </div>
