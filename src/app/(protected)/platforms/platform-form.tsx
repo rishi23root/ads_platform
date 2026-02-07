@@ -23,6 +23,27 @@ export function PlatformForm({ platform, mode }: PlatformFormProps) {
   const [domain, setDomain] = useState(platform?.domain || '');
   const [isActive, setIsActive] = useState(platform?.isActive ?? true);
 
+  const extractDomainFromInput = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    
+    try {
+      // If it looks like a URL, extract hostname
+      const url = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+      return new URL(url).hostname;
+    } catch {
+      // If not a valid URL, assume it's already a domain
+      return trimmed;
+    }
+  };
+
+  const handleDomainBlur = () => {
+    const extracted = extractDomainFromInput(domain);
+    if (extracted !== domain) {
+      setDomain(extracted);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -78,10 +99,14 @@ export function PlatformForm({ platform, mode }: PlatformFormProps) {
               id="domain"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              placeholder="example.com"
+              onBlur={handleDomainBlur}
+              placeholder="example.com or https://www.example.com"
               required
               disabled={isLoading}
             />
+            <p className="text-sm text-muted-foreground">
+              Enter domain or subdomain (e.g., instagram.com, www.instagram.com). Full URLs will be automatically extracted.
+            </p>
           </div>
 
           <div className="flex items-center space-x-2">

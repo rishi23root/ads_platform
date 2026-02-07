@@ -20,6 +20,27 @@ function normalizeDomainForMatch(domain: string): string {
   }
 }
 
+function extractRootDomain(hostname: string): string {
+  const parts = hostname.split('.');
+  if (parts.length >= 2) {
+    return parts.slice(-2).join('.'); // e.g., "instagram.com"
+  }
+  return hostname;
+}
+
+function domainsMatch(domain1: string, domain2: string): boolean {
+  const host1 = normalizeDomainForMatch(domain1);
+  const host2 = normalizeDomainForMatch(domain2);
+  
+  // Exact match
+  if (host1 === host2) return true;
+  
+  // Root domain match (e.g., instagram.com matches www.instagram.com)
+  const root1 = extractRootDomain(host1);
+  const root2 = extractRootDomain(host2);
+  return root1 === root2 && root1.length > 0;
+}
+
 async function autoExpireAds() {
   const now = new Date();
   await db
@@ -84,18 +105,13 @@ export async function POST(request: NextRequest) {
     const shouldFetchNotifications =
       requestType === undefined || requestType === 'notification';
 
-    // Resolve platform by domain (with normalization)
-    const normalizedQuery = normalizeDomainForMatch(domain);
+    // Resolve platform by domain (with root domain matching)
     const allPlatforms = await db
       .select({ id: platforms.id, domain: platforms.domain })
       .from(platforms)
       .where(eq(platforms.isActive, true));
 
-    const platform = allPlatforms.find(
-      (p) =>
-        p.domain === domain ||
-        normalizeDomainForMatch(p.domain) === normalizedQuery
-    );
+    const platform = allPlatforms.find((p) => domainsMatch(p.domain, domain));
 
     // If no platform found, return empty arrays (200, not 404)
     if (!platform) {

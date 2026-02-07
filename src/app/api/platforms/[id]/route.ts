@@ -3,6 +3,20 @@ import { database as db } from '@/db';
 import { platforms } from '@/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 
+function normalizeDomain(domain: string): string {
+  const trimmed = domain.trim();
+  if (!trimmed) return trimmed;
+  
+  try {
+    // If it looks like a URL, extract hostname
+    const url = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+    return new URL(url).hostname;
+  } catch {
+    // If not a valid URL, assume it's already a domain
+    return trimmed;
+  }
+}
+
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
@@ -43,6 +57,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       );
     }
 
+    // Normalize domain (extract hostname from URL if needed)
+    const normalizedDomain = normalizeDomain(domain);
+
     // Check if name already exists for another platform
     const existingPlatform = await db
       .select()
@@ -61,7 +78,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .update(platforms)
       .set({
         name,
-        domain,
+        domain: normalizedDomain,
         isActive: isActive ?? true,
         updatedAt: new Date(),
       })
