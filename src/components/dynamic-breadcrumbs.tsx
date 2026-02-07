@@ -17,6 +17,7 @@ const routeLabels: Record<string, string> = {
   "/platforms": "Platforms",
   "/ads": "Ads",
   "/notifications": "Notifications",
+  "/analytics": "Extension Insights",
   "/new": "New",
   "/edit": "Edit",
 }

@@ -2,8 +2,8 @@ import { ChartAreaInteractive } from '@/components/chart-area-interactive';
 import { DashboardAdsTable } from '@/components/dashboard-ads-table';
 import { SectionCards } from '@/components/section-cards';
 import { database as db } from '@/db';
-import { ads, platforms, notifications, extensionUsers, requestLogs } from '@/db/schema';
-import { eq, lt, and, sql } from 'drizzle-orm';
+import { ads, platforms, notifications } from '@/db/schema';
+import { eq, lt, and } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +25,8 @@ export default async function DashboardPage() {
   // Auto-expire ads that have passed their end date
   await autoExpireAds();
 
-  // Fetch all data
-  const [allAdsForStats, recentAds, allPlatforms, allNotifications, allExtensionUsers, adLogsCount, notificationLogsCount] = await Promise.all([
+  // Fetch all data (analytics stats are on the Analytics page only)
+  const [allAdsForStats, recentAds, allPlatforms, allNotifications] = await Promise.all([
     db.select({ status: ads.status }).from(ads), // For stats only
     db
       .select({
@@ -46,9 +46,6 @@ export default async function DashboardPage() {
       .limit(10),
     db.select().from(platforms),
     db.select().from(notifications),
-    db.select().from(extensionUsers),
-    db.select({ count: sql<number>`count(*)` }).from(requestLogs).where(eq(requestLogs.requestType, 'ad')),
-    db.select({ count: sql<number>`count(*)` }).from(requestLogs).where(eq(requestLogs.requestType, 'notification')),
   ]);
 
   // Calculate stats from all ads
@@ -58,12 +55,6 @@ export default async function DashboardPage() {
   const scheduledAds = allAdsForStats.filter((ad) => ad.status === 'scheduled').length;
   const activePlatforms = allPlatforms.filter((p) => p.isActive).length;
   const unreadNotifications = allNotifications.filter((n) => !n.isRead).length;
-  
-  // Analytics stats
-  const totalExtensionUsers = allExtensionUsers.length;
-  const totalRequests = allExtensionUsers.reduce((sum, user) => sum + user.totalRequests, 0);
-  const adsServed = Number(adLogsCount[0]?.count || 0);
-  const notificationsSent = Number(notificationLogsCount[0]?.count || 0);
 
   // Prepare data for dashboard table (showing recent ads)
   const tableData = recentAds.map((ad) => ({
@@ -94,10 +85,6 @@ export default async function DashboardPage() {
         activePlatforms={activePlatforms}
         totalNotifications={allNotifications.length}
         unreadNotifications={unreadNotifications}
-        totalExtensionUsers={totalExtensionUsers}
-        totalRequests={totalRequests}
-        adsServed={adsServed}
-        notificationsSent={notificationsSent}
       />
       <div className="px-4 lg:px-6">
         <ChartAreaInteractive />

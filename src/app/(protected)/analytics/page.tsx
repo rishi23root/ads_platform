@@ -37,7 +37,7 @@ export default async function AnalyticsPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Analytics</h1>
+        <h1 className="text-2xl font-semibold">Extension Insights</h1>
         <p className="text-muted-foreground">Extension user activity and request logs</p>
       </div>
 

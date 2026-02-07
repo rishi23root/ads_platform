@@ -18,6 +18,8 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -29,31 +31,41 @@ const data = {
     name: "Admin",
     email: "admin@example.com",
   },
-  navMain: [
+  navSections: [
     {
-      title: "Dashboard",
-      url: "/",
-      icon: IconDashboard,
+      label: "Overview",
+      items: [
+        {
+          title: "Dashboard",
+          url: "/",
+          icon: IconDashboard,
+        },
+        {
+          title: "Extension Insights",
+          url: "/analytics",
+          icon: IconChartBar,
+        },
+      ],
     },
     {
-      title: "Platforms",
-      url: "/platforms",
-      icon: IconDeviceDesktop,
-    },
-    {
-      title: "Ads",
-      url: "/ads",
-      icon: IconAd2,
-    },
-    {
-      title: "Notifications",
-      url: "/notifications",
-      icon: IconBell,
-    },
-    {
-      title: "Analytics",
-      url: "/analytics",
-      icon: IconChartBar,
+      label: "Content",
+      items: [
+        {
+          title: "Platforms",
+          url: "/platforms",
+          icon: IconDeviceDesktop,
+        },
+        {
+          title: "Ads",
+          url: "/ads",
+          icon: IconAd2,
+        },
+        {
+          title: "Notifications",
+          url: "/notifications",
+          icon: IconBell,
+        },
+      ],
     },
   ],
 }
@@ -77,7 +89,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        {data.navSections.map((section) => (
+          <SidebarGroup key={section.label}>
+            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+            <NavMain items={section.items} />
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <SidebarThemeToggle />
