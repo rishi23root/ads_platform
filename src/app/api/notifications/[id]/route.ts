@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { notifications, notificationPlatforms, platforms } from '@/db/schema';
+import { notifications } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-// GET single notification with its platforms
+// GET single notification
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
@@ -22,34 +22,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
 
-    // Get associated platforms
-    const associatedPlatforms = await db
-      .select({
-        platformId: notificationPlatforms.platformId,
-        platformName: platforms.name,
-        platformDomain: platforms.domain,
-      })
-      .from(notificationPlatforms)
-      .innerJoin(platforms, eq(notificationPlatforms.platformId, platforms.id))
-      .where(eq(notificationPlatforms.notificationId, id));
-
-    return NextResponse.json({
-      ...notification,
-      platforms: associatedPlatforms,
-      platformIds: associatedPlatforms.map((p) => p.platformId),
-    });
+    return NextResponse.json(notification);
   } catch (error) {
     console.error('Error fetching notification:', error);
     return NextResponse.json({ error: 'Failed to fetch notification' }, { status: 500 });
   }
 }
 
-// PUT update notification
+// PUT update notification (global, no platform association)
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { title, message, startDate, endDate, platformIds } = body;
+    const { title, message, startDate, endDate } = body;
 
     if (!title || !message) {
       return NextResponse.json(
@@ -61,13 +46,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!startDate || !endDate) {
       return NextResponse.json(
         { error: 'Start date and end date are required' },
-        { status: 400 }
-      );
-    }
-
-    if (!platformIds || !Array.isArray(platformIds) || platformIds.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one platform/domain is required' },
         { status: 400 }
       );
     }
@@ -89,19 +67,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
 
-    // Delete existing platform mappings
-    await db
-      .delete(notificationPlatforms)
-      .where(eq(notificationPlatforms.notificationId, id));
-
-    // Create new platform mappings
-    await db.insert(notificationPlatforms).values(
-      platformIds.map((platformId: string) => ({
-        notificationId: id,
-        platformId,
-      }))
-    );
-
     return NextResponse.json(updatedNotification);
   } catch (error) {
     console.error('Error updating notification:', error);
@@ -109,7 +74,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE notification (cascade will handle notificationPlatforms)
+// DELETE notification
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;

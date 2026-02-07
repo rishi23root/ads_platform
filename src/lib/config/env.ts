@@ -10,7 +10,11 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 });
 
-function validateEnv() {
+type Env = z.infer<typeof envSchema>;
+
+let _env: Env | null = null;
+
+function validateEnv(): Env {
   try {
     return envSchema.parse(process.env);
   } catch (error) {
@@ -22,4 +26,22 @@ function validateEnv() {
   }
 }
 
-export const env = validateEnv();
+/**
+ * Lazily validated env. During `next build` the env vars don't exist, so
+ * validation fails — we fall back to the raw process.env value (undefined).
+ * At runtime the vars are present, validation succeeds, and the result is cached.
+ */
+export const env: Env = new Proxy({} as Env, {
+  get(_target, prop: string) {
+    if (!_env) {
+      try {
+        _env = validateEnv();
+      } catch {
+        // Build time — env vars aren't available. Return the raw value
+        // (undefined). No real DB/auth calls happen during build.
+        return process.env[prop];
+      }
+    }
+    return _env[prop as keyof Env];
+  },
+});

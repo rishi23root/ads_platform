@@ -2,15 +2,14 @@
 
 ## Overview
 
-The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema consists of 5 main tables plus 1 join table for many-to-many relationships.
+The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes platforms, ads, notifications (global), notification_reads (per-user pull tracking), extension_users, and request_logs.
 
 ## Entity Relationship Diagram
 
 ```mermaid
 erDiagram
     platforms ||--o{ ads : "has"
-    platforms ||--o{ notification_platforms : "linked via"
-    notifications ||--o{ notification_platforms : "linked via"
+    notifications ||--o{ notification_reads : "pulled by"
     extension_users ||--o{ request_logs : "creates"
     
     platforms {
@@ -47,10 +46,11 @@ erDiagram
         timestamp updated_at
     }
     
-    notification_platforms {
+    notification_reads {
         uuid id PK
         uuid notification_id FK
-        uuid platform_id FK
+        varchar visitor_id
+        timestamp read_at
     }
     
     extension_users {
@@ -89,7 +89,6 @@ Stores platform/domain configurations where ads and notifications will be displa
 
 **Relationships:**
 - One-to-many with `ads` (via `platform_id`)
-- Many-to-many with `notifications` (via `notification_platforms`)
 
 **Indexes:**
 - Primary key on `id`
@@ -161,47 +160,39 @@ Stores notification messages with date ranges and multi-platform support.
 | `updated_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Last update timestamp |
 
 **Relationships:**
-- Many-to-many with `platforms` (via `notification_platforms`)
+- One-to-many with `notification_reads` (via `notification_id`)
 
 **Indexes:**
 - Primary key on `id`
 
 **Usage:**
-- Admin creates notifications with messages and date ranges
-- Notifications can be linked to multiple platforms
-- Extension API returns only notifications where `start_date <= now() <= end_date`
+- Admin creates notifications with messages and date ranges (global; no domain/platform link)
+- Extension API returns active notifications (where `start_date <= now() <= end_date`) that this user has not yet pulled (see `notification_reads`)
 - `is_read` flag for admin tracking (not used by extension)
 
-**Date Filtering:**
-Extension API automatically filters notifications by date range. Only notifications where the current time is between `start_date` and `end_date` are returned.
+**Date filtering:** Only notifications where the current time is between `start_date` and `end_date` are considered active.
 
 ---
 
-### notification_platforms
+### notification_reads
 
-Join table for many-to-many relationship between notifications and platforms.
+Tracks which notifications each user has already pulled (so each notification is shown only once per user).
 
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
-| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique join record identifier |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique record identifier |
 | `notification_id` | uuid | NOT NULL, FOREIGN KEY | Notification reference |
-| `platform_id` | uuid | NOT NULL, FOREIGN KEY | Platform reference |
+| `visitor_id` | varchar(255) | NOT NULL | Extension-provided user ID (same as in request body) |
+| `read_at` | timestamp with time zone | NOT NULL, DEFAULT now() | When the user pulled this notification |
 
 **Relationships:**
-- Many-to-one with `notifications` (via `notification_id`)
-  - Foreign key with `ON DELETE CASCADE` (notification deletion removes links)
-- Many-to-one with `platforms` (via `platform_id`)
-  - Foreign key with `ON DELETE CASCADE` (platform deletion removes links)
+- Many-to-one with `notifications` (via `notification_id`), ON DELETE CASCADE
 
-**Indexes:**
-- Primary key on `id`
-- Foreign key indexes on `notification_id` and `platform_id`
+**Unique constraint:** `(notification_id, visitor_id)` — one row per user per notification.
 
 **Usage:**
-- Links notifications to specific platforms
-- One notification can be linked to multiple platforms
-- One platform can have multiple notifications
-- Cascade deletion ensures referential integrity
+- When the extension calls the API with `requestType: "notification"` (or omits it), the API returns only active notifications that have no row in `notification_reads` for that `visitorId`
+- After returning notifications, the API inserts rows into `notification_reads` so they are not returned again for that user
 
 ---
 
@@ -263,14 +254,14 @@ Logs individual extension requests for analytics purposes.
 - No foreign key constraint (visitor_id is varchar, not FK)
 
 **Usage:**
-- Created when extension calls `/api/extension/log`
+- Created automatically when extension calls `/api/extension/ad-block`
 - Tracks which domains are being accessed
 - Tracks request types (ad vs notification)
 - Used for analytics dashboard
 - Analytics shows last 100 logs (no pagination currently)
 
 **Logging Flow:**
-1. Extension calls `/api/extension/log` with `visitorId`, `domain`, `requestType`
+1. Extension calls `/api/extension/ad-block` with `visitorId`, `domain`, and optional `requestType`
 2. API upserts `extension_users` record
 3. API inserts new `request_logs` record
 4. Both operations happen in same request
@@ -326,14 +317,12 @@ Request type enumeration for analytics logging.
    - Logs reference user via `visitor_id` (varchar, not FK)
    - No foreign key constraint (flexibility for extension-provided IDs)
 
-### Many-to-Many
+### Notification Read Tracking
 
-1. **platforms ↔ notifications**
-   - One platform can have many notifications
-   - One notification can be on many platforms
-   - Join table: `notification_platforms`
-   - Foreign keys: `notification_id` → `notifications.id`, `platform_id` → `platforms.id`
-   - On delete: CASCADE (deletion removes links)
+1. **notifications → notification_reads**
+   - Notifications are global (no platform link)
+   - `notification_reads` tracks which notifications each user (by `visitor_id`) has already pulled
+   - Unique on `(notification_id, visitor_id)`; foreign key `notification_id` → `notifications.id` ON DELETE CASCADE
 
 ---
 
@@ -345,11 +334,11 @@ Request type enumeration for analytics logging.
 
 ### Foreign Keys
 - `ads.platform_id` → `platforms.id`
-- `notification_platforms.notification_id` → `notifications.id`
-- `notification_platforms.platform_id` → `platforms.id`
+- `notification_reads.notification_id` → `notifications.id` (ON DELETE CASCADE)
 
 ### Unique Constraints
 - `extension_users.visitor_id` (unique)
+- `notification_reads (notification_id, visitor_id)` (unique)
 
 ### Implicit Indexes
 - Foreign keys are automatically indexed
@@ -441,35 +430,29 @@ const activeAds = await db
   );
 ```
 
-### Fetching Active Notifications for Domain
+### Fetching Active Notifications Not Yet Pulled by User
 
 ```typescript
-// Find platform by domain
-const [platform] = await db
-  .select()
-  .from(platforms)
-  .where(eq(platforms.domain, domain))
-  .limit(1);
-
-// Get active notifications linked to platform
+// Get active notifications that this visitor has not yet pulled (left join notification_reads)
 const activeNotifications = await db
   .select({
     id: notifications.id,
     title: notifications.title,
     message: notifications.message,
-    startDate: notifications.startDate,
-    endDate: notifications.endDate,
   })
   .from(notifications)
-  .innerJoin(
-    notificationPlatforms,
-    eq(notifications.id, notificationPlatforms.notificationId)
+  .leftJoin(
+    notificationReads,
+    and(
+      eq(notificationReads.notificationId, notifications.id),
+      eq(notificationReads.visitorId, visitorId)
+    )
   )
   .where(
     and(
-      eq(notificationPlatforms.platformId, platform.id),
       lte(notifications.startDate, now),
-      gte(notifications.endDate, now)
+      gte(notifications.endDate, now),
+      isNull(notificationReads.id)
     )
   );
 ```

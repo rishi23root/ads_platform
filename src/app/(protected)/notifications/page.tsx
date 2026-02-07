@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { database as db } from '@/db';
-import { notifications, notificationPlatforms, platforms } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { notifications } from '@/db/schema';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -35,39 +34,12 @@ export default async function NotificationsPage() {
     .from(notifications)
     .orderBy(notifications.createdAt);
 
-  // Fetch all notification-platform mappings with platform details
-  const notificationPlatformMappings = await db
-    .select({
-      notificationId: notificationPlatforms.notificationId,
-      platformId: notificationPlatforms.platformId,
-      platformName: platforms.name,
-      platformDomain: platforms.domain,
-    })
-    .from(notificationPlatforms)
-    .innerJoin(platforms, eq(notificationPlatforms.platformId, platforms.id));
-
-  // Group platforms by notification ID
-  const platformsByNotification = notificationPlatformMappings.reduce(
-    (acc, mapping) => {
-      if (!acc[mapping.notificationId]) {
-        acc[mapping.notificationId] = [];
-      }
-      acc[mapping.notificationId].push({
-        id: mapping.platformId,
-        name: mapping.platformName,
-        domain: mapping.platformDomain,
-      });
-      return acc;
-    },
-    {} as Record<string, { id: string; name: string; domain: string }[]>
-  );
-
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Notifications</h1>
-          <p className="text-muted-foreground">Manage system notifications for specific domains</p>
+          <p className="text-muted-foreground">Manage global system notifications</p>
         </div>
         <Button asChild>
           <Link href="/notifications/new">
@@ -85,20 +57,18 @@ export default async function NotificationsPage() {
               <TableHead>Message</TableHead>
               <TableHead>Date Range</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Domains</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {allNotifications.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   No notifications found. Create your first notification.
                 </TableCell>
               </TableRow>
             ) : (
               allNotifications.map((notification) => {
-                const notificationPlatforms = platformsByNotification[notification.id] || [];
                 const status = getStatusBadge(notification.startDate, notification.endDate);
 
                 return (
@@ -118,24 +88,6 @@ export default async function NotificationsPage() {
                       <Badge variant={status.variant}>
                         {status.label}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-xs">
-                        {notificationPlatforms.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">No domains</span>
-                        ) : (
-                          notificationPlatforms.slice(0, 3).map((platform) => (
-                            <Badge key={platform.id} variant="outline" className="text-xs">
-                              {platform.name}
-                            </Badge>
-                          ))
-                        )}
-                        {notificationPlatforms.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{notificationPlatforms.length - 3} more
-                          </Badge>
-                        )}
-                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

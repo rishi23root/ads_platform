@@ -43,10 +43,11 @@ flowchart TB
 - **Components**: Reusable UI components built with shadcn/ui
 
 #### 2. API Layer
-- **Extension API** (`/api/ads`, `/api/notifications`, `/api/extension/log`)
-  - Public endpoints (no authentication)
-  - Domain-based filtering
-  - Request logging for analytics
+- **Extension API** (`/api/extension/ad-block`)
+  - Public endpoint (no authentication)
+  - **Ads**: domain-based filtering with normalization
+  - **Notifications**: global (no domain); per-user read tracking so each notification is returned only until the user has pulled it (by `visitorId`)
+  - Automatic visit logging for analytics
   
 - **Admin API** (`/api/platforms`, `/api/ads`, `/api/notifications`)
   - Protected endpoints (require authentication)
@@ -99,16 +100,13 @@ sequenceDiagram
     participant API as Extension API
     participant DB as PostgreSQL
     
-    Ext->>API: GET /api/ads?domain=example.com
-    API->>DB: Query Active Ads
-    DB->>API: Return Ads
-    API->>Ext: JSON Response
-    
-    Ext->>API: POST /api/extension/log
-    API->>DB: Insert Request Log
-    API->>DB: Update Extension User
-    DB->>API: Confirm Insert
-    API->>Ext: Success Response
+    Ext->>API: POST /api/extension/ad-block<br/>{visitorId, domain, requestType?}
+    API->>DB: Resolve Platform (normalized domain)
+    API->>DB: Query Active Ads and/or Notifications
+    DB->>API: Return Data
+    API->>DB: Upsert Extension User
+    API->>DB: Insert Request Log(s)
+    API->>Ext: {ads: [...], notifications: [...]}
 ```
 
 ## Data Flow
@@ -122,14 +120,14 @@ sequenceDiagram
 5. **Response**: Returns created ad data
 6. **Client**: Updates UI, redirects or shows success
 
-### Extension Fetching Ads
+### Extension Fetching Ads and Notifications
 
-1. **Extension**: Detects user on configured domain
-2. **API Call**: GET `/api/ads?domain=example.com`
-3. **Database**: Queries active ads for platform matching domain
-4. **Response**: Returns array of active ads
-5. **Extension**: Displays ads to user
-6. **Logging**: Extension calls `/api/extension/log` to record request
+1. **Extension**: Provides stable `visitorId`; sends domain for ads and logging
+2. **API Call**: POST `/api/extension/ad-block` with `{visitorId, domain, requestType?}`
+3. **Database**: Resolves platform by domain for ads; for notifications, fetches global active notifications excluding those already pulled by this `visitorId`
+4. **Response**: Returns `{ads: [...], notifications: [...]}` (always arrays; public fields only)
+5. **Extension**: Displays ads (per domain) and notifications (e.g. once per day when extension loads)
+6. **Logging**: Automatic - visit(s) logged to `request_logs` and `extension_users` updated
 
 ## API Endpoints Summary
 
@@ -144,25 +142,27 @@ sequenceDiagram
 
 #### Ads
 - `GET /api/ads` - List all ads (admin view with platform info)
-- `GET /api/ads?domain={domain}` - Get active ads for domain (extension use)
+- `GET /api/ads?domain={domain}` - Get active ads for domain (admin/testing use)
 - `POST /api/ads` - Create ad
 - `GET /api/ads/[id]` - Get ad details
 - `PUT /api/ads/[id]` - Update ad
 - `DELETE /api/ads/[id]` - Delete ad
 
 #### Notifications
-- `GET /api/notifications` - List all notifications (admin view)
-- `GET /api/notifications?domain={domain}` - Get active notifications for domain
-- `POST /api/notifications` - Create notification
+- `GET /api/notifications` - List all notifications (admin view; global, no domain filter)
+- `POST /api/notifications` - Create notification (global)
 - `GET /api/notifications/[id]` - Get notification details
 - `PUT /api/notifications/[id]` - Update notification
 - `DELETE /api/notifications/[id]` - Delete notification
 
 ### Extension API (Public - No Authentication)
 
-- `GET /api/ads?domain={domain}` - Get active ads for domain
-- `GET /api/notifications?domain={domain}` - Get active notifications for domain
-- `POST /api/extension/log` - Log extension request (analytics)
+- `POST /api/extension/ad-block` - Get ads and/or notifications and automatically log visit(s)
+  - Body: `{visitorId: string, domain: string, requestType?: "ad" | "notification"}`
+  - Ads: filtered by domain (platform). Notifications: global; only returns notifications the user has not yet pulled (tracked by `visitorId`)
+  - If `requestType` omitted, returns both; response: `{ads: [...], notifications: [...]}` (arrays, public fields only)
+- `POST /api/extension/notifications` - Get notifications only (no domain required)
+  - Body: `{visitorId: string}`. Response: `{notifications: [...]}`. Use for notifications-only calls (e.g. once per day on extension load).
 
 ### Authentication API
 

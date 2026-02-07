@@ -48,9 +48,9 @@ This document explains how the **browser extension** and **admin dashboard** wor
 
 | Component            | Responsibility |
 |----------------------|----------------|
-| **Admin Dashboard**  | Store platforms (domains), ads, notifications; serve them by domain; accept and store extension request logs; show analytics (charts, etc.). |
-| **Browser Extension**| On each configured domain: fetch ads and notifications, replace ads / show notifications, send one or more log entries to `/api/extension/log` (e.g. one per “ad” and one per “notification” when both are used). |
-| **Database**         | `platforms`, `ads`, `notifications`, `notification_platforms`, `extension_users`, `request_logs`. |
+| **Admin Dashboard**  | Store platforms (domains), ads, and global notifications; serve ads by domain and notifications globally (per-user read tracking); single extension endpoint logs visits and returns data; show analytics. |
+| **Browser Extension**| Provides stable `visitorId`; calls `POST /api/extension/ad-block` to get ads (per domain) and notifications (global, once per user). Renders ads and notifications; no separate log endpoint. |
+| **Database**         | `platforms`, `ads`, `notifications`, `notification_reads`, `extension_users`, `request_logs`. |
 | **Redis**           | Used for admin session (login). Not used for extension traffic. |
 
 There is **no real-time push** (e.g. WebSockets) from dashboard to extension. All “notification” content is just **data** the extension fetches via the same API; “notification” in the API means “notification-type content,” not a push notification.
@@ -65,13 +65,9 @@ All communication is **HTTP (REST)**. The extension is the only client of these 
 
 | Purpose              | Method | Endpoint                          | When extension typically calls |
 |----------------------|--------|-----------------------------------|---------------------------------|
-| Get ads for domain   | GET    | `/api/ads?domain={domain}`        | When it needs to show ads (e.g. on page load / domain match). |
-| Get notifications    | GET    | `/api/notifications?domain={domain}` | When it needs to show notifications for that domain. |
-| Send analytics       | POST   | `/api/extension/log`              | After an ad or notification is used (one POST per event type in current design). |
+| Get ads/notifications and log visit | POST   | `/api/extension/ad-block`        | On page load or when domain matches. Fetches ads and/or notifications and automatically logs visit(s). |
 
-- **Ads**: extension sends `domain`; dashboard returns active ads for the platform that matches that domain.
-- **Notifications**: same idea: `domain` → platform → notifications linked to that platform and within their date range.
-- **Log**: body is `{ visitorId, domain, requestType }` with `requestType` either `"ad"` or `"notification"`. Each successful POST creates one row in `request_logs` and updates (or creates) `extension_users` (e.g. `lastSeenAt`, `totalRequests`).
+- **Ad Block**: extension sends `{ visitorId, domain, requestType? }`. `visitorId` is provided by the extension (stable user ID). Ads are resolved by domain; notifications are global and only those not yet pulled by this `visitorId` are returned. Response is always `{ads: [...], notifications: [...]}` (arrays). Visit(s) are logged automatically.
 
 ### 3.2 Dashboard → Extension
 
@@ -85,23 +81,18 @@ So “notification” in the product sense is: **extension pulls notification co
 ### 3.3 Data flow summary
 
 ```
-Extension (user on example.com)
+Extension (provides visitorId; e.g. on example.com for ads)
     │
-    ├─ GET /api/ads?domain=example.com
-    │       → Dashboard queries DB (platform by domain → active ads)
-    │       → Returns JSON array of ads
-    │
-    ├─ GET /api/notifications?domain=example.com
-    │       → Dashboard queries DB (platform → notifications in date range)
-    │       → Returns JSON array of notifications
-    │
-    └─ POST /api/extension/log (once or twice per “page use”)
-            Body: { visitorId, domain, requestType: "ad" } and/or { ..., requestType: "notification" }
-            → Dashboard: insert into request_logs, upsert extension_users
-            → Returns 201 + log object
+    └─ POST /api/extension/ad-block
+            Body: { visitorId, domain, requestType? }
+            → Dashboard: resolve platform by domain for ads; fetch global notifications not yet read by visitorId
+            → Returns { ads: [...], notifications: [...] } (always arrays)
+            → Automatically: upsert extension_users, insert request_logs
 ```
 
-Details of the log API (validation, errors, one JSON object per request) are in [EXTENSION_LOG_API.md](./EXTENSION_LOG_API.md).
+**Recommended:** Call for **ads** on domain page load; call for **notifications** once per day when the user opens the browser or when the extension loads (response is the list of new notifications for that user).
+
+Full request/response shapes, errors, and TypeScript types: [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
 
 ---
 
@@ -109,19 +100,18 @@ Details of the log API (validation, errors, one JSON object per request) are in 
 
 ### 4.1 Configuration (in the dashboard)
 
-1. **Platforms**: each platform has a **domain** (e.g. `example.com`). Ads and notifications are tied to platforms.
+1. **Platforms**: each platform has a **domain** (e.g. `example.com`). Ads are tied to platforms.
 2. **Ads**: linked to one platform; have status (e.g. `active`) and optional start/end dates. Dashboard auto-expires ads when `endDate` has passed.
-3. **Notifications**: have `startDate` and `endDate` and are linked to **one or more platforms** via `notification_platforms`. So one notification can show on many domains.
+3. **Notifications**: global (not tied to domains). Have `startDate` and `endDate`. Each notification is returned to a user only until they have “pulled” it (tracked by `visitorId` in `notification_reads`).
 
 ### 4.2 Extension flow (what the extension does)
 
-1. User visits a page; extension gets domain (e.g. from `window.location.hostname`).
-2. **Fetch ads**: `GET /api/ads?domain=example.com` → list of active ads for that domain.
-3. **Fetch notifications**: `GET /api/notifications?domain=example.com` → list of notifications currently in range for that domain.
-4. Extension renders ads (e.g. replace existing ad slots) and shows notifications (e.g. banner or popup).
-5. **Log usage**: `POST /api/extension/log` with `requestType: "ad"` and/or `requestType: "notification"` (current design often uses one POST per type).
+1. **User ID**: extension provides a stable `visitorId` (e.g. generated once, stored in extension storage).
+2. **Ads**: on domain page load, call `POST /api/extension/ad-block` with `{visitorId, domain}` or `requestType: "ad"`. Use the `ads` array from the response (domain-specific).
+3. **Notifications**: call once per day when the user opens the browser or when the extension loads (e.g. `requestType: "notification"`). Use the `notifications` array; it contains only notifications this user has not yet received.
+4. Response is always `{ads: [...], notifications: [...]}` (arrays). Logging is automatic.
 
-So “how notification works” is: **dashboard stores notification content and date range; extension asks “what notifications are active for this domain?” and then displays them and logs that it did so.**
+So “how notification works” is: **dashboard stores global notification content and date range; extension asks “what notifications are new for this user?” once per session/day and displays the returned list.**
 
 ---
 
@@ -131,105 +121,69 @@ Request volume scales with **number of extension users × how often each one tri
 
 Typical causes of high request rate:
 
-1. **Per-event logging**  
-   If the extension sends one `POST /api/extension/log` per ad view and per notification view, then:
-   - One page load with 3 ad slots + 1 notification → 4 log requests.
-   - Many tabs or many navigations → multiplies that.
+1. **Calling ad-block on every page load / tab**  
+   If the extension calls `POST /api/extension/ad-block` on every navigation or tab switch without caching, request count grows with page loads and tabs.
 
-2. **No (or short) caching**  
-   If the extension calls `GET /api/ads` and `GET /api/notifications` on every page load or every tab switch without caching, request count grows with page loads and tabs.
+2. **Notifications too often**  
+   Notifications are global and per-user; calling with `requestType: "notification"` on every load is unnecessary. Call once per day when the extension loads instead.
 
 3. **Many users / many domains**  
    Same logic per user; more users and more domains mean more total requests.
 
-4. **No batching**  
-   Each log event is one HTTP request. With batching, N events can become 1 request.
-
-So “many requests each second” usually means: **lots of small, frequent calls from the extension to the dashboard**, especially to `/api/extension/log` and/or to the ads and notifications GET endpoints.
+So “many requests each second” usually means: **frequent calls to `/api/extension/ad-block`** (e.g. no caching for ads, or notifications requested on every load).
 
 ---
 
 ## 6. Improving Data Delivery: Fewer Requests, Same Data
 
-You can reduce requests **without losing data** by changing both the **extension** and, where needed, the **backend**.
+### 6.1 Extension-side: cache ads by domain
 
-### 6.1 Extension-side: cache ads and notifications
+- **Idea**: Cache the `ads` part of the ad-block response (or the full response when you request both) keyed by `domain`, in memory or extension storage.
+- **TTL**: e.g. 5–15 minutes. After TTL, refetch when the user hits that domain again.
+- **Effect**: Same domain in many tabs or quick refreshes = one ad-block call per TTL per domain instead of per load.
 
-- **Idea**: Cache the responses of `GET /api/ads?domain=...` and `GET /api/notifications?domain=...` in memory or extension storage (e.g. by `domain`).
-- **TTL**: e.g. 5–15 minutes. After TTL, next time the extension needs data for that domain, it refetches.
-- **Effect**: Same domain in many tabs or quick refreshes = 1 pair of GETs per TTL instead of per load. Fewer GET requests per second.
+### 6.2 Notifications: once per day when extension loads
 
-Optional: invalidate or shorten TTL when the user explicitly refreshes or when the extension updates.
+- **Idea**: Notifications are global and each is shown only once per user. Call `POST /api/extension/ad-block` with `requestType: "notification"` (or omit for both) **once per day when the user opens the browser or when the extension loads**, not on every page load.
+- **Effect**: One notification fetch per user per day; response is the list of new notifications. No need to refetch notifications on every domain visit.
 
-### 6.2 Extension-side: batch log events (recommended)
+### 6.3 Throttling / debouncing
 
-- **Idea**: Do **not** send one `POST /api/extension/log` per event. Instead, **buffer** events in the extension and send them in a **batch** every N seconds or when the buffer reaches M items.
-- **Example**: Buffer `{ visitorId, domain, requestType }[]` and every 30 seconds (or when 10 items are queued) send one `POST` with a JSON array.
-- **Backend change required**: The dashboard must support a **batch log** endpoint that accepts an array and:
-  - Inserts multiple rows into `request_logs`,
-  - Updates `extension_users` once per `visitorId` (e.g. increment `totalRequests` by count, set `lastSeenAt` to latest).
-- **Effect**: Large reduction in number of log requests; same analytics data (or even better, with exact timestamps per event if you store them).
+- Don’t call ad-block on every tiny navigation; debounce or only refetch when domain changes or cache expires.
+- Use a single call (omit `requestType`) when you need both ads and notifications so one request returns both arrays.
 
-### 6.3 Backend: add a batch log endpoint
+### 6.4 Summary of impact
 
-- **New endpoint**: e.g. `POST /api/extension/log/batch`.
-- **Body**:  
-  `{ "events": [ { "visitorId", "domain", "requestType" }, ... ] }`  
-  Optional: add a client-generated `timestamp` per event if you want to preserve exact time when the event happened (otherwise server time is fine).
-- **Server logic**:
-  - Validate all items (same rules as single log).
-  - Single DB transaction: bulk insert into `request_logs`; for each distinct `visitorId`, upsert `extension_users` (e.g. set `lastSeenAt` to max of existing and new, set `totalRequests = totalRequests + count` for that visitor).
-- **Extension**: Use only the batch endpoint; stop calling the single-event `POST /api/extension/log` for each action.
-
-This is the single biggest lever to reduce **log** requests per second.
-
-### 6.4 Backend: optional combined “content” endpoint
-
-- **Idea**: One call for the extension to get both ads and notifications for a domain.
-- **New endpoint**: e.g. `GET /api/extension/content?domain=example.com` returning something like:
-  `{ "ads": [...], "notifications": [...] }`
-- **Implementation**: Run the same logic as current `GET /api/ads` and `GET /api/notifications` for that domain and return both in one response.
-- **Effect**: Cuts the number of GET requests per “load” in half (one request instead of two). Combined with caching, this further reduces GET traffic.
-
-### 6.5 Throttling / debouncing in the extension
-
-- **Logging**: If you don’t batch, at least **throttle** (e.g. at most one log request per user per 5–10 seconds per domain or globally).
-- **Fetching**: Don’t refetch ads/notifications on every tiny navigation; debounce or only refetch when domain actually changes or cache expires.
-
-### 6.6 Summary of impact
-
-| Change                          | Where        | Effect |
-|---------------------------------|-------------|--------|
-| Cache ads/notifications by domain (e.g. 5–15 min TTL) | Extension   | Fewer GET requests per second. |
-| Batch log events + batch API    | Extension + backend | Far fewer POST requests; same or better data. |
-| Combined GET content endpoint  | Backend (optional) | Fewer GET requests per load. |
-| Throttle/debounce log and fetch | Extension   | Fewer requests during bursts. |
-
-Implementing **batching for logs** (extension buffer + batch endpoint) and **caching for ads/notifications** will usually give the largest gain with a clear path.
+| Change | Where | Effect |
+|--------|--------|--------|
+| Cache ad-block response by domain (e.g. 5–15 min TTL) | Extension | Fewer requests per second on same domain. |
+| Notifications once per day on extension load | Extension | Minimal notification traffic; same UX. |
+| One call for both ads and notifications when needed | Extension | One POST instead of two. |
 
 ---
 
 ## 7. Quick Reference
 
-### Extension → Dashboard APIs (public)
+### Extension → Dashboard API (public)
 
-| Endpoint                         | Method | Purpose |
-|----------------------------------|--------|--------|
-| `/api/ads?domain={domain}`       | GET    | Active ads for domain. |
-| `/api/notifications?domain={domain}` | GET | Active notifications for domain (by date range). |
-| `/api/extension/log`             | POST   | Single log event: `{ visitorId, domain, requestType }`. |
+| Endpoint                | Method | Purpose |
+|-------------------------|--------|--------|
+| `/api/extension/ad-block` | POST   | Get ads (by domain) and/or notifications (global, per-user). Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}` (always arrays). Logging is automatic. |
 
-### How “notifications” work
+### User ID and response format
 
-- **Backend**: Stores notification title, message, dates, and platform (domain) links. No push.
-- **Extension**: Pulls notifications with `GET /api/notifications?domain=...` and displays them; then logs with `requestType: "notification"`.
+- **visitorId**: Provided by the extension (stable anonymous user ID). Used for analytics and to return only notifications the user has not yet pulled.
+- **Response**: Always `{ ads: [...], notifications: [...] }` in array format. Use directly in extension code.
+
+### How notifications work
+
+- **Backend**: Stores global notifications (title, message, date range). Tracks which user has already pulled which notification (`notification_reads`).
+- **Extension**: Call once per day when the user opens the browser or when the extension loads. Use `requestType: "notification"` (or omit to get both). The `notifications` array is the list of new notifications for that user.
 
 ### Reducing requests (short list)
 
-1. **Extension**: Cache ads and notifications by domain (TTL 5–15 min).
-2. **Extension**: Buffer log events; send in batches (e.g. every 30 s or 10 events).
-3. **Backend**: Add `POST /api/extension/log/batch` and process arrays; update extension to use it.
-4. **Optional**: Add `GET /api/extension/content?domain=...` returning both ads and notifications.
-5. **Extension**: Throttle/debounce any remaining per-event calls.
+1. **Extension**: Cache ad-block responses by domain (TTL 5–15 min) for ads.
+2. **Extension**: Request notifications once per day on extension load, not on every page.
+3. **Extension**: Use one call without `requestType` when you need both ads and notifications.
 
-For full API details see [EXTENSION_LOG_API.md](./EXTENSION_LOG_API.md) and [EXTENSION_API_DOCS.md](../EXTENSION_API_DOCS.md). For system architecture see [ARCHITECTURE.md](./ARCHITECTURE.md).
+**Full API reference (request/response shapes, types, errors):** [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md). System architecture: [ARCHITECTURE.md](./ARCHITECTURE.md).

@@ -1,6 +1,6 @@
-# Extension Log Test Script
+# Extension Ad Block Test Script
 
-This script simulates browser extension pull requests by creating log entries in your dashboard using **real data from your database**.
+This script simulates browser extension requests by fetching ad block data (ads and notifications) and automatically logging visits using **real data from your database**.
 
 ## Quick Start
 
@@ -11,9 +11,10 @@ This script simulates browser extension pull requests by creating log entries in
 ## What It Does
 
 1. **Fetches real platforms** from your database via `/api/platforms`
-2. **Finds active ads** for those platforms via `/api/ads`
-3. **Creates log entries** for both 'ad' and 'notification' request types
-4. **Uses actual domain names** from your configured platforms
+2. **Calls the ad-block endpoint** `/api/extension/ad-block` which:
+   - Returns ads and notifications for the platform
+   - Automatically logs visits (no separate log call needed)
+3. **Uses actual domain names** from your configured platforms
 
 ## Features
 
@@ -101,9 +102,19 @@ curl http://localhost:3000/api/platforms
 curl "http://localhost:3000/api/ads?domain=https://www.instagram.com/"
 ```
 
-### Log Ad Request
+### Get Ad Block Data (Both Ads and Notifications)
 ```bash
-curl -X POST http://localhost:3000/api/extension/log \
+curl -X POST http://localhost:3000/api/extension/ad-block \
+  -H "Content-Type: application/json" \
+  -d '{
+    "visitorId": "test-visitor-123",
+    "domain": "instagram.com"
+  }'
+```
+
+### Get Ads Only
+```bash
+curl -X POST http://localhost:3000/api/extension/ad-block \
   -H "Content-Type: application/json" \
   -d '{
     "visitorId": "test-visitor-123",
@@ -112,9 +123,9 @@ curl -X POST http://localhost:3000/api/extension/log \
   }'
 ```
 
-### Log Notification Request
+### Get Notifications Only
 ```bash
-curl -X POST http://localhost:3000/api/extension/log \
+curl -X POST http://localhost:3000/api/extension/ad-block \
   -H "Content-Type: application/json" \
   -d '{
     "visitorId": "test-visitor-123",
@@ -122,6 +133,8 @@ curl -X POST http://localhost:3000/api/extension/log \
     "requestType": "notification"
   }'
 ```
+
+**Note:** Visit logging happens automatically with each ad-block call. No separate log endpoint needed!
 
 ## Requirements
 

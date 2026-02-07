@@ -21,5 +21,5 @@ else
   fi
 fi
 
-# Start the dev server
+# Start the dev server (migrations run automatically via instrumentation.ts)
 exec pnpm run dev

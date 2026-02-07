@@ -196,11 +196,10 @@ admin_dashboard/
 │   └── types/                   # TypeScript types
 ├── drizzle/                     # Database migrations
 ├── docs/                        # Technical documentation
-├── memory-bank/                 # Project memory bank
+├── docs/                        # All documentation (see docs/README.md)
 ├── public/                      # Static assets
 ├── docker-compose.yml           # Infrastructure services
-├── test-extension-log.sh        # Test script for extension API
-└── EXTENSION_API_DOCS.md        # Extension API documentation
+└── docs/                        # All documentation (see docs/README.md)
 ```
 
 ## Available Scripts
@@ -219,7 +218,7 @@ admin_dashboard/
 
 ### Extension API Testing
 
-Use the included test script to simulate extension pull requests:
+Use the included test script to simulate extension ad-block requests:
 
 ```bash
 pnpm test:extension-log
@@ -228,15 +227,18 @@ pnpm test:extension-log
 Or run directly:
 
 ```bash
-./test-extension-log.sh
+./docs/test-extension-log.sh
 ```
 
+See [docs/TEST_EXTENSION_LOG.md](./docs/TEST_EXTENSION_LOG.md) for details.
+
 The script will:
-- Fetch real platforms and ads from your database
-- Create test log entries for both 'ad' and 'notification' request types
+- Fetch real platforms from your database
+- Call the ad-block endpoint to get ads and notifications
+- Automatically log visits (no separate log calls needed)
 - Display results and provide links to view in the Analytics dashboard
 
-See [TEST_EXTENSION_LOG.md](./TEST_EXTENSION_LOG.md) for detailed documentation.
+See [docs/TEST_EXTENSION_LOG.md](./docs/TEST_EXTENSION_LOG.md) for detailed documentation.
 
 ## Architecture Notes
 
@@ -294,22 +296,24 @@ The database connection uses a singleton pattern compatible with Next.js dev mod
 - `DELETE /api/notifications/[id]` - Delete notification
 
 ### Extension API (Public)
-- `GET /api/ads?domain={domain}` - Get active ads for domain
-- `GET /api/notifications?domain={domain}` - Get active notifications for domain
-- `POST /api/extension/log` - Log extension request (analytics)
+- `POST /api/extension/ad-block` - Get ads and/or notifications for domain and automatically log visit(s). Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}`.
 
 ### Authentication API
 - `POST /api/auth/login` - Admin login
 - `POST /api/auth/logout` - Admin logout
 
-See [EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md) for detailed extension API documentation.
+See [docs/EXTENSION_AD_BLOCK_API.md](./docs/EXTENSION_AD_BLOCK_API.md) and [docs/EXTENSION_API_DOCS.md](./docs/EXTENSION_API_DOCS.md) for detailed extension API documentation.
 
 ## Documentation
 
-- [Extension API Documentation](./EXTENSION_API_DOCS.md) - Complete API reference for browser extensions
-- [Test Script Documentation](./TEST_EXTENSION_LOG.md) - Guide for testing extension API
-- [Architecture Documentation](./docs/ARCHITECTURE.md) - System architecture and design patterns
-- [Database Documentation](./docs/DATABASE.md) - Database schema and relationships
+All documentation is in the [`docs/`](./docs/) directory. See [docs/README.md](./docs/README.md) for an overview.
+
+Key documents:
+- [Extension Ad Block API](./docs/EXTENSION_AD_BLOCK_API.md) - Complete API reference for browser extensions
+- [Extension API Examples](./docs/EXTENSION_API_DOCS.md) - Code examples and usage patterns
+- [Architecture](./docs/ARCHITECTURE.md) - System architecture and design patterns
+- [Database Schema](./docs/DATABASE.md) - Database schema and relationships
+- [Extension & Dashboard Overview](./docs/EXTENSION_AND_DASHBOARD_OVERVIEW.md) - How everything works together
 
 ## Production Deployment
 

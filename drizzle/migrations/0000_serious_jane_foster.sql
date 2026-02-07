@@ -1,6 +1,12 @@
-CREATE TYPE "public"."ad_status" AS ENUM('active', 'inactive', 'scheduled', 'expired');--> statement-breakpoint
-CREATE TYPE "public"."request_type" AS ENUM('ad', 'notification');--> statement-breakpoint
-CREATE TABLE "platforms" (
+DO $$ BEGIN
+  CREATE TYPE "public"."ad_status" AS ENUM('active', 'inactive', 'scheduled', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."request_type" AS ENUM('ad', 'notification');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "platforms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"domain" varchar(255) NOT NULL,
@@ -9,7 +15,7 @@ CREATE TABLE "platforms" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ads" (
+CREATE TABLE IF NOT EXISTS "ads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"description" text,
@@ -23,13 +29,13 @@ CREATE TABLE "ads" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "notification_platforms" (
+CREATE TABLE IF NOT EXISTS "notification_platforms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"notification_id" uuid NOT NULL,
 	"platform_id" uuid NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "notifications" (
+CREATE TABLE IF NOT EXISTS "notifications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"title" varchar(255) NOT NULL,
 	"message" text NOT NULL,
@@ -40,7 +46,7 @@ CREATE TABLE "notifications" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "extension_users" (
+CREATE TABLE IF NOT EXISTS "extension_users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"visitor_id" varchar(255) NOT NULL,
 	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -51,7 +57,7 @@ CREATE TABLE "extension_users" (
 	CONSTRAINT "extension_users_visitor_id_unique" UNIQUE("visitor_id")
 );
 --> statement-breakpoint
-CREATE TABLE "request_logs" (
+CREATE TABLE IF NOT EXISTS "request_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"visitor_id" varchar(255) NOT NULL,
 	"domain" varchar(255) NOT NULL,
@@ -59,6 +65,15 @@ CREATE TABLE "request_logs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "ads" ADD CONSTRAINT "ads_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_notification_id_notifications_id_fk" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN
+  ALTER TABLE "ads" ADD CONSTRAINT "ads_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_notification_id_notifications_id_fk" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

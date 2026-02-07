@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Script to simulate extension pull requests using REAL data from your database
-# This fetches actual platforms and ads, then creates log entries
+# This calls the ad-block endpoint which fetches ads/notifications and automatically logs visits
 
 # Base URL - adjust if your server runs on a different port
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 echo "=========================================="
-echo "Extension Log Test Script"
+echo "Extension Ad Block Test Script"
 echo "=========================================="
 echo "Base URL: $BASE_URL"
 echo ""
@@ -77,72 +77,58 @@ fi
 
 echo ""
 
-# Fetch ads from API to verify we have active ads for this domain
-# Note: The API requires exact domain match, so we check with the stored domain format
-echo "Fetching ads from database..."
-ADS_JSON_STORED=$(curl -s "$BASE_URL/api/ads?domain=$PLATFORM_DOMAIN_FULL")
-ADS_JSON_CLEAN=$(curl -s "$BASE_URL/api/ads?domain=$DOMAIN")
-
-# Use whichever returns results
-if [ -n "$ADS_JSON_STORED" ] && [ "$ADS_JSON_STORED" != "[]" ] && [ "$ADS_JSON_STORED" != "null" ]; then
-    ADS_JSON="$ADS_JSON_STORED"
-    QUERY_DOMAIN="$PLATFORM_DOMAIN_FULL"
-elif [ -n "$ADS_JSON_CLEAN" ] && [ "$ADS_JSON_CLEAN" != "[]" ] && [ "$ADS_JSON_CLEAN" != "null" ]; then
-    ADS_JSON="$ADS_JSON_CLEAN"
-    QUERY_DOMAIN="$DOMAIN"
-else
-    ADS_JSON="[]"
-    QUERY_DOMAIN="$DOMAIN"
-fi
-
-if [ "$ADS_JSON" != "[]" ] && [ -n "$ADS_JSON" ]; then
-    if [ "$USE_JQ" = true ]; then
-        AD_COUNT=$(echo "$ADS_JSON" | jq '. | length' 2>/dev/null || echo "0")
-        if [ "$AD_COUNT" -gt 0 ]; then
-            echo "Found $AD_COUNT active ad(s) for this platform:"
-            echo "$ADS_JSON" | jq -r '.[] | "  - \(.name) (Status: \(.status))"'
-        fi
-    else
-        echo "Found active ads for this platform"
-    fi
-else
-    echo "Note: No active ads found for this platform"
-    echo "The log will still be created, but no ads will be returned by /api/ads"
-fi
-
-echo ""
-echo "=========================================="
-echo "Generating test logs..."
-echo "=========================================="
-echo ""
-
 # Generate unique visitor ID with timestamp
 VISITOR_ID="${VISITOR_ID:-test-visitor-$(date +%s)}"
 
-# Function to log a request
-log_request() {
+echo ""
+echo "=========================================="
+echo "Testing ad-block endpoint..."
+echo "=========================================="
+echo ""
+
+# Function to call ad-block endpoint
+test_ad_block() {
     local request_type=$1
-    echo "Logging $request_type request..."
+    local description=$2
+    
+    echo "Testing: $description"
     echo "  Domain: $DOMAIN"
     echo "  Visitor ID: $VISITOR_ID"
+    if [ -n "$request_type" ]; then
+        echo "  Request Type: $request_type"
+    else
+        echo "  Request Type: (omitted - will fetch both)"
+    fi
     
-    response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/extension/log" \
+    if [ -n "$request_type" ]; then
+        body_json="{\"visitorId\": \"$VISITOR_ID\", \"domain\": \"$DOMAIN\", \"requestType\": \"$request_type\"}"
+    else
+        body_json="{\"visitorId\": \"$VISITOR_ID\", \"domain\": \"$DOMAIN\"}"
+    fi
+    
+    response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/extension/ad-block" \
         -H "Content-Type: application/json" \
-        -d "{
-      \"visitorId\": \"$VISITOR_ID\",
-      \"domain\": \"$DOMAIN\",
-      \"requestType\": \"$request_type\"
-    }")
+        -d "$body_json")
     
     http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
     body=$(echo "$response" | sed '/HTTP_CODE:/d')
     
-    if [ "$http_code" = "201" ]; then
-        echo "  ✓ Success! Log created for $request_type"
+    if [ "$http_code" = "200" ]; then
+        echo "  ✓ Success! Visit logged automatically"
         if [ "$USE_JQ" = true ]; then
-            echo "$body" | jq '.' 2>/dev/null | sed 's/^/    /'
+            ads_count=$(echo "$body" | jq '.ads | length' 2>/dev/null || echo "0")
+            notifs_count=$(echo "$body" | jq '.notifications | length' 2>/dev/null || echo "0")
+            echo "  Found: $ads_count ad(s), $notifs_count notification(s)"
+            if [ "$ads_count" -gt 0 ]; then
+                echo "  Ads:"
+                echo "$body" | jq -r '.ads[] | "    - \(.title)"' 2>/dev/null
+            fi
+            if [ "$notifs_count" -gt 0 ]; then
+                echo "  Notifications:"
+                echo "$body" | jq -r '.notifications[] | "    - \(.title)"' 2>/dev/null
+            fi
         else
-            echo "    $body"
+            echo "    Response: $body"
         fi
     else
         echo "  ✗ Failed with HTTP $http_code"
@@ -152,11 +138,14 @@ log_request() {
     echo ""
 }
 
-# Log ad request
-log_request "ad"
+# Test with both ads and notifications (default)
+test_ad_block "" "Get both ads and notifications"
 
-# Log notification request  
-log_request "notification"
+# Test ads only
+test_ad_block "ad" "Get ads only"
+
+# Test notifications only
+test_ad_block "notification" "Get notifications only"
 
 echo "=========================================="
 echo "Done!"
@@ -168,6 +157,11 @@ echo ""
 echo "View ads for this platform at:"
 echo "  $BASE_URL/api/ads?domain=$PLATFORM_DOMAIN_FULL"
 echo "  (or try: $BASE_URL/api/ads?domain=$DOMAIN)"
+echo ""
+echo "Test ad-block endpoint directly:"
+echo "  curl -X POST $BASE_URL/api/extension/ad-block \\"
+echo "    -H 'Content-Type: application/json' \\"
+echo "    -d '{\"visitorId\":\"$VISITOR_ID\",\"domain\":\"$DOMAIN\"}'"
 echo ""
 echo "To test with a different visitor ID:"
 echo "  VISITOR_ID=my-custom-id ./test-extension-log.sh"

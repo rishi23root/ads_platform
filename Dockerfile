@@ -41,7 +41,10 @@ RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Migration SQL files aren't traced by Next.js — copy them so instrumentation can find them
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
 USER nextjs
 EXPOSE 3000
+
 CMD ["node", "server.js"]

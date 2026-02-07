@@ -6,20 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { IconLoader2 } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import type { Notification, Platform } from '@/db/schema';
+import type { Notification } from '@/db/schema';
 
 interface NotificationFormProps {
   notification?: Notification;
-  platforms: Platform[];
-  selectedPlatformIds?: string[];
   mode: 'create' | 'edit';
 }
 
-export function NotificationForm({ notification, platforms, selectedPlatformIds = [], mode }: NotificationFormProps) {
+export function NotificationForm({ notification, mode }: NotificationFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState(notification?.title || '');
@@ -30,15 +27,6 @@ export function NotificationForm({ notification, platforms, selectedPlatformIds 
   const [endDate, setEndDate] = useState(
     notification?.endDate ? new Date(notification.endDate).toISOString().slice(0, 16) : ''
   );
-  const [platformIds, setPlatformIds] = useState<string[]>(selectedPlatformIds);
-
-  const handlePlatformToggle = (platformId: string, checked: boolean) => {
-    if (checked) {
-      setPlatformIds([...platformIds, platformId]);
-    } else {
-      setPlatformIds(platformIds.filter((id) => id !== platformId));
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,10 +41,6 @@ export function NotificationForm({ notification, platforms, selectedPlatformIds 
         throw new Error('End date must be after start date');
       }
 
-      if (platformIds.length === 0) {
-        throw new Error('Please select at least one platform/domain');
-      }
-
       const url = mode === 'create' ? '/api/notifications' : `/api/notifications/${notification?.id}`;
       const method = mode === 'create' ? 'POST' : 'PUT';
 
@@ -68,7 +52,6 @@ export function NotificationForm({ notification, platforms, selectedPlatformIds 
           message,
           startDate: new Date(startDate).toISOString(),
           endDate: new Date(endDate).toISOString(),
-          platformIds,
         }),
       });
 
@@ -151,41 +134,8 @@ export function NotificationForm({ notification, platforms, selectedPlatformIds 
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Target Domains *</Label>
-            <p className="text-sm text-muted-foreground mb-2">
-              Select which domains should show this notification
-            </p>
-            {platforms.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">
-                No platforms available. Please create a platform first.
-              </p>
-            ) : (
-              <div className="border rounded-md p-4 space-y-3 max-h-48 overflow-y-auto">
-                {platforms.map((platform) => (
-                  <div key={platform.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`platform-${platform.id}`}
-                      checked={platformIds.includes(platform.id)}
-                      onCheckedChange={(checked) =>
-                        handlePlatformToggle(platform.id, checked === true)
-                      }
-                      disabled={isLoading}
-                    />
-                    <Label
-                      htmlFor={`platform-${platform.id}`}
-                      className="text-sm font-normal cursor-pointer"
-                    >
-                      {platform.name} <span className="text-muted-foreground">({platform.domain})</span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           <div className="flex gap-2 pt-4">
-            <Button type="submit" disabled={isLoading || platforms.length === 0}>
+            <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
