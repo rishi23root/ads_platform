@@ -21,7 +21,6 @@ flowchart TB
     
     subgraph data [Data Layer]
         DB[(PostgreSQL<br/>Primary Database)]
-        Cache[(Redis<br/>Cache Layer)]
     end
     
     Browser -->|Fetch Ads/Notifications| ExtAPI
@@ -32,9 +31,6 @@ flowchart TB
     ExtAPI -->|Read/Write| DB
     ExtAPI -->|Log Analytics| DB
     AdminAPI -->|Read/Write| DB
-    AdminAPI -->|Cache Sessions| Cache
-    AuthAPI -->|Validate Sessions| Cache
-    AuthAPI -->|Store Sessions| Cache
 ```
 
 ## Component Architecture
@@ -67,10 +63,6 @@ flowchart TB
   - Platforms, Ads, Notifications
   - Extension Users, Request Logs
   - Relationships and constraints
-
-- **Redis**: Caching layer
-  - Session storage
-  - Potential for query caching
 
 ## Request Flow
 
@@ -185,12 +177,12 @@ Critical modules are marked as server-only to prevent accidental client-side usa
 
 ```typescript
 import 'server-only';
-// Database, Redis, Auth, Config modules
+// Database, Auth, Config modules
 ```
 
 ### Singleton Pattern
 
-Database and Redis connections use singleton pattern for efficiency:
+Database connection uses singleton pattern for efficiency:
 
 ```typescript
 let db: ReturnType<typeof drizzle> | null = null;
@@ -264,12 +256,6 @@ async function autoExpireAds() {
 - Indexes on foreign keys and frequently queried fields
 - Singleton pattern reduces connection overhead
 
-### Caching Strategy
-
-- Redis available for session storage
-- Potential for query result caching
-- Lazy initialization of Redis client
-
 ### Server Components
 
 - Default to Server Components (no client JavaScript)
@@ -280,7 +266,7 @@ async function autoExpireAds() {
 
 ### Development
 
-- Docker Compose for PostgreSQL and Redis
+- Docker Compose for PostgreSQL
 - Next.js dev server with hot reload
 - Local environment variables
 
@@ -323,7 +309,6 @@ async function autoExpireAds() {
 - **Language**: TypeScript (strict mode)
 - **Database**: PostgreSQL
 - **ORM**: Drizzle ORM
-- **Cache**: Redis
 - **UI**: React 19, Tailwind CSS 4, shadcn/ui
 - **Auth**: JWT (Jose library)
 - **Charts**: Recharts
@@ -336,7 +321,6 @@ async function autoExpireAds() {
 - Current architecture supports horizontal scaling
 - Stateless API design
 - Database connection pooling
-- Redis for shared state
 
 ### Potential Enhancements
 

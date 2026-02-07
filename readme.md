@@ -1,6 +1,6 @@
 # Admin Dashboard - Ad Replacement Platform
 
-Production-grade Admin Dashboard for managing advertisements and notifications for a browser extension. Built with Next.js 16, TypeScript, Drizzle ORM, PostgreSQL, and Redis.
+Production-grade Admin Dashboard for managing advertisements and notifications for a browser extension. Built with Next.js 16, TypeScript, Drizzle ORM, and PostgreSQL.
 
 ## Overview
 
@@ -18,7 +18,6 @@ This admin dashboard provides a complete solution for managing:
 - **Package Manager**: pnpm
 - **Database**: PostgreSQL (via Docker Compose)
 - **ORM**: Drizzle ORM + Drizzle Kit
-- **Cache**: Redis (via Docker Compose)
 - **UI**: Tailwind CSS 4 + shadcn/ui components
 - **Authentication**: JWT-based session management
 - **Icons**: Tabler Icons
@@ -34,7 +33,7 @@ This admin dashboard provides a complete solution for managing:
 
 ### 1. Start Infrastructure Services
 
-Start PostgreSQL and Redis using Docker Compose:
+Start PostgreSQL using Docker Compose:
 
 ```bash
 docker compose up -d
@@ -51,10 +50,6 @@ POSTGRES_DB=ads_platform
 POSTGRES_USER=ads_admin
 POSTGRES_PASSWORD=your_password
 
-# Redis
-REDIS_URL=redis://:password@localhost:6379
-REDIS_PASSWORD=your_redis_password
-
 # Application
 NODE_ENV=development
 
@@ -65,12 +60,10 @@ JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
 
 # Optional
 DATABASE_POOL_MAX=10
-REDIS_TTL_DEFAULT=3600
 ```
 
 **Required environment variables:**
 - `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
 - `NODE_ENV` - Environment mode (development/production)
 - `ADMIN_USERNAME` - Admin login username
 - `ADMIN_PASSWORD` - Admin login password
@@ -78,7 +71,6 @@ REDIS_TTL_DEFAULT=3600
 
 **Optional variables:**
 - `DATABASE_POOL_MAX` - Database connection pool size (default: 10)
-- `REDIS_TTL_DEFAULT` - Default Redis TTL in seconds (default: 3600)
 
 ### 3. Install Dependencies
 
@@ -200,8 +192,7 @@ admin_dashboard/
 │   ├── lib/
 │   │   ├── auth.ts             # Authentication utilities
 │   │   ├── config/              # Configuration
-│   │   ├── dal.ts               # Data access layer
-│   │   └── redis.ts             # Redis client
+│   │   └── dal.ts               # Data access layer
 │   └── types/                   # TypeScript types
 ├── drizzle/                     # Database migrations
 ├── docs/                        # Technical documentation
@@ -252,7 +243,6 @@ See [TEST_EXTENSION_LOG.md](./TEST_EXTENSION_LOG.md) for detailed documentation.
 ### Server-Only Boundaries
 
 - Database access (`src/db/*`) is server-only
-- Redis access (`src/lib/redis.ts`) is server-only
 - Server config (`src/lib/config/server.ts`) is server-only
 - Authentication (`src/lib/auth.ts`) is server-only
 - Client components must NOT import these modules
@@ -264,10 +254,6 @@ Environment variables are validated at application startup using Zod. The applic
 ### Database Connection
 
 The database connection uses a singleton pattern compatible with Next.js dev mode hot reloading. Connection pooling is configured via `DATABASE_POOL_MAX`.
-
-### Redis Connection
-
-Redis client uses a singleton pattern with automatic reconnection handling. The client is lazy-initialized on first use.
 
 ### Authentication
 
@@ -331,7 +317,7 @@ See [EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md) for detailed extension API 
 - Use strong `JWT_SECRET` (minimum 32 characters)
 - Use secure `ADMIN_PASSWORD`
 - Run migrations before deploying: `pnpm db:migrate`
-- Database and Redis connections handle graceful shutdown
+- Database connection handles graceful shutdown
 - Use production-ready connection pooling settings
 - Enable HTTPS for secure cookie transmission
 - Configure CORS appropriately for extension API endpoints

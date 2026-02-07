@@ -12,12 +12,12 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ThemeMenuContent } from "@/components/theme-menu-content"
 
 export function SidebarThemeToggle() {
-  const { setTheme, theme } = useTheme()
+  const { theme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
@@ -60,18 +60,7 @@ export function SidebarThemeToggle() {
             align="end"
             sideOffset={4}
           >
-            <DropdownMenuItem onClick={() => setTheme("light")}>
-              <IconSun className="mr-2 h-4 w-4" />
-              <span>Light</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("dark")}>
-              <IconMoon className="mr-2 h-4 w-4" />
-              <span>Dark</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("system")}>
-              <IconSun className="mr-2 h-4 w-4" />
-              <span>System</span>
-            </DropdownMenuItem>
+            <ThemeMenuContent />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
