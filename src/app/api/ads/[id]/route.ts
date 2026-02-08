@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { ads } from '@/db/schema';
+import { ads, adPlatforms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 type RouteContext = {
@@ -34,11 +34,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { name, description, imageUrl, targetUrl, platformId, status, startDate, endDate } = body;
+    const { name, description, imageUrl, targetUrl, platformIds, status, startDate, endDate } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
+
+    const safePlatformIds = Array.isArray(platformIds)
+      ? platformIds.filter((pid: unknown) => typeof pid === 'string' && pid)
+      : [];
 
     // Determine status based on dates if not explicitly set
     let finalStatus = status;
@@ -66,7 +70,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         description: description || null,
         imageUrl: imageUrl || null,
         targetUrl: targetUrl || null,
-        platformId: platformId === '__none__' ? null : platformId || null,
+        platformId: safePlatformIds[0] ?? null,
         status: finalStatus,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -77,6 +81,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     if (!updatedAd) {
       return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
+    }
+
+    await db.delete(adPlatforms).where(eq(adPlatforms.adId, id));
+    if (safePlatformIds.length > 0) {
+      await db.insert(adPlatforms).values(
+        safePlatformIds.map((platformId: string) => ({ adId: id, platformId }))
+      );
     }
 
     return NextResponse.json(updatedAd);

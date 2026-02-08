@@ -17,6 +17,7 @@ interface DashboardAd {
   platform: string;
   platformDomain?: string | null;
   platformName?: string | null;
+  platforms?: { name: string; domain: string }[];
   status: string;
   dateRange: string;
   createdAt: string;
@@ -60,7 +61,19 @@ export function DashboardAdsTable({ data }: DashboardAdsTableProps) {
             <TableRow key={ad.id}>
               <TableCell className="font-medium">{ad.name}</TableCell>
               <TableCell>
-                {ad.platformDomain ? (
+                {ad.platforms && ad.platforms.length > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    {ad.platforms.map((p) => (
+                      <Badge
+                        key={p.domain}
+                        variant="outline"
+                        className="font-normal"
+                      >
+                        {p.domain || p.name}
+                      </Badge>
+                    ))}
+                  </span>
+                ) : ad.platformDomain ? (
                   <Badge variant="outline" className="font-normal">
                     {ad.platformDomain}
                   </Badge>

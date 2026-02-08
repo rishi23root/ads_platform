@@ -1,11 +1,14 @@
+-- Single baseline migration: full schema (no legacy)
 DO $$ BEGIN
   CREATE TYPE "public"."ad_status" AS ENUM('active', 'inactive', 'scheduled', 'expired');
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
   CREATE TYPE "public"."request_type" AS ENUM('ad', 'notification');
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
+END $$;
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "platforms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
@@ -27,12 +30,6 @@ CREATE TABLE IF NOT EXISTS "ads" (
 	"end_date" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "notification_platforms" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"notification_id" uuid NOT NULL,
-	"platform_id" uuid NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "notifications" (
@@ -65,15 +62,40 @@ CREATE TABLE IF NOT EXISTS "request_logs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "ad_platforms" (
+	"ad_id" uuid NOT NULL,
+	"platform_id" uuid NOT NULL,
+	CONSTRAINT "ad_platforms_ad_id_platform_id_pk" PRIMARY KEY("ad_id","platform_id")
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "notification_reads" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"notification_id" uuid NOT NULL,
+	"visitor_id" varchar(255) NOT NULL,
+	"read_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "notification_reads_notification_id_visitor_id_unique" UNIQUE("notification_id","visitor_id")
+);
+--> statement-breakpoint
 DO $$ BEGIN
   ALTER TABLE "ads" ADD CONSTRAINT "ads_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE set null ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
-  ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_notification_id_notifications_id_fk" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
-DO $$ BEGIN
-  ALTER TABLE "notification_platforms" ADD CONSTRAINT "notification_platforms_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "ad_platforms" ADD CONSTRAINT "ad_platforms_ad_id_ads_id_fk" FOREIGN KEY ("ad_id") REFERENCES "public"."ads"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "ad_platforms" ADD CONSTRAINT "ad_platforms_platform_id_platforms_id_fk" FOREIGN KEY ("platform_id") REFERENCES "public"."platforms"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_notification_id_notifications_id_fk" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--> statement-breakpoint
+INSERT INTO "ad_platforms" ("ad_id", "platform_id")
+SELECT "id", "platform_id" FROM "ads" WHERE "platform_id" IS NOT NULL
+ON CONFLICT ("ad_id", "platform_id") DO NOTHING;

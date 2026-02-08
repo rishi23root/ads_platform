@@ -2,8 +2,8 @@ import { ChartAreaInteractive } from '@/components/chart-area-interactive';
 import { DashboardAdsTable } from '@/components/dashboard-ads-table';
 import { SectionCards } from '@/components/section-cards';
 import { database as db } from '@/db';
-import { ads, platforms, notifications } from '@/db/schema';
-import { eq, lt, and } from 'drizzle-orm';
+import { ads, platforms, adPlatforms, notifications } from '@/db/schema';
+import { eq, lt, and, inArray } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,27 +26,34 @@ export default async function DashboardPage() {
   await autoExpireAds();
 
   // Fetch all data (analytics stats are on the Analytics page only)
-  const [allAdsForStats, recentAds, allPlatforms, allNotifications] = await Promise.all([
+  const [allAdsForStats, recentAdsRows, allPlatforms, allNotifications] = await Promise.all([
     db.select({ status: ads.status }).from(ads), // For stats only
-    db
-      .select({
-        id: ads.id,
-        name: ads.name,
-        description: ads.description,
-        status: ads.status,
-        startDate: ads.startDate,
-        endDate: ads.endDate,
-        createdAt: ads.createdAt,
-        platformName: platforms.name,
-        platformDomain: platforms.domain,
-      })
-      .from(ads)
-      .leftJoin(platforms, eq(ads.platformId, platforms.id))
-      .orderBy(ads.createdAt)
-      .limit(10),
+    db.select().from(ads).orderBy(ads.createdAt).limit(10),
     db.select().from(platforms),
     db.select().from(notifications),
   ]);
+
+  const recentAdIds = recentAdsRows.map((a) => a.id);
+  const recentLinks =
+    recentAdIds.length > 0
+      ? await db
+          .select({
+            adId: adPlatforms.adId,
+            platformName: platforms.name,
+            platformDomain: platforms.domain,
+          })
+          .from(adPlatforms)
+          .innerJoin(platforms, eq(adPlatforms.platformId, platforms.id))
+          .where(inArray(adPlatforms.adId, recentAdIds))
+      : [];
+
+  const platformsByAdId = recentLinks.reduce<
+    Record<string, { name: string; domain: string }[]>
+  >((acc, row) => {
+    if (!acc[row.adId]) acc[row.adId] = [];
+    acc[row.adId].push({ name: row.platformName, domain: row.platformDomain });
+    return acc;
+  }, {});
 
   // Calculate stats from all ads
   const totalAds = allAdsForStats.length;
@@ -57,22 +64,31 @@ export default async function DashboardPage() {
   const unreadNotifications = allNotifications.filter((n) => !n.isRead).length;
 
   // Prepare data for dashboard table (showing recent ads)
-  const tableData = recentAds.map((ad) => ({
-    id: ad.id,
-    name: ad.name,
-    platform: ad.platformDomain || ad.platformName || '-',
-    platformDomain: ad.platformDomain,
-    platformName: ad.platformName,
-    status: ad.status,
-    dateRange: ad.startDate && ad.endDate
-      ? `${new Date(ad.startDate).toLocaleDateString()} - ${new Date(ad.endDate).toLocaleDateString()}`
-      : ad.startDate
-      ? `Starts: ${new Date(ad.startDate).toLocaleDateString()}`
-      : ad.endDate
-      ? `Ends: ${new Date(ad.endDate).toLocaleDateString()}`
-      : '-',
-    createdAt: new Date(ad.createdAt).toLocaleDateString(),
-  }));
+  const tableData = recentAdsRows.map((ad) => {
+    const adPlatformList = platformsByAdId[ad.id] ?? [];
+    const platformStr =
+      adPlatformList.length > 0
+        ? adPlatformList.map((p) => p.domain || p.name).join(', ')
+        : '-';
+    return {
+      id: ad.id,
+      name: ad.name,
+      platform: platformStr,
+      platformDomain: adPlatformList[0]?.domain ?? null,
+      platformName: adPlatformList[0]?.name ?? null,
+      platforms: adPlatformList,
+      status: ad.status,
+      dateRange:
+        ad.startDate && ad.endDate
+          ? `${new Date(ad.startDate).toLocaleDateString()} - ${new Date(ad.endDate).toLocaleDateString()}`
+          : ad.startDate
+            ? `Starts: ${new Date(ad.startDate).toLocaleDateString()}`
+            : ad.endDate
+              ? `Ends: ${new Date(ad.endDate).toLocaleDateString()}`
+              : '-',
+      createdAt: new Date(ad.createdAt).toLocaleDateString(),
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">

@@ -3,6 +3,7 @@ import { database as db } from '@/db';
 import {
   ads,
   platforms,
+  adPlatforms,
   extensionUsers,
   requestLogs,
   notifications,
@@ -139,9 +140,10 @@ export async function POST(request: NextRequest) {
           targetUrl: ads.targetUrl,
         })
         .from(ads)
+        .innerJoin(adPlatforms, eq(ads.id, adPlatforms.adId))
         .where(
           and(
-            eq(ads.platformId, platform.id),
+            eq(adPlatforms.platformId, platform.id),
             eq(ads.status, 'active')
           )
         )

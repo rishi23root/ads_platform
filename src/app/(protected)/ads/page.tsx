@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { database as db } from '@/db';
-import { ads, platforms } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { ads, platforms, adPlatforms } from '@/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -25,24 +25,28 @@ const statusColors: Record<string, 'default' | 'secondary' | 'outline' | 'destru
 };
 
 export default async function AdsPage() {
-  const allAds = await db
-    .select({
-      id: ads.id,
-      name: ads.name,
-      description: ads.description,
-      imageUrl: ads.imageUrl,
-      targetUrl: ads.targetUrl,
-      platformId: ads.platformId,
-      status: ads.status,
-      startDate: ads.startDate,
-      endDate: ads.endDate,
-      createdAt: ads.createdAt,
-      platformName: platforms.name,
-      platformDomain: platforms.domain,
-    })
-    .from(ads)
-    .leftJoin(platforms, eq(ads.platformId, platforms.id))
-    .orderBy(ads.createdAt);
+  const allAds = await db.select().from(ads).orderBy(ads.createdAt);
+  const adIds = allAds.map((a) => a.id);
+  const links =
+    adIds.length > 0
+      ? await db
+          .select({
+            adId: adPlatforms.adId,
+            platformName: platforms.name,
+            platformDomain: platforms.domain,
+          })
+          .from(adPlatforms)
+          .innerJoin(platforms, eq(adPlatforms.platformId, platforms.id))
+          .where(inArray(adPlatforms.adId, adIds))
+      : [];
+
+  const platformsByAdId = links.reduce<
+    Record<string, { name: string; domain: string }[]>
+  >((acc, row) => {
+    if (!acc[row.adId]) acc[row.adId] = [];
+    acc[row.adId].push({ name: row.platformName, domain: row.platformDomain });
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -83,17 +87,23 @@ export default async function AdsPage() {
                 <TableRow key={ad.id}>
                   <TableCell className="font-medium">{ad.name}</TableCell>
                   <TableCell>
-                    {ad.platformDomain ? (
-                      <Badge variant="outline" className="font-normal">
-                        {ad.platformDomain}
-                      </Badge>
-                    ) : ad.platformName ? (
-                      <Badge variant="secondary" className="font-normal">
-                        {ad.platformName}
-                      </Badge>
-                    ) : (
-                      '-'
-                    )}
+                    {(() => {
+                      const adPlatformList = platformsByAdId[ad.id] ?? [];
+                      if (adPlatformList.length === 0) return '-';
+                      return (
+                        <span className="flex flex-wrap gap-1">
+                          {adPlatformList.map((p) => (
+                            <Badge
+                              key={p.domain}
+                              variant="outline"
+                              className="font-normal"
+                            >
+                              {p.domain || p.name}
+                            </Badge>
+                          ))}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {ad.startDate && ad.endDate ? (
