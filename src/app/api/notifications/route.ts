@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
+import { publishRealtimeNotification } from '@/lib/redis';
 
 // GET all notifications (global, no domain filtering)
 export async function GET() {
@@ -48,6 +49,19 @@ export async function POST(request: NextRequest) {
         endDate: new Date(endDate),
       })
       .returning();
+
+    if (newNotification) {
+      await publishRealtimeNotification(
+        JSON.stringify({
+          type: 'new',
+          id: newNotification.id,
+          title: newNotification.title,
+          message: newNotification.message,
+          startDate: newNotification.startDate.toISOString(),
+          endDate: newNotification.endDate.toISOString(),
+        })
+      );
+    }
 
     return NextResponse.json(newNotification, { status: 201 });
   } catch (error) {

@@ -58,10 +58,13 @@ const rangeLabels: Record<string, string> = {
 
 export function ChartAreaInteractive() {
   const isMobile = useIsMobile()
+  const [mounted, setMounted] = React.useState(false)
   const [timeRange, setTimeRange] = React.useState("90d")
   const [chartData, setChartData] = React.useState<ChartDataPoint[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => setMounted(true), [])
 
   React.useEffect(() => {
     if (isMobile) {
@@ -112,37 +115,43 @@ export function ChartAreaInteractive() {
           <span className="@[540px]/card:hidden">{descriptionText}</span>
         </CardDescription>
         <CardAction>
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={(v) => v && setTimeRange(v)}
-            variant="outline"
-            className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-          >
-            <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-            <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-            <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
-          </ToggleGroup>
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger
-              className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
-              size="sm"
-              aria-label="Select time range"
-            >
-              <SelectValue placeholder="Last 3 months" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="90d" className="rounded-lg">
-                Last 3 months
-              </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                Last 30 days
-              </SelectItem>
-              <SelectItem value="7d" className="rounded-lg">
-                Last 7 days
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          {mounted ? (
+            <>
+              <ToggleGroup
+                type="single"
+                value={timeRange}
+                onValueChange={(v) => v && setTimeRange(v)}
+                variant="outline"
+                className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
+              >
+                <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
+                <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
+                <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
+              </ToggleGroup>
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger
+                  className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
+                  size="sm"
+                  aria-label="Select time range"
+                >
+                  <SelectValue placeholder="Last 3 months" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="90d" className="rounded-lg">
+                    Last 3 months
+                  </SelectItem>
+                  <SelectItem value="30d" className="rounded-lg">
+                    Last 30 days
+                  </SelectItem>
+                  <SelectItem value="7d" className="rounded-lg">
+                    Last 7 days
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">{rangeLabels[timeRange] ?? "Last 3 months"}</span>
+          )}
         </CardAction>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">

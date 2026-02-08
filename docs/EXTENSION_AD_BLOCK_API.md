@@ -1,6 +1,15 @@
 # Extension API — Ad Block & Notifications
 
-Single reference for the browser extension: endpoints, request/response shapes, and usage. **User ID (`visitorId`) is provided by the extension.** Responses are arrays for ads and notifications.
+Short reference: endpoints, request/response shapes, and cURL. **User ID (`visitorId`) is provided by the extension.** Responses are arrays for ads and notifications.
+
+## How this doc relates to EXTENSION_API_REFERENCE.md
+
+| Document | Use when |
+|----------|----------|
+| **EXTENSION_AD_BLOCK_API.md** (this file) | You want a compact endpoint cheat sheet: paths, request/response shapes, and cURL. Same API. |
+| **EXTENSION_API_REFERENCE.md** | You want the full reference: **recommended extension connection flow**, TypeScript types, error handling, and code examples. Use that doc to integrate the correct endpoints and flow into your extension. |
+
+Both describe the **same API**. For the recommended flow (connect to live SSE → user marked active → pull on first connect → pull on notification event → ad-block on page loads), see **EXTENSION_API_REFERENCE.md**.
 
 ---
 
@@ -51,14 +60,94 @@ Use this when the extension only needs notifications (e.g. once per day on load)
 
 ---
 
-## Endpoint 2: Fetch Ads and/or Notifications
+## Endpoint 2: Live (SSE) — real-time notifications and connection count
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **Path**   | `/api/extension/live` |
+
+Server-Sent Events (SSE) stream. **Connect here first** so the user is marked **live/active** (Redis is updated; the dashboard shows the connection count via its own SSE). When the admin creates or updates a notification, you receive a `notification` event; **on that event** call `POST /api/extension/notifications` to **pull** and show the new notifications. Optional query param `visitorId`.
+
+### Request
+
+- **URL:** `GET {BASE_URL}/api/extension/live` (optional: `?visitorId=...`)
+- **Headers:** None required. Browser `EventSource` sends `Accept: text/event-stream` automatically.
+
+### Response
+
+- **Content-Type:** `text/event-stream`
+- **Events:**
+
+| Event              | Description |
+|--------------------|-------------|
+| `connection_count` | Sent once when you connect. `data` is the current number of connected clients (string number). |
+| `notification`     | Sent when the admin creates or updates a notification. `data` is a JSON string. |
+
+### Notification event data (JSON)
+
+When `event` is `notification`, `data` is a JSON string with shape:
+
+```json
+{
+  "type": "new" | "updated",
+  "id": "uuid",
+  "title": "string",
+  "message": "string",
+  "startDate": "ISO8601",
+  "endDate": "ISO8601"
+}
+```
+
+### Reconnection
+
+The connection may close after a **platform timeout** (e.g. ~5 minutes on serverless). The extension should **reconnect** when the stream ends or errors:
+
+- Listen for `error` and `close` on the `EventSource`.
+- Reopen the connection (e.g. create a new `EventSource` to the same URL) after a short delay. Optional: use exponential backoff for repeated failures.
+
+### Example (extension)
+
+```javascript
+const baseUrl = 'https://your-dashboard.example.com';
+const visitorId = 'user-stable-id-abc';
+const url = baseUrl + '/api/extension/live?visitorId=' + encodeURIComponent(visitorId);
+const es = new EventSource(url);
+
+// On notification event: pull and show (read state recorded via pull)
+es.addEventListener('notification', async () => {
+  const res = await fetch(baseUrl + '/api/extension/notifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ visitorId }),
+  });
+  const { notifications } = await res.json();
+  notifications.forEach((n) => showNotificationBanner(n.title, n.message));
+});
+
+es.addEventListener('connection_count', (e) => {
+  const count = parseInt(e.data, 10);
+  // Optional: display or log count
+});
+
+es.onerror = () => {
+  es.close();
+  setTimeout(() => connectLive(), 2000);
+};
+```
+
+**Flow:** Connect to live (user becomes active; count reflected on dashboard) → on first connect pull `POST /api/extension/notifications` → on `notification` event pull again and show → use ad-block on page loads. See **EXTENSION_API_REFERENCE.md** for the full recommended connection flow.
+
+---
+
+## Endpoint 3: Fetch Ads and/or Notifications
 
 | | |
 |---|---|
 | **Method** | `POST` |
 | **Path**   | `/api/extension/ad-block` |
 
-Fetches ads for the current domain and/or global notifications the user has not yet “pulled”. Automatically logs visits. **Always returns JSON with `ads` and `notifications` arrays** (one may be empty depending on `requestType`).
+Fetches ads for the current domain and/or global notifications (pull). the user has not yet “pulled”. Automatically logs visits. **Always returns JSON with `ads` and `notifications` arrays** (one may be empty depending on `requestType`).
 
 ---
 
@@ -191,6 +280,7 @@ interface AdBlockResponse {
 - **Dedicated endpoint:** Use **`POST /api/extension/notifications`** with body `{ "visitorId": "..." }` only — no domain. Best for “notifications only” (e.g. once per day when the extension loads).
 - **Alternative:** Use ad-block with `requestType: "notification"` and any domain if you want both ads and notifications from one endpoint.
 - **Once per user:** Each notification is returned only until the user has “pulled” it (tracked by `visitorId`).
+- **Real-time push:** For instant delivery when the admin creates or updates a notification, connect to **`GET /api/extension/live`** (SSE). See Endpoint 2 above.
 
 ### Request type
 

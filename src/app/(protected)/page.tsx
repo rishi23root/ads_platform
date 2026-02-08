@@ -1,5 +1,6 @@
 import { ChartAreaInteractive } from '@/components/chart-area-interactive';
 import { DashboardAdsTable } from '@/components/dashboard-ads-table';
+import { LiveConnectionsCard } from '@/components/live-connections-card';
 import { SectionCards } from '@/components/section-cards';
 import { database as db } from '@/db';
 import { ads, platforms, adPlatforms, notifications } from '@/db/schema';
@@ -101,6 +102,7 @@ export default async function DashboardPage() {
         activePlatforms={activePlatforms}
         totalNotifications={allNotifications.length}
         unreadNotifications={unreadNotifications}
+        extraCard={<LiveConnectionsCard />}
       />
       <div className="px-4 lg:px-6">
         <ChartAreaInteractive />
