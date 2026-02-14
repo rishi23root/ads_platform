@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 interface DeleteButtonProps {
   id: string;
   name: string;
-  entityType: 'ad' | 'platform' | 'notification';
+  entityType: 'ad' | 'platform' | 'notification' | 'campaign';
   apiPath: string;
 }
 
@@ -40,12 +40,20 @@ const entityLabels = {
     successMessage: 'Notification deleted successfully',
     errorMessage: 'Failed to delete notification',
   },
+  campaign: {
+    title: 'Delete Campaign',
+    successMessage: 'Campaign deleted successfully',
+    errorMessage: 'Failed to delete campaign',
+  },
 };
 
 export function DeleteButton({ name, entityType, apiPath }: DeleteButtonProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const labels = entityLabels[entityType];
+
+  useEffect(() => setMounted(true), []);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -67,6 +75,15 @@ export function DeleteButton({ name, entityType, apiPath }: DeleteButtonProps) {
       setIsDeleting(false);
     }
   };
+
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled tabIndex={-1}>
+        <IconTrash className="h-4 w-4" />
+        <span className="sr-only">Delete {entityType}</span>
+      </Button>
+    );
+  }
 
   return (
     <AlertDialog>

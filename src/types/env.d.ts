@@ -5,8 +5,8 @@ declare namespace NodeJS {
     NODE_ENV: 'development' | 'production' | 'test';
     DATABASE_POOL_MAX?: string;
     REDIS_TTL_DEFAULT?: string;
-    ADMIN_USERNAME: string;
-    ADMIN_PASSWORD: string;
-    JWT_SECRET: string;
+    BETTER_AUTH_SECRET: string;
+    BETTER_AUTH_BASE_URL?: string;
+    BETTER_AUTH_URL?: string;
   }
 }

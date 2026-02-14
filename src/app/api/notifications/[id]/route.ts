@@ -30,12 +30,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
-// PUT update notification (global, no platform association)
+// PUT update notification (content-only)
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { title, message, startDate, endDate } = body;
+    const { title, message, ctaLink } = body;
 
     if (!title || !message) {
       return NextResponse.json(
@@ -44,21 +44,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: 'Start date and end date are required' },
-        { status: 400 }
-      );
-    }
-
-    // Update the notification
     const [updatedNotification] = await db
       .update(notifications)
       .set({
         title,
         message,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        ctaLink: ctaLink ?? null,
         updatedAt: new Date(),
       })
       .where(eq(notifications.id, id))
@@ -74,8 +65,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         id: updatedNotification.id,
         title: updatedNotification.title,
         message: updatedNotification.message,
-        startDate: updatedNotification.startDate.toISOString(),
-        endDate: updatedNotification.endDate.toISOString(),
       })
     );
 

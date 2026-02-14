@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ThemeMenuContent } from "@/components/theme-menu-content"
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -45,14 +46,8 @@ export function NavUser({
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-      })
-
-      if (!response.ok) {
-        throw new Error('Logout failed')
-      }
-
+      const { authClient } = await import('@/lib/auth-client')
+      await authClient.signOut()
       toast.success('Logged out successfully')
       router.push('/login')
       router.refresh()
@@ -132,6 +127,8 @@ export function NavUser({
                 </div>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <ThemeMenuContent />
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled>
               <IconUserCircle />

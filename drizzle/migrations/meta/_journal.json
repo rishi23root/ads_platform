@@ -1,1 +1,62 @@
-{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1739000000000,"tag":"0000_baseline","breakpoints":true}]}
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1739000000000,
+      "tag": "0000_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770986985965,
+      "tag": "0001_melodic_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770987625537,
+      "tag": "0002_slimy_devos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770987951577,
+      "tag": "0003_remarkable_nightmare",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770988339398,
+      "tag": "0004_gorgeous_captain_cross",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770990660335,
+      "tag": "0005_gorgeous_morg",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770991000000,
+      "tag": "0006_adwarden_mvp_refactor",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770992000000,
+      "tag": "0007_campaign_countries",
+      "breakpoints": true
+    }
+  ]
+}

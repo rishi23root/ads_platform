@@ -1,4 +1,4 @@
-import { IconBell, IconDeviceDesktop, IconTrendingUp } from "@tabler/icons-react"
+import { IconChartBar, IconTrendingUp, IconUsers } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -11,44 +11,38 @@ import {
 } from "@/components/ui/card"
 
 interface SectionCardsProps {
-  totalAds: number;
-  activeAds: number;
-  expiredAds: number;
-  scheduledAds: number;
-  totalPlatforms: number;
-  activePlatforms: number;
-  totalNotifications: number;
-  unreadNotifications: number;
+  activeCampaigns: number;
+  totalCampaigns: number;
+  campaignLogs: number;
+  activeUsers: number;
+  liveUsers?: number;
   /** Optional card to prepend to the grid (e.g. live connections) */
   extraCard?: React.ReactNode;
 }
 
 export function SectionCards({
-  totalAds,
-  activeAds,
-  expiredAds,
-  scheduledAds,
-  totalPlatforms,
-  activePlatforms,
-  totalNotifications,
-  unreadNotifications,
+  activeCampaigns,
+  totalCampaigns,
+  campaignLogs,
+  activeUsers,
+  liveUsers,
   extraCard,
 }: SectionCardsProps) {
-  const activeAdsPercentage = totalAds > 0 ? Math.round((activeAds / totalAds) * 100) : 0;
+  const activePercentage = totalCampaigns > 0 ? Math.round((activeCampaigns / totalCampaigns) * 100) : 0;
 
   return (
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       {extraCard}
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Active Ads</CardDescription>
+          <CardDescription>Active Campaigns</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {activeAds}
+            {activeCampaigns}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400">
               <IconTrendingUp className="size-3" />
-              {activeAdsPercentage}%
+              {activePercentage}%
             </Badge>
           </CardAction>
         </CardHeader>
@@ -57,51 +51,51 @@ export function SectionCards({
             Currently running campaigns
           </div>
           <div className="text-muted-foreground">
-            {totalAds - activeAds - expiredAds - scheduledAds} inactive
+            {totalCampaigns} total campaigns
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Platforms</CardDescription>
+          <CardDescription>Campaign Logs</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {totalPlatforms}
+            {campaignLogs}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconDeviceDesktop className="size-3" />
-              {activePlatforms} active
+              <IconChartBar className="size-3" />
+              Extension requests
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            {activePlatforms} active platforms
+            Ad/notification/popup requests
           </div>
           <div className="text-muted-foreground">
-            {totalPlatforms - activePlatforms} inactive
+            From extension users
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Notifications</CardDescription>
+          <CardDescription>Active Users</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {totalNotifications}
+            {activeUsers}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className={unreadNotifications > 0 ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : ""}>
-              <IconBell className="size-3" />
-              {unreadNotifications} unread
+            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <IconUsers className="size-3" />
+              {liveUsers !== undefined ? `${liveUsers} live` : 'Visitors'}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            {unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'All caught up'}
+            Unique extension visitors
           </div>
           <div className="text-muted-foreground">
-            {totalNotifications - unreadNotifications} read
+            {liveUsers !== undefined ? `${liveUsers} currently connected` : 'Tracked in visitors table'}
           </div>
         </CardFooter>
       </Card>

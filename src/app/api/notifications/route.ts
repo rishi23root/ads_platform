@@ -19,11 +19,11 @@ export async function GET() {
   }
 }
 
-// POST create new notification (global, no platform/domain required)
+// POST create new notification (content-only, no dates)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, message, startDate, endDate } = body;
+    const { title, message, ctaLink } = body;
 
     if (!title || !message) {
       return NextResponse.json(
@@ -32,21 +32,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: 'Start date and end date are required' },
-        { status: 400 }
-      );
-    }
-
-    // Create the notification (global, no platform association)
     const [newNotification] = await db
       .insert(notifications)
       .values({
         title,
         message,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        ctaLink: ctaLink ?? null,
       })
       .returning();
 
@@ -57,8 +48,6 @@ export async function POST(request: NextRequest) {
           id: newNotification.id,
           title: newNotification.title,
           message: newNotification.message,
-          startDate: newNotification.startDate.toISOString(),
-          endDate: newNotification.endDate.toISOString(),
         })
       );
     }

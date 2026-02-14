@@ -9,11 +9,14 @@ import {
   IconDeviceDesktop,
   IconInnerShadowTop,
   IconChartBar,
+  IconUsers,
+  IconTargetArrow,
+  IconUserSearch,
 } from "@tabler/icons-react"
 
+import { KBarTrigger } from "@/components/kbar-trigger"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
-import { SidebarThemeToggle } from "@/components/sidebar-theme-toggle"
 import {
   Sidebar,
   SidebarContent,
@@ -26,51 +29,45 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const data = {
-  user: {
-    name: "Admin",
-    email: "admin@example.com",
-  },
-  navSections: [
-    {
-      label: "Overview",
-      items: [
-        {
-          title: "Dashboard",
-          url: "/",
-          icon: IconDashboard,
-        },
-        {
-          title: "Extension Insights",
-          url: "/analytics",
-          icon: IconChartBar,
-        },
-      ],
-    },
-    {
-      label: "Content",
-      items: [
-        {
-          title: "Platforms",
-          url: "/platforms",
-          icon: IconDeviceDesktop,
-        },
-        {
-          title: "Ads",
-          url: "/ads",
-          icon: IconAd2,
-        },
-        {
-          title: "Notifications",
-          url: "/notifications",
-          icon: IconBell,
-        },
-      ],
-    },
-  ],
+type Role = "user" | "admin"
+
+const overviewItems = [
+  { title: "Dashboard", url: "/", icon: IconDashboard },
+  { title: "Campaigns", url: "/campaigns", icon: IconTargetArrow },
+  { title: "Visitors", url: "/visitors", icon: IconUserSearch },
+  { title: "Extension Insights", url: "/analytics", icon: IconChartBar },
+]
+
+const contentItems = [
+  { title: "Platforms", url: "/platforms", icon: IconDeviceDesktop },
+  { title: "Ads", url: "/ads", icon: IconAd2 },
+  { title: "Notifications", url: "/notifications", icon: IconBell },
+]
+
+function getNavSections(role: Role) {
+  const sections: { label: string; items: typeof overviewItems }[] = [
+    { label: "Overview", items: overviewItems },
+  ]
+  if (role === "admin") {
+    sections.push({ label: "Content", items: contentItems })
+    sections.push({
+      label: "Admin",
+      items: [{ title: "Users", url: "/users", icon: IconUsers }],
+    })
+  }
+  return sections
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  user,
+  role,
+  ...props
+}: React.ComponentProps<typeof Sidebar> & {
+  user: { name: string; email: string; avatar?: string }
+  role: Role
+}) {
+  const navSections = getNavSections(role)
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -82,14 +79,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link href="/">
                 <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Admin Dashboard</span>
+                <span className="text-base font-semibold">Adwarden</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {data.navSections.map((section) => (
+        {navSections.map((section) => (
           <SidebarGroup key={section.label}>
             <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
             <NavMain items={section.items} />
@@ -97,8 +94,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarThemeToggle />
-        <NavUser user={data.user} />
+        <KBarTrigger />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

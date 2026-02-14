@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { ads, adPlatforms } from '@/db/schema';
+import { ads } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 type RouteContext = {
@@ -8,7 +8,7 @@ type RouteContext = {
 };
 
 // GET single ad
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
 
@@ -34,33 +34,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { name, description, imageUrl, targetUrl, platformIds, status, startDate, endDate } = body;
+    const { name, description, imageUrl, targetUrl, htmlCode } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    const safePlatformIds = Array.isArray(platformIds)
-      ? platformIds.filter((pid: unknown) => typeof pid === 'string' && pid)
-      : [];
-
-    // Determine status based on dates if not explicitly set
-    let finalStatus = status;
-    const now = new Date();
-    if (startDate && endDate && !status) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      if (end < now) {
-        finalStatus = 'expired';
-      } else if (start <= now && end >= now) {
-        finalStatus = 'active';
-      } else if (start > now) {
-        finalStatus = 'scheduled';
-      } else {
-        finalStatus = 'inactive';
-      }
-    } else if (!finalStatus) {
-      finalStatus = 'inactive';
     }
 
     const [updatedAd] = await db
@@ -70,10 +47,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         description: description || null,
         imageUrl: imageUrl || null,
         targetUrl: targetUrl || null,
-        platformId: safePlatformIds[0] ?? null,
-        status: finalStatus,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        htmlCode: htmlCode ?? null,
         updatedAt: new Date(),
       })
       .where(eq(ads.id, id))
@@ -81,13 +55,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     if (!updatedAd) {
       return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
-    }
-
-    await db.delete(adPlatforms).where(eq(adPlatforms.adId, id));
-    if (safePlatformIds.length > 0) {
-      await db.insert(adPlatforms).values(
-        safePlatformIds.map((platformId: string) => ({ adId: id, platformId }))
-      );
     }
 
     return NextResponse.json(updatedAd);

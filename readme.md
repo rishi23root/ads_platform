@@ -213,6 +213,7 @@ admin_dashboard/
 - `pnpm db:push` - Push schema directly (dev only)
 - `pnpm db:studio` - Open Drizzle Studio
 - `pnpm test:extension-log` - Run test script to simulate extension requests
+- `pnpm load-test:extension` - Load test extension API (10 users × 10 req/min × 10 min)
 
 ## Testing
 
@@ -239,6 +240,22 @@ The script will:
 - Display results and provide links to view in the Analytics dashboard
 
 See [docs/TEST_EXTENSION_LOG.md](./docs/TEST_EXTENSION_LOG.md) for detailed documentation.
+
+### Extension Load Testing
+
+Use the load test script to simulate extension traffic at scale:
+
+```bash
+pnpm load-test:extension
+```
+
+With a custom base URL:
+
+```bash
+BASE_URL=https://your-server.com pnpm load-test:extension
+```
+
+The script simulates **10 users**, each making **10 requests per minute** for **10 minutes** (~1000 total requests) to `POST /api/extension/ad-block`. It reports progress every minute and a final summary of successes and failures.
 
 ## Architecture Notes
 

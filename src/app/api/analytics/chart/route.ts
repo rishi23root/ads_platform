@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { requestLogs } from '@/db/schema';
+import { campaignLogs } from '@/db/schema';
 import { and, gte, lte } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
@@ -64,14 +64,14 @@ export async function GET(request: NextRequest) {
 
     const logs = await db
       .select({
-        requestType: requestLogs.requestType,
-        createdAt: requestLogs.createdAt,
+        type: campaignLogs.type,
+        createdAt: campaignLogs.createdAt,
       })
-      .from(requestLogs)
+      .from(campaignLogs)
       .where(
         and(
-          gte(requestLogs.createdAt, start),
-          lte(requestLogs.createdAt, end)
+          gte(campaignLogs.createdAt, start),
+          lte(campaignLogs.createdAt, end)
         )
       );
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     for (const log of logs) {
       const dateStr = new Date(log.createdAt).toISOString().slice(0, 10);
       const existing = dataByDate.get(dateStr) ?? { ad: 0, notification: 0 };
-      if (log.requestType === 'ad') {
+      if (log.type === 'ad' || log.type === 'popup') {
         existing.ad += 1;
       } else {
         existing.notification += 1;

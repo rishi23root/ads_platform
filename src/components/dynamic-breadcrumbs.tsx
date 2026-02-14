@@ -14,6 +14,7 @@ import {
 
 const routeLabels: Record<string, string> = {
   "/": "Dashboard",
+  "/campaigns": "Campaigns",
   "/platforms": "Platforms",
   "/ads": "Ads",
   "/notifications": "Notifications",
@@ -49,8 +50,14 @@ export function DynamicBreadcrumbs() {
       // For dynamic routes, try to get a meaningful label
       // Check if previous segment gives context
       if (segments[index - 1]) {
-        const parentLabel = routeLabels[`/${segments[index - 1]}`] || segments[index - 1]
-        label = `${parentLabel} Details`
+        const parentSegment = segments[index - 1]
+        // Special case: "campaigns" -> "Campaign Details" (singular)
+        if (parentSegment === "campaigns") {
+          label = "Campaign Details"
+        } else {
+          const parentLabel = routeLabels[`/${parentSegment}`] || parentSegment
+          label = `${parentLabel} Details`
+        }
       } else {
         label = segment.slice(0, 8) + "..."
       }

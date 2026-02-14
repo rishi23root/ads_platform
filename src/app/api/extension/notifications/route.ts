@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import {
-  extensionUsers,
-  requestLogs,
   notifications,
   notificationReads,
 } from '@/db/schema';
-import { eq, and, lte, gte, isNull } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 
 /**
  * POST /api/extension/notifications
  * Returns global notifications this user has not yet pulled. No domain required.
+ * Notifications are content-only; date filtering is on campaigns (handled by ad-block route).
+ * This endpoint returns all unread notifications (simplified for MVP).
  * Body: { visitorId: string }
  * Response: { notifications: [...] }
  */
@@ -45,9 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const now = new Date();
-
-    // Fetch active notifications not yet read by this visitor
+    // Fetch notifications not yet read by this visitor (content-only, no date filter)
     const activeNotifications = await db
       .select({
         id: notifications.id,
@@ -62,13 +60,7 @@ export async function POST(request: NextRequest) {
           eq(notificationReads.visitorId, visitorId)
         )
       )
-      .where(
-        and(
-          lte(notifications.startDate, now),
-          gte(notifications.endDate, now),
-          isNull(notificationReads.id)
-        )
-      )
+      .where(isNull(notificationReads.id))
       .orderBy(notifications.createdAt);
 
     const publicNotifications = activeNotifications.map((notif) => ({
@@ -89,37 +81,6 @@ export async function POST(request: NextRequest) {
         // Ignore duplicate key (already read)
       }
     }
-
-    // Upsert extension_users and insert request_log (no domain — use sentinel)
-    const existingUser = await db
-      .select()
-      .from(extensionUsers)
-      .where(eq(extensionUsers.visitorId, visitorId))
-      .limit(1);
-
-    if (existingUser.length > 0) {
-      await db
-        .update(extensionUsers)
-        .set({
-          lastSeenAt: now,
-          totalRequests: existingUser[0].totalRequests + 1,
-          updatedAt: now,
-        })
-        .where(eq(extensionUsers.visitorId, visitorId));
-    } else {
-      await db.insert(extensionUsers).values({
-        visitorId,
-        firstSeenAt: now,
-        lastSeenAt: now,
-        totalRequests: 1,
-      });
-    }
-
-    await db.insert(requestLogs).values({
-      visitorId,
-      domain: 'extension',
-      requestType: 'notification',
-    });
 
     return NextResponse.json({ notifications: publicNotifications });
   } catch (error) {

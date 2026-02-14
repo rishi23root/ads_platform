@@ -1,5 +1,5 @@
 import { database as db } from '@/db';
-import { extensionUsers, requestLogs } from '@/db/schema';
+import { visitors, campaignLogs } from '@/db/schema';
 import {
   Table,
   TableBody,
@@ -18,18 +18,19 @@ export const dynamic = 'force-dynamic';
 const typeColors: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   ad: 'default',
   notification: 'secondary',
+  popup: 'outline',
 };
 
 export default async function AnalyticsPage() {
-  // Fetch analytics data
-  const [allUsers, allLogs, adLogs, notificationLogs] = await Promise.all([
-    db.select().from(extensionUsers),
-    db.select().from(requestLogs).orderBy(desc(requestLogs.createdAt)).limit(100), // Latest 100 logs
-    db.select({ count: sql<number>`count(*)` }).from(requestLogs).where(eq(requestLogs.requestType, 'ad')),
-    db.select({ count: sql<number>`count(*)` }).from(requestLogs).where(eq(requestLogs.requestType, 'notification')),
+  // Fetch analytics data (visitors, campaign_logs)
+  const [allVisitors, allLogs, adLogs, notificationLogs] = await Promise.all([
+    db.select().from(visitors),
+    db.select().from(campaignLogs).orderBy(desc(campaignLogs.createdAt)).limit(100),
+    db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'ad')),
+    db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'notification')),
   ]);
 
-  const totalUsers = allUsers.length;
+  const totalUsers = allVisitors.length;
   const totalRequests = allLogs.length;
   const adsServed = Number(adLogs[0]?.count || 0);
   const notificationsSent = Number(notificationLogs[0]?.count || 0);
@@ -105,7 +106,8 @@ export default async function AnalyticsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>User ID</TableHead>
+              <TableHead>Visitor ID</TableHead>
+              <TableHead>Campaign</TableHead>
               <TableHead>Domain</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Timestamp</TableHead>
@@ -114,8 +116,8 @@ export default async function AnalyticsPage() {
           <TableBody>
             {allLogs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                  No request logs found. Extension requests will appear here.
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  No campaign logs found. Extension requests will appear here.
                 </TableCell>
               </TableRow>
             ) : (
@@ -124,14 +126,17 @@ export default async function AnalyticsPage() {
                   <TableCell className="font-mono text-sm">
                     {log.visitorId}
                   </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {log.campaignId.slice(0, 8)}…
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="font-normal">
                       {log.domain}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={typeColors[log.requestType] || 'secondary'}>
-                      {log.requestType}
+                    <Badge variant={typeColors[log.type] || 'secondary'}>
+                      {log.type}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
