@@ -91,19 +91,19 @@ export default async function VisitorsPage({
   }
   const havingClause = havingConditions.length > 0 ? sql.join(havingConditions, sql` AND `) : undefined;
 
-  let listQuery = baseQuery
-    .where(whereClause)
+  const listQuery = baseQuery
+    .where(whereClause ?? sql`true`)
+    .having(havingClause ?? sql`true`)
     .orderBy(desc(sql`max(${visitors.createdAt})`))
     .limit(pageSize)
     .offset(offset);
-  if (havingClause) listQuery = listQuery.having(havingClause);
-
-  let countQuery = db
+  
+  const countQuery = db
     .select({ visitorId: visitors.visitorId })
     .from(visitors)
-    .where(whereClause)
-    .groupBy(visitors.visitorId);
-  if (havingClause) countQuery = countQuery.having(havingClause);
+    .where(whereClause ?? sql`true`)
+    .groupBy(visitors.visitorId)
+    .having(havingClause ?? sql`true`);
 
   const [visitorsList, countRows, countryRows] = await Promise.all([
     listQuery,

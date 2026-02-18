@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ import { IconLoader2 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -115,5 +115,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-background">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
