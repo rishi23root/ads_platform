@@ -51,6 +51,7 @@ export function CampaignHeader({
               name={campaign.name}
               entityType="campaign"
               apiPath={`/api/campaigns/${campaign.id}`}
+              redirectTo="/campaigns"
             />
           </div>
         )}
@@ -84,6 +85,10 @@ export function CampaignHeader({
                       </span>
                     )}
                   </>
+                ) : campaign.campaignType === 'notification' ? (
+                  <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+                    All
+                  </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">None</span>
                 )}

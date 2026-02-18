@@ -72,6 +72,14 @@ export async function publishRealtimeNotification(payload: string): Promise<void
 }
 
 /**
+ * Publish a platforms_updated event so extension SSE subscribers can refresh their domains.
+ * No-op if Redis is not configured.
+ */
+export async function publishPlatformsUpdated(): Promise<void> {
+  await publishRealtimeNotification(JSON.stringify({ type: 'platforms_updated' }));
+}
+
+/**
  * Publish the current connection count to REALTIME_COUNT_CHANNEL so dashboard SSE subscribers get updates.
  * No-op if Redis is not configured.
  */

@@ -1,5 +1,10 @@
 // Adwarden MVP - DBML for dbdiagram.io
-// Paste this at https://dbdiagram.io/d
+// Paste at https://dbdiagram.io/d
+
+Project Adwarden {
+  database_type: 'PostgreSQL'
+  Note: 'Campaign-centric ad/notification delivery. visitors = event log (one row per serve).'
+}
 
 // ============ Enums ============
 Enum user_role {
@@ -33,19 +38,13 @@ Enum campaign_status {
   expired
 }
 
-Enum request_log_type {
+Enum visitor_event_type {
   ad
   notification
   popup
 }
 
-Enum campaign_log_type {
-  ad
-  notification
-  popup
-}
-
-// ============ Better Auth ============
+// ============ Auth ============
 Table user {
   id varchar(255) [pk]
   name varchar(255)
@@ -91,10 +90,9 @@ Table verification {
   value varchar(255) [not null]
   expires_at timestamp [not null]
   created_at timestamp [not null]
-  updated_at timestamp [not null]
 }
 
-// ============ Platforms ============
+// ============ Content ============
 Table platforms {
   id uuid [pk]
   name varchar(255) [not null]
@@ -104,7 +102,6 @@ Table platforms {
   updated_at timestamp [not null]
 }
 
-// ============ Ads ============
 Table ads {
   id uuid [pk]
   name varchar(255) [not null]
@@ -116,7 +113,6 @@ Table ads {
   updated_at timestamp [not null]
 }
 
-// ============ Notifications ============
 Table notifications {
   id uuid [pk]
   title varchar(255) [not null]
@@ -163,49 +159,27 @@ Table campaign_countries {
 }
 
 Table campaign_ad {
-  campaign_id uuid [pk]
-  ad_id uuid [not null, unique]
+  campaign_id uuid [pk, ref: > campaigns.id]
+  ad_id uuid [pk, ref: > ads.id]
+  Note: 'Same ad can be used in multiple campaigns'
 }
 
 Table campaign_notification {
-  campaign_id uuid [pk]
-  notification_id uuid [not null, unique]
+  campaign_id uuid [pk, ref: > campaigns.id]
+  notification_id uuid [pk, ref: > notifications.id]
+  Note: 'Same notification can be used in multiple campaigns'
 }
 
-Table campaign_visitor_views {
-  campaign_id uuid [pk]
-  visitor_id varchar(255) [pk]
-  view_count integer [not null, default: 0]
-  last_viewed_at timestamp [not null]
-}
-
-// ============ Visitors ============
+// ============ Visitors & Analytics ============
 Table visitors {
-  visitor_id varchar(255) [pk]
-  country varchar(2)
-  total_requests integer [not null, default: 0]
-  created_at timestamp [not null]
-  last_seen_at timestamp [not null]
-}
-
-// ============ Request Logs ============
-Table request_logs {
   id uuid [pk]
   visitor_id varchar(255) [not null]
+  campaign_id uuid
   domain varchar(255) [not null]
-  request_type request_log_type [not null]
-  created_at timestamp [not null]
-}
-
-// ============ Campaign Logs ============
-Table campaign_logs {
-  id uuid [pk]
-  campaign_id uuid [not null]
-  visitor_id varchar(255) [not null]
-  domain varchar(255) [not null]
+  type visitor_event_type [not null]
   country varchar(2)
-  type campaign_log_type [not null]
   created_at timestamp [not null]
+  Note: 'Event-based: one row per campaign serve'
 }
 
 // ============ Relationships ============
@@ -220,12 +194,4 @@ Ref: campaign_platforms.platform_id > platforms.id
 
 Ref: campaign_countries.campaign_id > campaigns.id
 
-Ref: campaign_ad.campaign_id > campaigns.id
-Ref: campaign_ad.ad_id > ads.id
-
-Ref: campaign_notification.campaign_id > campaigns.id
-Ref: campaign_notification.notification_id > notifications.id
-
-Ref: campaign_visitor_views.campaign_id > campaigns.id
-
-Ref: campaign_logs.campaign_id > campaigns.id
+Ref: visitors.campaign_id > campaigns.id

@@ -10,14 +10,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { VisitorIdCell } from '@/components/visitor-id-cell';
+import { IconRefresh } from '@tabler/icons-react';
 
 interface LogEntry {
   id: string;
   visitorId: string;
-  domain: string;
+  domain: string | null;
   type: string;
+  statusCode: number | null;
   createdAt: string;
 }
 
@@ -33,7 +36,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
+  const fetchLogs = React.useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -63,6 +66,11 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
     };
   }, [campaignId, page]);
 
+  React.useEffect(() => {
+    const cleanup = fetchLogs();
+    return cleanup;
+  }, [fetchLogs]);
+
   if (error) {
     return (
       <div className="flex h-[160px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
@@ -84,8 +92,8 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             Extension requests for this campaign. Paginated for performance.
           </p>
         </div>
-        {!loading && (
-          <div className="shrink-0">
+        <div className="shrink-0 flex items-center gap-2">
+          {!loading && (totalPages > 0 || totalCount > 0) && (
             <TablePagination
               mode="button"
               page={page}
@@ -94,8 +102,18 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
               pageSize={pageSize}
               onPageChange={setPage}
             />
-          </div>
-        )}
+          )}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={fetchLogs}
+            disabled={loading}
+            aria-label="Refresh logs"
+            className="h-8 w-8 cursor-pointer transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 disabled:active:scale-100"
+          >
+            <IconRefresh className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <div className="rounded-md border">
         <Table>
@@ -104,19 +122,20 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
               <TableHead>Visitor</TableHead>
               <TableHead>Domain</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : logs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
+                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-sm">
                   No logs yet. Extension requests will appear here.
                 </TableCell>
               </TableRow>
@@ -126,9 +145,12 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                   <TableCell>
                     <VisitorIdCell visitorId={log.visitorId} />
                   </TableCell>
-                  <TableCell className="text-sm">{log.domain}</TableCell>
+                  <TableCell className="text-sm">{log.domain ?? '—'}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{log.type}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums">
+                    {log.statusCode ?? '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString(undefined, {

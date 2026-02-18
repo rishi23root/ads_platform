@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { publishRealtimeNotification } from '@/lib/redis';
 import { getSessionWithRole } from '@/lib/dal';
 
 type RouteContext = {
@@ -72,15 +71,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!updatedNotification) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
-
-    await publishRealtimeNotification(
-      JSON.stringify({
-        type: 'updated',
-        id: updatedNotification.id,
-        title: updatedNotification.title,
-        message: updatedNotification.message,
-      })
-    );
 
     return NextResponse.json(updatedNotification);
   } catch (error) {

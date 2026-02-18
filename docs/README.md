@@ -5,7 +5,7 @@ This directory contains all documentation for the Admin Dashboard and Extension 
 ## Documentation Files
 
 ### API Documentation
-- **[EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md)** - **Complete extension API reference** — comprehensive guide with both endpoints (`/api/extension/notifications` and `/api/extension/ad-block`), request/response formats (arrays), TypeScript types, code examples, error handling, and best practices. **Start here for extension development.**
+- **[EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md)** - **Complete extension API reference** — comprehensive guide with `/api/extension/ad-block` (use `requestType: "notification"` for notifications on extension load), request/response formats (arrays), TypeScript types, code examples, error handling, and best practices. **Start here for extension development.**
 - **[EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md)** - Extension API reference (alternative format)
 - **[EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md)** - Additional extension API notes and usage patterns
 

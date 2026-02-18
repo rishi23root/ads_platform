@@ -4,6 +4,7 @@ import { platforms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { normalizeDomain } from '@/lib/domain-utils';
+import { publishPlatformsUpdated } from '@/lib/redis';
 
 // GET all platforms
 export async function GET() {
@@ -72,6 +73,10 @@ export async function POST(request: NextRequest) {
         isActive: isActive ?? true,
       })
       .returning();
+
+    if (newPlatform) {
+      await publishPlatformsUpdated();
+    }
 
     return NextResponse.json(newPlatform, { status: 201 });
   } catch (error) {

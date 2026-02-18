@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes platforms, ads, notifications (global), notification_reads (per-user pull tracking), visitors (extension user tracking), request_logs (generic API request analytics), and campaign_logs (campaign-specific impressions).
+The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes platforms, ads, notifications (global), notification_reads (per-user pull tracking), and visitors (event-based: one row per campaign serve, replaces former request_logs and campaign_logs).
 
 ## Entity Relationship Diagram
 
@@ -10,7 +10,7 @@ The database uses PostgreSQL with Drizzle ORM for type-safe database operations.
 erDiagram
     platforms ||--o{ ads : "has"
     notifications ||--o{ notification_reads : "pulled by"
-    visitors ||--o{ request_logs : "creates"
+    visitors }o--|| campaigns : "served by"
     
     platforms {
         uuid id PK
@@ -48,18 +48,12 @@ erDiagram
     }
     
     visitors {
-        varchar visitor_id PK
-        varchar country
-        integer total_requests
-        timestamp created_at
-        timestamp last_seen_at
-    }
-    
-    request_logs {
         uuid id PK
         varchar visitor_id
+        uuid campaign_id FK
         varchar domain
-        enum request_type
+        enum type
+        varchar country
         timestamp created_at
     }
 ```
@@ -190,69 +184,30 @@ Tracks which notifications each user has already pulled (so each notification is
 
 ### visitors
 
-Tracks browser extension users and their activity statistics.
+Event-based table: one row per campaign serve. Replaces former `request_logs`, `campaign_logs`, and `campaign_visitor_views` tables.
 
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
-| `visitor_id` | varchar(255) | PRIMARY KEY | Extension-provided visitor identifier |
-| `country` | varchar(2) | NULL | 2-letter country code (from headers or body) |
-| `total_requests` | integer | NOT NULL, DEFAULT 0 | Total number of API requests made |
-| `created_at` | timestamp with time zone | NOT NULL, DEFAULT now() | First request timestamp |
-| `last_seen_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Most recent request timestamp |
+| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique event identifier |
+| `visitor_id` | varchar(255) | NOT NULL | Extension-provided visitor identifier |
+| `campaign_id` | uuid | NULL, FK → campaigns.id | Campaign that served content (null = not used; we only insert when serving) |
+| `domain` | varchar(255) | NOT NULL | Domain where request occurred (e.g. `instagram.com`, `extension`) |
+| `type` | visitor_event_type | NOT NULL | `ad` \| `notification` \| `popup` |
 
 **Relationships:**
-- One-to-many with `request_logs` (via `visitor_id`, logical relationship)
-
-**Indexes:**
-- Primary key on `visitor_id`
-
-**Usage:**
-- Created automatically when extension calls any extension API
-- Updated on each request (increments `total_requests`, updates `last_seen_at`)
-- Used for analytics and user tracking
-- `visitor_id` is provided by extension (fingerprint/hash)
-
-**Upsert Behavior:**
-When extension calls `/api/extension/ad-block` or `/api/extension/notifications`:
-1. If `visitor_id` exists: Update `last_seen_at`, increment `total_requests`
-2. If `visitor_id` doesn't exist: Create new record with `total_requests = 1`
-
----
-
-### request_logs
-
-Logs individual extension API requests for analytics purposes. Separate from `campaign_logs`, which tracks campaign-specific impressions.
-
-| Column | Type | Constraints | Description |
-|--------|------|------------|-------------|
-| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique log entry identifier |
-| `visitor_id` | varchar(255) | NOT NULL | Extension user identifier |
-| `domain` | varchar(255) | NOT NULL | Domain where request originated (use `extension` for notifications-only endpoint) |
-| `request_type` | enum | NOT NULL | Type of request (see enum below) |
-| `created_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Request timestamp |
-
-**Request Type Enum Values:**
-- `ad` - Request for ads
-- `notification` - Request for notifications
-
-**Relationships:**
-- Many-to-one with `visitors` (via `visitor_id`, logical relationship)
+- Many-to-one with `campaigns` (via `campaign_id`)
 
 **Indexes:**
 - Primary key on `id`
-- Index on `(visitor_id, created_at DESC)` for efficient lookups
+- `(campaign_id, created_at DESC)` for campaign logs
+- `(visitor_id, campaign_id)` for frequency tracking
+- `(visitor_id, created_at DESC)` for visitor analytics
 
 **Usage:**
-- **User-guided logging**: Inserted only when the user actually receives data (ads or notifications)
-- For ad-block: uses actual domain from request; inserts one row per type that returned data (ad, notification, or both)
-- For notifications-only: uses sentinel domain `extension`; inserts only when notifications were returned
-- Tracks which domains delivered content and request types (not every API call)
-- Used for analytics dashboard
-
-**Logging Flow:**
-1. Extension calls `/api/extension/ad-block` or `/api/extension/notifications`
-2. API upserts `visitors` record (increments `total_requests`)
-3. API inserts `request_logs` **only when** ads or notifications were actually returned to the user
+- Inserted only when content is actually served to a user (one row per campaign served)
+- Campaign logs: `WHERE campaign_id = :id AND created_at >= campaign.start_date`
+- Frequency: `COUNT(*) WHERE visitor_id = :v AND campaign_id = :c` (replaces campaign_visitor_views)
+- Unique visitors: `COUNT(DISTINCT visitor_id)`
 
 ---
 
@@ -276,17 +231,17 @@ Ad status enumeration.
 - End date passes → `expired` (automatic)
 - Admin deactivates → `inactive`
 
-### request_type
+### visitor_event_type
 
-Request type enumeration for analytics logging.
+Event type enumeration for analytics logging.
 
-- `ad` - Extension requested ads
-- `notification` - Extension requested notifications
+- `ad` - Inline ad served
+- `notification` - Notification served
+- `popup` - Popup ad served
 
 **Usage:**
-- Used in `request_logs` table
-- Allows filtering analytics by request type
-- Extension logs both types when fetching content
+- Used in `visitors` table
+- Indicates what type of content was served to the user
 
 ---
 
@@ -300,10 +255,9 @@ Request type enumeration for analytics logging.
    - Foreign key: `ads.platform_id` → `platforms.id`
    - On delete: SET NULL (platform deletion doesn't delete ads)
 
-2. **visitors → request_logs** (logical)
-   - One visitor can have many request logs
-   - Logs reference visitor via `visitor_id` (varchar, not FK)
-   - No foreign key constraint (flexibility for extension-provided IDs)
+2. **campaigns → visitors** (logical)
+   - One campaign can have many visitor events
+   - Events reference campaign via `campaign_id` (FK)
 
 ### Notification Read Tracking
 
@@ -325,7 +279,6 @@ Request type enumeration for analytics logging.
 - `notification_reads.notification_id` → `notifications.id` (ON DELETE CASCADE)
 
 ### Unique Constraints
-- `visitors.visitor_id` (primary key)
 - `notification_reads (notification_id, visitor_id)` (unique)
 
 ### Implicit Indexes
@@ -449,26 +402,19 @@ const activeNotifications = await db
   );
 ```
 
-### Upserting Visitor (Extension User)
+### Inserting Visitor Events (When Serving)
 
 ```typescript
-await db
-  .insert(visitors)
-  .values({
+// One row per campaign served. Insert only when content is actually returned to the user.
+await db.insert(visitors).values(
+  servedCampaigns.map((c) => ({
     visitorId,
+    campaignId: c.id,
+    domain,
+    type: c.campaignType === 'notification' ? 'notification' : c.campaignType === 'popup' ? 'popup' : 'ad',
     country: resolvedCountry,
-    totalRequests: 1,
-    createdAt: now,
-    lastSeenAt: now,
-  })
-  .onConflictDoUpdate({
-    target: visitors.visitorId,
-    set: {
-      lastSeenAt: now,
-      totalRequests: sql`${visitors.totalRequests} + 1`,
-      ...(resolvedCountry !== null && { country: resolvedCountry }),
-    },
-  });
+  }))
+);
 ```
 
 ---
@@ -493,4 +439,4 @@ await db
 - Add soft delete pattern (deleted_at timestamp)
 - Add versioning/audit trail for content changes
 - Add full-text search indexes for descriptions/messages
-- Consider partitioning for large `request_logs` table
+- Consider partitioning for large `visitors` table

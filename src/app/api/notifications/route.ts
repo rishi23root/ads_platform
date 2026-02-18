@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
-import { publishRealtimeNotification } from '@/lib/redis';
 import { getSessionWithRole } from '@/lib/dal';
 
 // GET all notifications (global, no domain filtering)
@@ -54,17 +53,6 @@ export async function POST(request: NextRequest) {
         ctaLink: ctaLink ?? null,
       })
       .returning();
-
-    if (newNotification) {
-      await publishRealtimeNotification(
-        JSON.stringify({
-          type: 'new',
-          id: newNotification.id,
-          title: newNotification.title,
-          message: newNotification.message,
-        })
-      );
-    }
 
     return NextResponse.json(newNotification, { status: 201 });
   } catch (error) {

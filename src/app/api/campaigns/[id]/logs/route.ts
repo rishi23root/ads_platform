@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaignLogs } from '@/db/schema';
+import { visitors } from '@/db/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 
@@ -28,23 +28,24 @@ export async function GET(
     );
     const offset = (page - 1) * pageSize;
 
-    const where = eq(campaignLogs.campaignId, id);
+    const where = eq(visitors.campaignId, id);
 
     const [logs, countResult] = await Promise.all([
       db
         .select({
-          id: campaignLogs.id,
-          visitorId: campaignLogs.visitorId,
-          domain: campaignLogs.domain,
-          type: campaignLogs.type,
-          createdAt: campaignLogs.createdAt,
+          id: visitors.id,
+          visitorId: visitors.visitorId,
+          domain: visitors.domain,
+          type: visitors.type,
+          statusCode: visitors.statusCode,
+          createdAt: visitors.createdAt,
         })
-        .from(campaignLogs)
+        .from(visitors)
         .where(where)
-        .orderBy(desc(campaignLogs.createdAt))
+        .orderBy(desc(visitors.createdAt))
         .limit(pageSize)
         .offset(offset),
-      db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(where),
+      db.select({ count: sql<number>`count(*)` }).from(visitors).where(where),
     ]);
 
     const totalCount = Number(countResult[0]?.count ?? 0);

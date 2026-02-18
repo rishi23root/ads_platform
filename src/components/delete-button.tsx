@@ -22,6 +22,8 @@ interface DeleteButtonProps {
   name: string;
   entityType: 'ad' | 'platform' | 'notification' | 'campaign';
   apiPath: string;
+  /** When provided, redirects here after successful delete (e.g. when deleting from a detail page) */
+  redirectTo?: string;
 }
 
 const entityLabels = {
@@ -47,7 +49,7 @@ const entityLabels = {
   },
 };
 
-export function DeleteButton({ name, entityType, apiPath }: DeleteButtonProps) {
+export function DeleteButton({ name, entityType, apiPath, redirectTo }: DeleteButtonProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -68,7 +70,11 @@ export function DeleteButton({ name, entityType, apiPath }: DeleteButtonProps) {
       }
 
       toast.success(labels.successMessage);
-      router.refresh();
+      if (redirectTo) {
+        router.replace(redirectTo);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : labels.errorMessage);
     } finally {

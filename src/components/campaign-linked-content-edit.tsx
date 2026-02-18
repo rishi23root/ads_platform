@@ -32,12 +32,14 @@ export function CampaignLinkedContentEdit({ ad, notification }: CampaignLinkedCo
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           ad={ad}
+          initialMode="edit"
         />
       ) : notification ? (
         <NotificationEditDrawer
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           notification={notification}
+          initialMode="edit"
         />
       ) : null}
     </>

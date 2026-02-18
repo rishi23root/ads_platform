@@ -88,6 +88,10 @@ export function CampaignForm({
   const [name, setName] = useState(campaign?.name ?? '');
   const [targetAudience, setTargetAudience] = useState<TargetAudience>((campaign?.targetAudience as TargetAudience) ?? 'all_users');
   const [campaignType, setCampaignType] = useState<CampaignType>((campaign?.campaignType as CampaignType) ?? 'ads');
+  const handleCampaignTypeChange = (v: CampaignType) => {
+    setCampaignType(v);
+    if (v === 'notification') setPlatformIds([]);
+  };
   const [frequencyType, setFrequencyType] = useState<FrequencyType>((campaign?.frequencyType as FrequencyType) ?? 'always');
   const [frequencyCount, setFrequencyCount] = useState(campaign?.frequencyCount?.toString() ?? '');
   const [timeStart, setTimeStart] = useState(campaign?.timeStart ?? '');
@@ -108,8 +112,9 @@ export function CampaignForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation: at least one domain (platform)
-    if (!platformIds.length) {
+    // Validation: at least one domain (platform) - not required for notifications
+
+    if (campaignType !== 'notification' && !platformIds.length) {
       toast.error('Select at least one domain (platform)');
       return;
     }
@@ -142,7 +147,7 @@ export function CampaignForm({
         status,
         startDate: startDate || null,
         endDate: endDate || null,
-        platformIds,
+        platformIds: campaignType === 'notification' ? [] : platformIds,
         countryCodes,
         adId: (campaignType === 'ads' || campaignType === 'popup') ? adId || null : null,
         notificationId: campaignType === 'notification' ? notificationId || null : null,
@@ -192,7 +197,7 @@ export function CampaignForm({
                   </div>
                   <div className="space-y-2">
                     <Label>Campaign type</Label>
-                    <Select value={campaignType} onValueChange={(v) => setCampaignType(v as CampaignType)}>
+                    <Select value={campaignType} onValueChange={(v) => handleCampaignTypeChange(v as CampaignType)}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ads">Ads</SelectItem>
@@ -309,6 +314,7 @@ export function CampaignForm({
             <div className="space-y-4">
               <SectionTitle>Targeting</SectionTitle>
               <div className="space-y-4">
+                {campaignType !== 'notification' && (
                 <div className="space-y-2">
                   <Label>Targeted websites (platforms) *</Label>
                   <MultiSelectContainer>
@@ -349,7 +355,10 @@ export function CampaignForm({
                     </Select>
                   </MultiSelectContainer>
                 </div>
-
+                )}
+                {campaignType === 'notification' && (
+                  <InfoHint>Notifications are served everywhere — no domain restriction.</InfoHint>
+                )}
                 <div className="space-y-2">
                   <Label>Countries to serve</Label>
                   <InfoHint>Leave empty to serve in all countries</InfoHint>

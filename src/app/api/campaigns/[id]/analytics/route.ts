@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaignLogs } from '@/db/schema';
+import { visitors } from '@/db/schema';
 import { and, eq, gte, lte } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { getStartDate, fillMissingDays } from '@/lib/date-range';
@@ -36,14 +36,14 @@ export async function GET(
 
     const logs = await db
       .select({
-        createdAt: campaignLogs.createdAt,
+        createdAt: visitors.createdAt,
       })
-      .from(campaignLogs)
+      .from(visitors)
       .where(
         and(
-          eq(campaignLogs.campaignId, id),
-          gte(campaignLogs.createdAt, start),
-          lte(campaignLogs.createdAt, end)
+          eq(visitors.campaignId, id),
+          gte(visitors.createdAt, start),
+          lte(visitors.createdAt, end)
         )
       );
 

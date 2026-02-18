@@ -17,9 +17,9 @@ function sseEvent(name: string, data: string): Uint8Array {
 
 /**
  * GET /api/extension/live
- * SSE stream for real-time notifications and connection count.
+ * SSE stream for real-time notifications, domains, and connection count.
  * Optional query: visitorId (for future use).
- * Events: connection_count, notification.
+ * Events: connection_count, notification, domains.
  * Connection may close after platform timeout (~5 min); extension should reconnect.
  */
 export async function GET(request: NextRequest) {
@@ -72,7 +72,16 @@ export async function GET(request: NextRequest) {
 
         await subscriber.subscribe(REALTIME_CHANNEL, (message: string) => {
           try {
-            controller.enqueue(sseEvent('notification', message));
+            let eventName = 'notification';
+            try {
+              const parsed = JSON.parse(message) as { type?: string };
+              if (parsed?.type === 'platforms_updated') {
+                eventName = 'domains';
+              }
+            } catch {
+              // not JSON or parse error, keep as notification
+            }
+            controller.enqueue(sseEvent(eventName, message));
           } catch {
             // stream may be closed
           }

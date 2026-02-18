@@ -6,9 +6,11 @@ import {
   campaignCountries,
   campaignAd,
   campaignNotification,
+  notifications,
 } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
+import { publishRealtimeNotification } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!Array.isArray(platformIds) || platformIds.length === 0) {
+    if (campaignType !== 'notification' && (!Array.isArray(platformIds) || platformIds.length === 0)) {
       return NextResponse.json(
         { error: 'Select at least one domain (platform)' },
         { status: 400 }
@@ -157,6 +159,17 @@ export async function POST(request: NextRequest) {
     }
     if (campaignType === 'notification' && notificationId) {
       await db.insert(campaignNotification).values({ campaignId, notificationId });
+      const [notif] = await db.select().from(notifications).where(eq(notifications.id, notificationId)).limit(1);
+      if (notif) {
+        await publishRealtimeNotification(
+          JSON.stringify({
+            type: 'new',
+            id: notif.id,
+            title: notif.title,
+            message: notif.message,
+          })
+        );
+      }
     }
 
     return NextResponse.json({ id: campaignId });

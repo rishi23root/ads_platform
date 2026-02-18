@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import {
-  campaignLogs,
+  visitors,
   campaignPlatforms,
   campaignCountries,
   campaignAd,
@@ -46,23 +46,23 @@ export async function GET(
     // Current period logs
     const [currentLogs, prevLogs, platformRows, countryRows, adRow, notifRow] = await Promise.all([
       db
-        .select({ createdAt: campaignLogs.createdAt, visitorId: campaignLogs.visitorId })
-        .from(campaignLogs)
+        .select({ createdAt: visitors.createdAt, visitorId: visitors.visitorId })
+        .from(visitors)
         .where(
           and(
-            eq(campaignLogs.campaignId, id),
-            gte(campaignLogs.createdAt, start),
-            lte(campaignLogs.createdAt, end)
+            eq(visitors.campaignId, id),
+            gte(visitors.createdAt, start),
+            lte(visitors.createdAt, end)
           )
         ),
       db
-        .select({ createdAt: campaignLogs.createdAt, visitorId: campaignLogs.visitorId })
-        .from(campaignLogs)
+        .select({ createdAt: visitors.createdAt, visitorId: visitors.visitorId })
+        .from(visitors)
         .where(
           and(
-            eq(campaignLogs.campaignId, id),
-            gte(campaignLogs.createdAt, prevStart),
-            lte(campaignLogs.createdAt, prevEnd)
+            eq(visitors.campaignId, id),
+            gte(visitors.createdAt, prevStart),
+            lte(visitors.createdAt, prevEnd)
           )
         ),
       db
@@ -115,16 +115,16 @@ export async function GET(
     }));
 
     const topDomainsRaw = await db
-      .select({ domain: campaignLogs.domain, count: sql<number>`count(*)` })
-      .from(campaignLogs)
+      .select({ domain: visitors.domain, count: sql<number>`count(*)` })
+      .from(visitors)
       .where(
         and(
-          eq(campaignLogs.campaignId, id),
-          gte(campaignLogs.createdAt, start),
-          lte(campaignLogs.createdAt, end)
+          eq(visitors.campaignId, id),
+          gte(visitors.createdAt, start),
+          lte(visitors.createdAt, end)
         )
       )
-      .groupBy(campaignLogs.domain)
+      .groupBy(visitors.domain)
       .orderBy(desc(sql`count(*)`))
       .limit(30);
 
@@ -148,24 +148,19 @@ export async function GET(
       .slice(0, 10)
       .map(({ displayDomain, count }) => ({ domain: displayDomain, count }));
 
-    let countryDistribution: { country: string | null; count: number }[] = [];
-    try {
-      countryDistribution = await db
-        .select({ country: campaignLogs.country, count: sql<number>`count(*)` })
-        .from(campaignLogs)
-        .where(
-          and(
-            eq(campaignLogs.campaignId, id),
-            gte(campaignLogs.createdAt, start),
-            lte(campaignLogs.createdAt, end)
-          )
+    const countryDistribution = await db
+      .select({ country: visitors.country, count: sql<number>`count(*)` })
+      .from(visitors)
+      .where(
+        and(
+          eq(visitors.campaignId, id),
+          gte(visitors.createdAt, start),
+          lte(visitors.createdAt, end)
         )
-        .groupBy(campaignLogs.country)
-        .orderBy(desc(sql`count(*)`))
-        .limit(15);
-    } catch {
-      // country column may not exist if migration 0001_add_country_to_campaign_logs hasn't run
-    }
+      )
+      .groupBy(visitors.country)
+      .orderBy(desc(sql`count(*)`))
+      .limit(15);
 
     const platformIds = platformRows.map((r) => r.platformId);
     const platformDomains =

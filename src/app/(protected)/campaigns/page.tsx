@@ -106,7 +106,9 @@ export default async function CampaignsPage() {
                   <TableCell>{c.frequencyType.replace(/_/g, ' ')}</TableCell>
                   <TableCell>
                     <span className="text-muted-foreground text-sm">
-                      {c.platformIds?.length ?? 0} platforms
+                      {c.campaignType === 'notification' && (c.platformIds?.length ?? 0) === 0
+                        ? 'All platforms'
+                        : `${c.platformIds?.length ?? 0} platforms`}
                       {(c.countryCodes?.length ?? 0) > 0 ? ` · ${c.countryCodes!.length} countries` : ' · All countries'}
                       {(c.campaignType === 'ads' || c.campaignType === 'popup') && (c.adId ? ' · 1 ad' : '')}
                       {c.campaignType === 'notification' && (c.notificationId ? ' · 1 notification' : '')}

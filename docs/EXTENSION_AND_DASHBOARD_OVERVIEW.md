@@ -40,7 +40,7 @@ This document explains how the **browser extension** and **admin dashboard** wor
 ```
 
 - **Admin Dashboard**: backend + UI. It stores platforms, ads, notifications, and request logs. It exposes **public** endpoints for the extension and **protected** endpoints for the admin UI.
-- **Extension**: runs in the user’s browser, calls the dashboard’s **public** API to get ads/notifications and to send logs. For real-time notification signals, connect to `GET /api/extension/live` (SSE); when the admin creates a notification, the server pushes an event and the extension pulls the new content.
+- **Extension**: runs in the user’s browser, calls the dashboard’s **public** API to get ads/notifications and to send logs. For real-time notification signals, connect to `GET /api/extension/live` (SSE); when the admin creates a notification, the server pushes an event and the extension pulls the new content. **When the user is on the dashboard (admin UI), do not pull or show notifications** — admins should not see notification banners.
 
 ---
 
@@ -53,7 +53,7 @@ This document explains how the **browser extension** and **admin dashboard** wor
 | **Database**         | `platforms`, `ads`, `notifications`, `notification_reads`, `extension_users`, `request_logs`. |
 | **Redis**           | Used for admin session (login). Not used for extension traffic. |
 
-**Real-time:** Connect to `GET /api/extension/live` (SSE) to receive a `notification` event when the admin creates/updates a notification; on that event, call `POST /api/extension/notifications` to pull and show. This marks the user as live (dashboard shows connection count).
+**Real-time:** Connect to `GET /api/extension/live` (SSE) to receive a `notification` event when the admin creates/updates a notification; on that event, call `POST /api/extension/ad-block` with `requestType: "notification"` to pull and show. This marks the user as live (dashboard shows connection count). **Skip notification pull when the user is on the dashboard** — admins should not see notifications.
 
 ---
 
@@ -63,10 +63,12 @@ All communication is **HTTP (REST)**. The extension is the only client of these 
 
 ### 3.1 Extension → Dashboard (what the extension calls)
 
+All extension endpoints are **public** (no authentication). Do **not** use `/api/notifications` — that is the admin dashboard API and requires an authenticated session. For notifications on extension load, use `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }`. No domain needed.
+
 | Purpose              | Method | Endpoint                          | When extension typically calls |
 |----------------------|--------|-----------------------------------|---------------------------------|
 | Live SSE (real-time notification signal) | GET | `/api/extension/live` | Keep open while extension is active. Marks user as live; receive `notification` event when admin creates/updates. |
-| Pull notifications only | POST | `/api/extension/notifications` | On first connect or when SSE `notification` event received. Body: `{ visitorId }`. No domain needed. |
+| Pull notifications only | POST | `/api/extension/ad-block` | On extension load. Body: `{ visitorId, requestType: "notification" }`. No domain needed. Returns `{ ads: [], notifications: [...] }`. **Skip when user is on the dashboard** — admins should not see notifications. |
 | Get ads/notifications and log visit | POST   | `/api/extension/ad-block`        | On page load or when domain matches. Body: `{ visitorId, domain, requestType? }`. Fetches ads and/or notifications; logging is automatic. |
 
 - **Ad Block**: extension sends `{ visitorId, domain, requestType? }`. Ads are resolved by domain; notifications are global and only those not yet pulled by this `visitorId` are returned. Response is always `{ads: [...], notifications: [...]}` (arrays).
@@ -110,7 +112,7 @@ Full request/response shapes, errors, and TypeScript types: [EXTENSION_AD_BLOCK_
 
 1. **User ID**: extension provides a stable `visitorId` (e.g. generated once, stored in extension storage).
 2. **Ads**: on domain page load, call `POST /api/extension/ad-block` with `{visitorId, domain}` or `requestType: "ad"`. Use the `ads` array from the response (domain-specific).
-3. **Notifications**: call once per day when the user opens the browser or when the extension loads (e.g. `requestType: "notification"`). Use the `notifications` array; it contains only notifications this user has not yet received.
+3. **Notifications**: call once per day when the user opens the browser or when the extension loads (e.g. `requestType: "notification"`). Use the `notifications` array; it contains only notifications this user has not yet received. **Skip when the user is on the dashboard** — admins should not see notifications.
 4. Response is always `{ads: [...], notifications: [...]}` (arrays). Logging is automatic.
 
 So “how notification works” is: **dashboard stores global notification content and date range; extension asks “what notifications are new for this user?” once per session/day and displays the returned list.**
@@ -171,18 +173,17 @@ So “many requests each second” usually means: **frequent calls to `/api/exte
 | Endpoint                | Method | Purpose |
 |-------------------------|--------|--------|
 | `/api/extension/live` | GET   | SSE stream. Marks user as live; sends `notification` event when admin creates/updates. Reconnect on close. |
-| `/api/extension/notifications` | POST   | Pull notifications only. Body: `{visitorId}`. No domain. Returns `{notifications: [...]}`. |
-| `/api/extension/ad-block` | POST   | Get ads (by domain) and/or notifications. Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}`. Logging is automatic. |
+| `/api/extension/ad-block` | POST   | Get ads (by domain) and/or notifications. Body: `{visitorId, domain, requestType?}`. Use `requestType: "notification"` on extension load to get notifications only. Returns `{ads: [...], notifications: [...]}`. |
 
 ### User ID and response format
 
 - **visitorId**: Provided by the extension (stable anonymous user ID). Used for analytics and to return only notifications the user has not yet pulled.
 - **Response**: Always `{ ads: [...], notifications: [...] }` in array format. Use directly in extension code.
 
-### How notifications work
+### How notifications work (on extension load)
 
 - **Backend**: Stores global notifications (title, message, date range). Tracks which user has already pulled which notification (`notification_reads`).
-- **Extension**: Call once per day when the user opens the browser or when the extension loads. Use `requestType: "notification"` (or omit to get both). The `notifications` array is the list of new notifications for that user.
+- **Extension**: On extension load, call `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }` to get notifications only. No domain needed. Returns `{ ads: [], notifications: [...] }`. Use the `notifications` array to show banners/toasts. **Do not pull or show notifications when the user is on the dashboard** — admins should not see notification banners.
 
 ### Reducing requests (short list)
 

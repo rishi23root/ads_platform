@@ -4,7 +4,9 @@ This document contains the API endpoint for browser extensions to fetch ads and 
 
 **Base URL:** `https://your-admin-dashboard-domain.com` (paths are relative, e.g. `/api/extension/ad-block`)
 
-> **Note**: For the full reference including `/api/extension/notifications`, `/api/extension/live` (SSE), and recommended flow, see [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md). For a compact cheat sheet, see [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
+> **Note**: For the full reference including `/api/extension/ad-block` (with `requestType: "notification"` for notifications), `/api/extension/live` (SSE), and recommended flow, see [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md). For a compact cheat sheet, see [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
+
+**Authentication:** All extension endpoints (`/api/extension/*`) are **public** — no authentication required. Do **not** use `/api/notifications`; that is the admin dashboard API and requires an authenticated session. For notifications on extension load, use `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }`. No domain needed.
 
 ---
 
@@ -42,7 +44,7 @@ POST /api/extension/ad-block
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `visitorId` | string | Yes | Unique identifier for the user (fingerprint/hash) |
-| `domain` | string | Yes | Domain where the request originated from. Supports normalization: `instagram.com`, `www.instagram.com`, and `https://www.instagram.com/` all work. |
+| `domain` | string | For ads | Domain where the request originated. **Required when requesting ads**; omit when `requestType: "notification"` only. Supports normalization: `instagram.com`, `www.instagram.com`, etc. |
 | `requestType` | string | No | Either `"ad"` or `"notification"`. If omitted, returns both ads and notifications and logs both. |
 
 ### Response

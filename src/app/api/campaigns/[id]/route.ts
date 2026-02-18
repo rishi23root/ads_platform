@@ -6,9 +6,11 @@ import {
   campaignCountries,
   campaignAd,
   campaignNotification,
+  notifications,
 } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
+import { publishRealtimeNotification } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,15 +95,14 @@ export async function PUT(
       notificationId,
     } = body;
 
+    const effectiveCampaignType = campaignType ?? existing.campaignType;
     const effectivePlatformIds = platformIds ?? (await db.select({ platformId: campaignPlatforms.platformId }).from(campaignPlatforms).where(eq(campaignPlatforms.campaignId, id))).map((r) => r.platformId);
-    if (!Array.isArray(effectivePlatformIds) || effectivePlatformIds.length === 0) {
+    if (effectiveCampaignType !== 'notification' && (!Array.isArray(effectivePlatformIds) || effectivePlatformIds.length === 0)) {
       return NextResponse.json(
         { error: 'Select at least one domain (platform)' },
         { status: 400 }
       );
     }
-
-    const effectiveCampaignType = campaignType ?? existing.campaignType;
     if (effectiveCampaignType === 'ads' || effectiveCampaignType === 'popup') {
       const [adRow] = await db.select({ adId: campaignAd.adId }).from(campaignAd).where(eq(campaignAd.campaignId, id)).limit(1);
       const effectiveAdId = adId !== undefined ? adId : adRow?.adId;
@@ -166,6 +167,17 @@ export async function PUT(
       await db.delete(campaignNotification).where(eq(campaignNotification.campaignId, id));
       if (notificationId) {
         await db.insert(campaignNotification).values({ campaignId: id, notificationId });
+        const [notif] = await db.select().from(notifications).where(eq(notifications.id, notificationId)).limit(1);
+        if (notif) {
+          await publishRealtimeNotification(
+            JSON.stringify({
+              type: 'updated',
+              id: notif.id,
+              title: notif.title,
+              message: notif.message,
+            })
+          );
+        }
       }
     }
 

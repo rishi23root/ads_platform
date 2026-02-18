@@ -4,18 +4,14 @@ import {
   ads,
   platforms,
   notifications,
-  notificationReads,
   visitors,
-  requestLogs,
   campaigns,
   campaignPlatforms,
   campaignCountries,
   campaignAd,
   campaignNotification,
-  campaignVisitorViews,
-  campaignLogs,
 } from '@/db/schema';
-import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, notInArray } from 'drizzle-orm';
 import { domainsMatch } from '@/lib/domain-utils';
 
 function isNewUser(createdAt: Date, withinDays = 7): boolean {
@@ -73,7 +69,8 @@ type CampaignRow = {
 /**
  * POST /api/extension/ad-block
  * Returns ads and/or notifications per campaign rules.
- * Body: { visitorId: string, domain: string, country?: string, requestType?: "ad" | "notification" }
+ * Body: { visitorId: string, domain?: string, requestType?: "ad" | "notification" }
+ * - domain is required when requesting ads; optional when requestType is "notification" only.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +82,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let body: { visitorId?: string; domain?: string; country?: string; requestType?: 'ad' | 'notification' };
+    let body: { visitorId?: string; domain?: string; requestType?: 'ad' | 'notification' };
     try {
       body = await request.json();
     } catch (parseError) {
@@ -98,11 +95,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { visitorId, domain, country, requestType } = body;
+    const { visitorId, domain, requestType } = body;
 
-    if (!visitorId || !domain) {
+    const country = getCountryFromHeaders(request);
+    // console.log('[ad-block] req', { visitorId, domain: domain ?? null, country, requestType: requestType ?? null });
+
+    if (!visitorId) {
       return NextResponse.json(
-        { error: 'visitorId and domain are required' },
+        { error: 'visitorId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Domain is required for ads only; optional for notifications (served everywhere when not specified)
+    const isNotificationOnly = requestType === 'notification';
+    if (!domain && !isNotificationOnly) {
+      return NextResponse.json(
+        { error: 'domain is required when requesting ads' },
         { status: 400 }
       );
     }
@@ -119,70 +128,104 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
 
-    // Resolve country: body first, then from request headers (Vercel x-vercel-ip-country, Cloudflare cf-ipcountry)
-    const resolvedCountry =
-      (country !== undefined && country !== null && String(country).trim() !== ''
-        ? String(country).toUpperCase().slice(0, 2)
-        : null) ?? getCountryFromHeaders(request);
-
-    // Upsert visitors (optional country, increment totalRequests)
-    await db
-      .insert(visitors)
-      .values({
-        visitorId,
-        country: resolvedCountry,
-        totalRequests: 1,
-        createdAt: now,
-        lastSeenAt: now,
-      })
-      .onConflictDoUpdate({
-        target: visitors.visitorId,
-        set: {
-          lastSeenAt: now,
-          totalRequests: sql`${visitors.totalRequests} + 1`,
-          ...(resolvedCountry !== null && { country: resolvedCountry }),
-        },
-      });
-
     const allPlatformsList = await db
       .select({ id: platforms.id, domain: platforms.domain })
       .from(platforms)
       .where(eq(platforms.isActive, true));
 
-    const platform = allPlatformsList.find((p) => domainsMatch(p.domain, domain));
+    const platform = domain ? allPlatformsList.find((p) => domainsMatch(p.domain, domain)) : null;
 
-    if (!platform) {
-      // No platform for this domain - return empty. Do NOT log (user received no data).
-      return NextResponse.json({ ads: [], notifications: [] });
-    }
+    // No early return: when platform is null we still serve global notification campaigns (no domain restriction)
 
     type AdOut = { title: string; image: string | null; description: string | null; redirectUrl: string | null; htmlCode?: string | null; displayAs?: 'inline' | 'popup' };
     type NotifOut = { title: string; message: string; ctaLink?: string | null };
     let publicAds: AdOut[] = [];
     let publicNotifications: NotifOut[] = [];
 
-    // Resolve campaigns for this platform
-    const campaignsForPlatform = await db
-      .select({
-        id: campaigns.id,
-        targetAudience: campaigns.targetAudience,
-        campaignType: campaigns.campaignType,
-        frequencyType: campaigns.frequencyType,
-        frequencyCount: campaigns.frequencyCount,
-        timeStart: campaigns.timeStart,
-        timeEnd: campaigns.timeEnd,
-        status: campaigns.status,
-        startDate: campaigns.startDate,
-        endDate: campaigns.endDate,
-      })
-      .from(campaigns)
-      .innerJoin(campaignPlatforms, eq(campaignPlatforms.campaignId, campaigns.id))
-      .where(eq(campaignPlatforms.platformId, platform.id));
+    // Resolve campaigns:
+    // - When platform exists: campaigns linked to that platform (ads + notifications)
+    // - Always: notification campaigns with NO platforms (empty domain list = no domain restriction)
+    const [platformCampaigns, globalNotifCampaigns] = await Promise.all([
+      platform
+        ? db
+          .select({
+            id: campaigns.id,
+            targetAudience: campaigns.targetAudience,
+            campaignType: campaigns.campaignType,
+            frequencyType: campaigns.frequencyType,
+            frequencyCount: campaigns.frequencyCount,
+            timeStart: campaigns.timeStart,
+            timeEnd: campaigns.timeEnd,
+            status: campaigns.status,
+            startDate: campaigns.startDate,
+            endDate: campaigns.endDate,
+          })
+          .from(campaigns)
+          .innerJoin(campaignPlatforms, eq(campaignPlatforms.campaignId, campaigns.id))
+          .where(eq(campaignPlatforms.platformId, platform.id))
+        : [],
+      (async () => {
+        const campaignIdsWithPlatforms = await db
+          .selectDistinct({ campaignId: campaignPlatforms.campaignId })
+          .from(campaignPlatforms);
+        const ids = campaignIdsWithPlatforms.map((r) => r.campaignId);
+        return ids.length > 0
+          ? db
+            .select({
+              id: campaigns.id,
+              targetAudience: campaigns.targetAudience,
+              campaignType: campaigns.campaignType,
+              frequencyType: campaigns.frequencyType,
+              frequencyCount: campaigns.frequencyCount,
+              timeStart: campaigns.timeStart,
+              timeEnd: campaigns.timeEnd,
+              status: campaigns.status,
+              startDate: campaigns.startDate,
+              endDate: campaigns.endDate,
+            })
+            .from(campaigns)
+            .where(and(eq(campaigns.campaignType, 'notification'), notInArray(campaigns.id, ids)))
+          : db
+            .select({
+              id: campaigns.id,
+              targetAudience: campaigns.targetAudience,
+              campaignType: campaigns.campaignType,
+              frequencyType: campaigns.frequencyType,
+              frequencyCount: campaigns.frequencyCount,
+              timeStart: campaigns.timeStart,
+              timeEnd: campaigns.timeEnd,
+              status: campaigns.status,
+              startDate: campaigns.startDate,
+              endDate: campaigns.endDate,
+            })
+            .from(campaigns)
+            .where(eq(campaigns.campaignType, 'notification'));
+      })(),
+    ]);
 
+    const platformRows = platformCampaigns;
+    const globalRows = globalNotifCampaigns;
+    const seenIds = new Set<string>();
+    const campaignsForPlatform: CampaignRow[] = [];
+    for (const c of platformRows) {
+      if (!seenIds.has(c.id)) {
+        seenIds.add(c.id);
+        campaignsForPlatform.push(c);
+      }
+    }
+    for (const c of globalRows) {
+      if (!seenIds.has(c.id)) {
+        seenIds.add(c.id);
+        campaignsForPlatform.push(c);
+      }
+    }
     const campaignIds = campaignsForPlatform.map((c) => c.id);
 
-    const [visitorRow, countryRows, viewRows, campaignAdRows, campaignNotifRows] = await Promise.all([
-      db.select().from(visitors).where(eq(visitors.visitorId, visitorId)).limit(1),
+    const [visitorFirstSeen, countryRows, viewCountRows, campaignAdRows, campaignNotifRows] = await Promise.all([
+      db
+        .select({ createdAt: sql<Date>`MIN(${visitors.createdAt})`.as('created_at') })
+        .from(visitors)
+        .where(eq(visitors.visitorId, visitorId)),
       campaignIds.length > 0
         ? db
           .select({ campaignId: campaignCountries.campaignId, countryCode: campaignCountries.countryCode })
@@ -191,14 +234,18 @@ export async function POST(request: NextRequest) {
         : [],
       campaignIds.length > 0
         ? db
-          .select({ campaignId: campaignVisitorViews.campaignId, viewCount: campaignVisitorViews.viewCount })
-          .from(campaignVisitorViews)
+          .select({
+            campaignId: visitors.campaignId,
+            viewCount: sql<number>`COUNT(*)`.as('view_count'),
+          })
+          .from(visitors)
           .where(
             and(
-              inArray(campaignVisitorViews.campaignId, campaignIds),
-              eq(campaignVisitorViews.visitorId, visitorId)
+              eq(visitors.visitorId, visitorId),
+              inArray(visitors.campaignId, campaignIds)
             )
           )
+          .groupBy(visitors.campaignId)
         : [],
       campaignIds.length > 0
         ? db
@@ -214,8 +261,8 @@ export async function POST(request: NextRequest) {
         : [],
     ]);
 
-    const visitorCreatedAt = visitorRow[0]?.createdAt ?? now;
-    const visitorCountry = visitorRow[0]?.country?.toUpperCase().slice(0, 2) ?? null;
+    const visitorCreatedAt = visitorFirstSeen[0]?.createdAt ?? now;
+    const visitorCountry = country;
     const isNew = isNewUser(visitorCreatedAt);
     const currentMinutes = currentTimeInMinutes();
 
@@ -228,8 +275,8 @@ export async function POST(request: NextRequest) {
     }
 
     const viewCountMap = new Map<string, number>();
-    for (const row of viewRows) {
-      viewCountMap.set(row.campaignId, row.viewCount);
+    for (const row of viewCountRows) {
+      if (row.campaignId) viewCountMap.set(row.campaignId, Number(row.viewCount));
     }
 
     const campaignAdMap = new Map<string, string>();
@@ -290,6 +337,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const servedAdIds = new Set<string>();
     if (shouldFetchAds && adIds.size > 0) {
       const adList = await db
         .select({
@@ -312,9 +360,13 @@ export async function POST(request: NextRequest) {
         htmlCode: ad.htmlCode ?? null,
         displayAs: adIds.get(ad.id) ?? 'inline',
       }));
+      for (const a of adList) servedAdIds.add(a.id);
     }
 
+    const servedNotificationIds = new Set<string>();
     if (shouldFetchNotifications && notificationIds.size > 0) {
+      // Notifications come from qualifying campaigns only. Campaign filters (frequency, country, time, etc.)
+      // and viewCount from visitors determine if we should serve.
       const notifList = await db
         .select({
           id: notifications.id,
@@ -323,19 +375,7 @@ export async function POST(request: NextRequest) {
           ctaLink: notifications.ctaLink,
         })
         .from(notifications)
-        .leftJoin(
-          notificationReads,
-          and(
-            eq(notificationReads.notificationId, notifications.id),
-            eq(notificationReads.visitorId, visitorId)
-          )
-        )
-        .where(
-          and(
-            inArray(notifications.id, [...notificationIds]),
-            isNull(notificationReads.id)
-          )
-        )
+        .where(inArray(notifications.id, [...notificationIds]))
         .orderBy(notifications.createdAt);
 
       publicNotifications = notifList.map((n) => ({
@@ -344,67 +384,42 @@ export async function POST(request: NextRequest) {
         ctaLink: n.ctaLink ?? null,
       }));
 
-      if (notifList.length > 0) {
-        try {
-          await db.insert(notificationReads).values(
-            notifList.map((n) => ({ notificationId: n.id, visitorId }))
-          );
-        } catch {
-          // ignore duplicate reads
-        }
-      }
+      for (const n of notifList) servedNotificationIds.add(n.id);
     }
 
-    // Bulk upsert campaign views for frequency tracking
-    if (qualifyingCampaigns.length > 0) {
-      await db
-        .insert(campaignVisitorViews)
-        .values(
-          qualifyingCampaigns.map((c) => ({
-            campaignId: c.id,
-            visitorId,
-            viewCount: 1,
-            lastViewedAt: now,
-          }))
-        )
-        .onConflictDoUpdate({
-          target: [campaignVisitorViews.campaignId, campaignVisitorViews.visitorId],
-          set: {
-            viewCount: sql`campaign_visitor_views.view_count + 1`,
-            lastViewedAt: now,
-          },
-        });
-    }
-
-    // Bulk insert campaign logs
-    const logEntries: { campaignId: string; visitorId: string; domain: string; country: string | null; type: 'ad' | 'notification' | 'popup' }[] = [];
+    // Insert visitor events: one row per campaign served, or one 'request' row when nothing served
+    const logDomain = domain ?? 'extension';
+    const visitorEvents: { visitorId: string; campaignId: string; domain: string; country: string | null; type: 'ad' | 'notification' | 'popup'; statusCode: number }[] = [];
     for (const c of qualifyingCampaigns) {
-      if (c.campaignType === 'ads' && shouldFetchAds && campaignAdMap.has(c.id)) {
-        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'ad' });
+      const adId = campaignAdMap.get(c.id);
+      const notifId = campaignNotifMap.get(c.id);
+      if (c.campaignType === 'ads' && shouldFetchAds && adId && servedAdIds.has(adId)) {
+        visitorEvents.push({ visitorId, campaignId: c.id, domain: logDomain, country: country, type: 'ad', statusCode: 200 });
       }
-      if (c.campaignType === 'popup' && shouldFetchAds && campaignAdMap.has(c.id)) {
-        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'popup' });
+      if (c.campaignType === 'popup' && shouldFetchAds && adId && servedAdIds.has(adId)) {
+        visitorEvents.push({ visitorId, campaignId: c.id, domain: logDomain, country: country, type: 'popup', statusCode: 200 });
       }
-      if (c.campaignType === 'notification' && shouldFetchNotifications && campaignNotifMap.has(c.id)) {
-        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'notification' });
+      if (c.campaignType === 'notification' && shouldFetchNotifications && notifId && servedNotificationIds.has(notifId)) {
+        visitorEvents.push({ visitorId, campaignId: c.id, domain: logDomain, country: country, type: 'notification', statusCode: 200 });
       }
     }
-    if (logEntries.length > 0) {
-      await db.insert(campaignLogs).values(logEntries);
+    if (visitorEvents.length > 0) {
+      await db.insert(visitors).values(visitorEvents);
+    } else {
+      // Log every request, even when nothing served
+      await db.insert(visitors).values({
+        visitorId,
+        campaignId: null,
+        domain: logDomain,
+        country: country,
+        type: 'request',
+        statusCode: 200,
+      });
     }
 
-    // Insert request_logs only when user actually receives data (user-guided logging)
-    const requestLogEntries: { visitorId: string; domain: string; requestType: 'ad' | 'notification' }[] = [];
-    if (publicAds.length > 0 && shouldFetchAds) requestLogEntries.push({ visitorId, domain, requestType: 'ad' });
-    if (publicNotifications.length > 0 && shouldFetchNotifications) requestLogEntries.push({ visitorId, domain, requestType: 'notification' });
-    if (requestLogEntries.length > 0) {
-      await db.insert(requestLogs).values(requestLogEntries);
-    }
-
-    return NextResponse.json({
-      ads: publicAds,
-      notifications: publicNotifications,
-    });
+    const res = { ads: publicAds, notifications: publicNotifications };
+    console.log('[ad-block] res', { domain: domain ?? 'extension', ads: publicAds.length, notifications: publicNotifications.length });
+    return NextResponse.json(res);
   } catch (error) {
     console.error('Error fetching extension ad block:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

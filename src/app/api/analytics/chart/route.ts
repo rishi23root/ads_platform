@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaignLogs } from '@/db/schema';
-import { and, gte, lte } from 'drizzle-orm';
+import { visitors } from '@/db/schema';
+import { and, gte, lte, isNotNull } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { getStartDate, fillMissingDays } from '@/lib/date-range';
 
@@ -38,14 +38,15 @@ export async function GET(request: NextRequest) {
 
     const logs = await db
       .select({
-        type: campaignLogs.type,
-        createdAt: campaignLogs.createdAt,
+        type: visitors.type,
+        createdAt: visitors.createdAt,
       })
-      .from(campaignLogs)
+      .from(visitors)
       .where(
         and(
-          gte(campaignLogs.createdAt, start),
-          lte(campaignLogs.createdAt, end)
+          isNotNull(visitors.campaignId),
+          gte(visitors.createdAt, start),
+          lte(visitors.createdAt, end)
         )
       );
 

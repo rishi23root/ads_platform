@@ -18,9 +18,9 @@ Both describe the **same API**; this doc adds flow, types, and examples so you c
 1. [Base URL](#base-url)
 2. [Recommended extension connection flow](#recommended-extension-connection-flow)
 3. [Endpoints Overview](#endpoints-overview)
-4. [Endpoint 1: Notifications Only (pull)](#endpoint-1-notifications-only-pull)
-5. [Endpoint 2: Ads and/or Notifications (pull)](#endpoint-2-ads-andor-notifications-pull)
-6. [Endpoint 3: Live (SSE) — real-time push](#endpoint-3-live-sse--real-time-push)
+4. [Endpoint 0: Active Domains (list)](#endpoint-0-active-domains-list)
+5. [Endpoint 1: Ads and/or Notifications (pull)](#endpoint-1-ads-andor-notifications-pull)
+6. [Endpoint 2: Live (SSE) — real-time push](#endpoint-2-live-sse--real-time-push)
 7. [TypeScript Types](#typescript-types)
 8. [Error Handling](#error-handling)
 9. [Code Examples](#code-examples)
@@ -46,8 +46,8 @@ Use this flow so users are marked **live**, the dashboard shows the right **conn
 1. **Connect to the live SSE endpoint**  
    Open `GET {BASE_URL}/api/extension/live` (e.g. with `EventSource`). This marks the user as **live and active**: the backend updates Redis, and the **dashboard** shows the updated connection count via its own SSE stream. Keep this connection open while the extension is active.
 
-2. **First connect: pull any existing notifications**  
-   When the user connects for the first time (or when the extension loads), call `POST {BASE_URL}/api/extension/notifications` with `visitorId`. Show any returned notifications. This covers notifications created while the user was offline.
+2. **Extension load: pull any existing notifications**  
+   When the extension loads, call `POST {BASE_URL}/api/extension/ad-block` with `{ visitorId, requestType: "notification" }`. No domain needed. Show any returned notifications from the `notifications` array. This covers notifications created while the user was offline.
 
 3. **Normal browsing**  
    On page load or when the user visits different websites, call `POST {BASE_URL}/api/extension/ad-block` with `visitorId` and `domain` (and optional `requestType`) for ads and visit logging. Extension works as usual.
@@ -56,7 +56,7 @@ Use this flow so users are marked **live**, the dashboard shows the right **conn
    As long as the user has the extension active, keep the connection to `GET /api/extension/live` open (reconnect on close or error).
 
 5. **When admin creates a new notification**  
-   The backend publishes to Redis and sends an event over the **same** live SSE connection. When the extension receives that **notification** event, it should **pull** the new notifications by calling `POST {BASE_URL}/api/extension/notifications` with `visitorId`, then **show** the returned notifications. Read state is recorded only when you pull.
+   The backend publishes to Redis and sends an event over the **same** live SSE connection. When the extension receives that **notification** event, it should **pull** the new notifications by calling `POST {BASE_URL}/api/extension/ad-block` with `{ visitorId, requestType: "notification" }`, then **show** the returned notifications. No domain needed. Read state is recorded only when you pull.
 
 **Summary:** Connect to live SSE (user becomes live, count reflected on dashboard) → pull notifications on first connect → use ad-block on page loads → on notification SSE event, pull and show. Use the endpoints below for each step.
 
@@ -64,16 +64,17 @@ Use this flow so users are marked **live**, the dashboard shows the right **conn
 
 ## Endpoints Overview
 
-| Endpoint | Method | Purpose | Domain Required |
-|----------|--------|---------|-----------------|
-| `/api/extension/domains` | GET | **List** all active target domains | ❌ No |
-| `/api/extension/notifications` | POST | **Pull** notifications only | ❌ No |
-| `/api/extension/ad-block` | POST | **Pull** ads and/or notifications | ✅ Yes |
-| `/api/extension/live` | GET | **Push** real-time notifications + connection count (SSE) | ❌ No |
+| Endpoint | Method | Purpose | Domain Required | Auth |
+|----------|--------|---------|-----------------|------|
+| `/api/extension/domains` | GET | **List** all active target domains | ❌ No | ❌ No |
+| `/api/extension/ad-block` | POST | **Pull** ads and/or notifications | For ads only | ❌ No |
+| `/api/extension/live` | GET | **Push** real-time notifications + connection count (SSE) | ❌ No | ❌ No |
+
+**Important:** All extension endpoints above are **public** (no authentication). Do **not** use `/api/notifications` — that is the admin dashboard API and requires an authenticated session. For notifications on extension load, use `POST /api/extension/ad-block` with `requestType: "notification"`.
 
 **Quick decision:**
 - **List active domains** → `GET /api/extension/domains` (no auth; returns `{ domains: [...] }`)
-- **Pull notifications only** → `POST /api/extension/notifications` (no domain needed)
+- **Pull notifications only** → `POST /api/extension/ad-block` with `requestType: "notification"`
 - **Pull ads only** → `POST /api/extension/ad-block` with `requestType: "ad"`
 - **Pull both** → `POST /api/extension/ad-block` (omit `requestType`)
 - **Push notifications (real-time)** → `GET /api/extension/live` (SSE stream; reconnect on close)
@@ -112,69 +113,9 @@ curl http://localhost:3000/api/extension/domains
 
 ---
 
-## Endpoint 1: Notifications Only (pull)
+## Endpoint 1: Ads and/or Notifications (pull)
 
-**Pull** = you request once; server responds with current notifications this user has not yet received. Use for periodic checks (e.g. once per day on extension load).
-
-### Request
-
-**URL:** `POST {BASE_URL}/api/extension/notifications`
-
-**Headers:**
-```
-Content-Type: application/json
-```
-
-**Body:**
-```json
-{
-  "visitorId": "string"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `visitorId` | string | Yes | Stable anonymous user ID provided by the extension |
-
-### Response (200 OK)
-
-```json
-{
-  "notifications": [
-    {
-      "title": "Notification Title",
-      "message": "Notification message",
-      "ctaLink": "https://example.com/action"
-    }
-  ]
-}
-```
-
-**Response rules:**
-- `notifications` is always an **array**
-- Returns only **global** notifications this user has **not** already pulled
-- Each notification is returned **once per user** (tracked by `visitorId`)
-- Empty array `[]` if no new notifications
-
-### cURL
-
-```bash
-curl -X POST http://localhost:3000/api/extension/notifications \
-  -H "Content-Type: application/json" \
-  -d '{"visitorId":"test-visitor-123"}'
-```
-
-### When to Use
-
-- **Once per day** when the user opens the browser or when the extension loads
-- Extension only needs notifications (no ads)
-- No domain context available
-
----
-
-## Endpoint 2: Ads and/or Notifications (pull)
-
-**Pull** = you request with domain and optional `requestType`; server responds with ads and/or notifications. Use for page load or when you have domain context.
+**Pull** = you request with optional `domain` and `requestType`; server responds with ads and/or notifications. For notifications only, `domain` is not needed.
 
 ### Request
 
@@ -190,15 +131,15 @@ Content-Type: application/json
 {
   "visitorId": "string",
   "domain": "string",
-  "requestType": "ad" | "notification" // optional
+  "requestType": "ad" | "notification"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `visitorId` | string | Yes | Stable anonymous user ID provided by the extension |
-| `domain` | string | Yes | Domain where request originated (e.g. page hostname). Normalized: `instagram.com`, `www.instagram.com`, `https://www.instagram.com/` all resolve |
-| `requestType` | string | No | `"ad"` \| `"notification"`. If omitted, returns both |
+| `domain` | string | For ads | Domain where request originated. **Required when requesting ads**; omit when `requestType: "notification"` only. Normalized: `instagram.com`, `www.instagram.com`, etc. |
+| `requestType` | string | No | `"ad"` \| `"notification"`. If omitted, returns both (domain required) |
 
 ### Response (200 OK)
 
@@ -262,11 +203,10 @@ How to render each ad based on `displayAs`:
 }
 ```
 
-**Notifications only:**
+**Notifications only (on extension load — no domain needed):**
 ```json
 {
   "visitorId": "user-stable-id-abc",
-  "domain": "instagram.com",
   "requestType": "notification"
 }
 ```
@@ -287,24 +227,25 @@ curl -X POST http://localhost:3000/api/extension/ad-block \
   -d '{"visitorId":"test-visitor-123","domain":"instagram.com","requestType":"ad"}'
 ```
 
-**Notifications only:**
+**Notifications only (on extension load — no domain needed):**
 ```bash
-curl -X POST http://localhost:3000/api/extension/ad-block \
+curl -X POST https://test.buildyourresume.in/api/extension/ad-block \
   -H "Content-Type: application/json" \
-  -d '{"visitorId":"test-visitor-123","domain":"instagram.com","requestType":"notification"}'
+  -d '{"visitorId":"visitor-22","requestType":"notification"}'
 ```
+Returns `{ ads: [], notifications: [...] }`. Call this when the extension loads to fetch notifications only.
 
 ### When to Use
 
 - **Ads**: On every page load or when user navigates to a configured domain
 - **Both**: Initial page load when you need both ads and notifications
-- **Notifications via ad-block**: When you want notifications but also have domain context
+- **Notifications on extension load**: Call `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }` when the extension loads to get notifications only. No domain needed. Returns `{ ads: [], notifications: [...] }`
 
 ---
 
-## Endpoint 3: Live (SSE) — real-time push
+## Endpoint 2: Live (SSE) — real-time push
 
-**Push** = you open a long-lived **Server-Sent Events (SSE)** connection; the server pushes events when the admin creates or updates a notification (via Redis). You also receive the current **connection count** when you connect. Use for instant delivery of new notifications without polling.
+**Push** = you open a long-lived **Server-Sent Events (SSE)** connection; the server pushes events when the admin creates or updates a notification, or when platforms (domains) are changed (via Redis). You also receive the current **connection count** when you connect. Use for instant delivery of new notifications and domain updates without polling.
 
 ### Request
 
@@ -324,11 +265,12 @@ curl -X POST http://localhost:3000/api/extension/ad-block \
 | Event | When | Data |
 |-------|------|------|
 | `connection_count` | Once when you connect | Current number of connected clients (string number). User is now counted as live (dashboard updates). |
-| `notification` | When admin creates or updates a notification | JSON string (see below). **On this event, call `POST /api/extension/notifications` to pull and show the new notifications.** |
+| `notification` | When admin creates or updates a notification | JSON string (see below). **On this event, call `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }` to pull and show. No domain needed.** |
+| `domains` | When admin creates, updates, or deletes a platform | JSON `{"type":"platforms_updated"}`. **On this event, call `GET /api/extension/domains` to refresh your internal domains list.** |
 
 ### Notification event payload (JSON)
 
-When `event` is `notification`, `data` may contain notification details. Regardless, **on receiving this event** call `POST /api/extension/notifications` to pull and show; read state is recorded only via the pull API. Optional: `data` as JSON:
+When `event` is `notification`, `data` may contain notification details. Regardless, **on receiving this event** call `POST /api/extension/ad-block` with `{ visitorId, requestType: "notification" }` to pull and show. No domain needed. Read state is recorded only via the pull API. Optional: `data` as JSON:
 
 ```json
 {
@@ -351,7 +293,8 @@ The stream may close after a **platform timeout** (e.g. ~5 minutes). Reconnect w
 ### When to Use
 
 - **Mark user as live**: Connecting to this endpoint updates Redis so the dashboard shows this user in the connection count (via its own SSE).
-- **Instant notification signal**: When the admin creates or updates a notification, you receive a `notification` event. On that event, call `POST /api/extension/notifications` to **pull** the new notifications and show them; read state is recorded only via the pull API.
+- **Instant notification signal**: When the admin creates or updates a notification, you receive a `notification` event. On that event, call `POST /api/extension/ad-block` with `requestType: "notification"` to **pull** the new notifications and show them; read state is recorded only via the pull API.
+- **Instant domains update**: When the admin creates, updates, or deletes a platform, you receive a `domains` event. On that event, call `GET /api/extension/domains` to refresh your internal domains list.
 - **Connection count**: You receive `connection_count` once when you connect (optional to display).
 - See [Recommended extension connection flow](#recommended-extension-connection-flow) for the full sequence.
 
@@ -435,18 +378,18 @@ interface LiveNotificationEvent {
 | 400 | Missing/invalid `Content-Type` | `"Content-Type must be application/json"` |
 | 400 | Invalid JSON body | `"Invalid JSON in request body"` + details |
 | 400 | Missing `visitorId` | `"visitorId is required"` |
-| 400 | Missing `domain` (ad-block only) | `"visitorId and domain are required"` |
+| 400 | Missing `domain` when requesting ads | `"domain is required when requesting ads"` |
 | 400 | Invalid `requestType` | `"requestType must be either \"ad\" or \"notification\""` |
-| 500 | Server/database error | `"Failed to fetch notifications"` or `"Failed to fetch ad block"` |
+| 500 | Server/database error | `"Failed to fetch ad block"` |
 
 ### Error Handling Example
 
 ```typescript
 async function fetchNotifications(visitorId: string): Promise<NotificationsResponse> {
-  const res = await fetch(`${BASE_URL}/api/extension/notifications`, {
+  const res = await fetch(`${BASE_URL}/api/extension/ad-block`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visitorId }),
+    body: JSON.stringify({ visitorId, requestType: 'notification' }),
   });
 
   if (!res.ok) {
@@ -454,7 +397,8 @@ async function fetchNotifications(visitorId: string): Promise<NotificationsRespo
     throw new Error(err.error || `HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<NotificationsResponse>;
+  const data = await res.json();
+  return { notifications: data.notifications };
 }
 ```
 
@@ -468,10 +412,10 @@ async function fetchNotifications(visitorId: string): Promise<NotificationsRespo
 const BASE_URL = 'https://your-dashboard.example.com';
 
 async function getNotifications(visitorId: string) {
-  const res = await fetch(`${BASE_URL}/api/extension/notifications`, {
+  const res = await fetch(`${BASE_URL}/api/extension/ad-block`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visitorId }),
+    body: JSON.stringify({ visitorId, requestType: 'notification' }),
   });
 
   if (!res.ok) {
@@ -568,10 +512,10 @@ function connectLive(visitorId: string) {
 
   // On notification event: pull and show (read state recorded via pull)
   es.addEventListener('notification', async () => {
-    const res = await fetch(`${BASE_URL}/api/extension/notifications`, {
+    const res = await fetch(`${BASE_URL}/api/extension/ad-block`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visitorId }),
+      body: JSON.stringify({ visitorId, requestType: 'notification' }),
     });
     if (!res.ok) return;
     const { notifications } = (await res.json()) as NotificationsResponse;
@@ -594,22 +538,22 @@ function connectLive(visitorId: string) {
 // Usage: call when extension loads; optionally pull existing notifications first
 const visitorId = 'user-stable-id-abc';
 connectLive(visitorId);
-// Optional: pull any existing unread notifications on first connect
-fetch(`${BASE_URL}/api/extension/notifications`, {
+// Optional: pull any existing unread notifications on extension load
+fetch(`${BASE_URL}/api/extension/ad-block`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ visitorId }),
+  body: JSON.stringify({ visitorId, requestType: 'notification' }),
 }).then((r) => r.json()).then((d) => d.notifications.forEach((n: { title: string; message: string }) => showNotificationBanner(n.title, n.message)));
 ```
 
 ### Vanilla JavaScript (No TypeScript)
 
 ```javascript
-// Notifications
-const res = await fetch(`${BASE_URL}/api/extension/notifications`, {
+// Notifications (on extension load — no domain needed)
+const res = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ visitorId: 'my-user-id' }),
+  body: JSON.stringify({ visitorId: 'my-user-id', requestType: 'notification' }),
 });
 const { notifications } = await res.json();
 notifications.forEach((n) => {
@@ -647,8 +591,8 @@ ads.forEach((ad) => {
 ### Notifications
 
 - **Connect to live first:** Open **`GET /api/extension/live`** so the user is counted as live/active (Redis updated; dashboard shows count via its own SSE). Keep this connection open while the extension is active; reconnect on close or error.
-- **First connect:** Call **`POST /api/extension/notifications`** with `visitorId` when the user connects for the first time (or on extension load) to get any existing unread notifications and show them.
-- **On notification event:** When you receive a `notification` event on the live SSE stream, call **`POST /api/extension/notifications`** again to **pull** the new notifications and show them. Read state is recorded only when you pull.
+- **Extension load:** Call **`POST /api/extension/ad-block`** with `{ visitorId, requestType: "notification" }` when the extension loads to get any existing unread notifications and show them. No domain needed.
+- **On notification event:** When you receive a `notification` event on the live SSE stream, call **`POST /api/extension/ad-block`** with `{ visitorId, requestType: "notification" }` again to **pull** the new notifications and show them. No domain needed. Read state is recorded only when you pull.
 - Each notification is returned only until the user has pulled it; after that it won't appear again for that user.
 
 ### Ads
@@ -689,7 +633,7 @@ Both endpoints automatically:
 
 | Endpoint | Use Case | Domain Required | Response / Behavior |
 |----------|----------|-----------------|---------------------|
-| `POST /api/extension/notifications` | **Pull** notifications only (e.g. once per day) | ❌ No | `{ notifications: [...] }` |
+| `POST /api/extension/ad-block` | **Pull** notifications only (e.g. on extension load) | ✅ Yes | `{ ads: [], notifications: [...] }` |
 | `POST /api/extension/ad-block` | **Pull** ads only | ✅ Yes | `{ ads: [...], notifications: [] }` |
 | `POST /api/extension/ad-block` | **Pull** both ads and notifications | ✅ Yes | `{ ads: [...], notifications: [...] }` |
 | `POST /api/extension/ad-block` | **Pull** notifications via ad-block | ✅ Yes | `{ ads: [], notifications: [...] }` |

@@ -161,7 +161,7 @@ sequenceDiagram
   - Body: `{visitorId: string, domain: string, requestType?: "ad" | "notification"}`
   - Ads: filtered by domain (platform). Notifications: global; only returns notifications the user has not yet pulled (tracked by `visitorId`)
   - If `requestType` omitted, returns both; response: `{ads: [...], notifications: [...]}` (arrays, public fields only)
-- `POST /api/extension/notifications` - Get notifications only (no domain required)
+- `POST /api/extension/ad-block` with `requestType: "notification"` - Get notifications only (on extension load)
   - Body: `{visitorId: string}`. Response: `{notifications: [...]}`. Use for notifications-only calls (e.g. once per day on extension load).
 
 ### Authentication API

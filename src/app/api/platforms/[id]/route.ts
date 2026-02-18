@@ -4,6 +4,7 @@ import { platforms } from '@/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { normalizeDomain } from '@/lib/domain-utils';
+import { publishPlatformsUpdated } from '@/lib/redis';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -103,6 +104,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Platform not found' }, { status: 404 });
     }
 
+    await publishPlatformsUpdated();
     return NextResponse.json(updatedPlatform);
   } catch (error) {
     console.error('Error updating platform:', error);
@@ -132,6 +134,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Platform not found' }, { status: 404 });
     }
 
+    await publishPlatformsUpdated();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting platform:', error);

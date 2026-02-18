@@ -2,8 +2,8 @@ import { ChartAreaInteractive } from '@/components/chart-area-interactive';
 import { LiveConnectionsCard } from '@/components/live-connections-card';
 import { SectionCards } from '@/components/section-cards';
 import { database as db } from '@/db';
-import { campaigns, campaignLogs, visitors } from '@/db/schema';
-import { eq, sql, desc } from 'drizzle-orm';
+import { campaigns, visitors } from '@/db/schema';
+import { eq, sql, desc, isNotNull } from 'drizzle-orm';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,8 +27,11 @@ export default async function DashboardPage() {
         .from(campaigns)
         .where(eq(campaigns.status, 'active')),
       db.select({ count: sql<number>`count(*)` }).from(campaigns),
-      db.select({ count: sql<number>`count(*)` }).from(campaignLogs),
-      db.select({ count: sql<number>`count(*)` }).from(visitors),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(visitors)
+        .where(isNotNull(visitors.campaignId)),
+      db.select({ count: sql<number>`count(DISTINCT ${visitors.visitorId})` }).from(visitors),
       db.select().from(campaigns).orderBy(desc(campaigns.createdAt)).limit(10),
     ]);
 
