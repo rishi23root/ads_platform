@@ -1,4 +1,4 @@
-import { unauthorized } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { getSessionWithRole } from '@/lib/dal';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SiteHeader } from '@/components/site-header';
@@ -13,7 +13,7 @@ export default async function ProtectedLayout({
   const sessionWithRole = await getSessionWithRole();
 
   if (!sessionWithRole) {
-    unauthorized();
+    redirect('/login?reason=unauthorized');
   }
 
   const { user, role } = sessionWithRole;

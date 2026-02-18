@@ -148,6 +148,42 @@ test_ad_block "ad" "Get ads only"
 test_ad_block "notification" "Get notifications only"
 
 echo "=========================================="
+echo "Testing notifications-only endpoint..."
+echo "=========================================="
+echo ""
+
+# Test POST /api/extension/notifications (no domain required)
+echo "Testing: Pull notifications only (no domain)"
+echo "  Visitor ID: $VISITOR_ID"
+echo "  Endpoint: POST /api/extension/notifications"
+echo ""
+
+response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/extension/notifications" \
+    -H "Content-Type: application/json" \
+    -d "{\"visitorId\": \"$VISITOR_ID\"}")
+
+http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+body=$(echo "$response" | sed '/HTTP_CODE:/d')
+
+if [ "$http_code" = "200" ]; then
+    echo "  ✓ Success! Visit and request_logs written (domain: extension)"
+    if [ "$USE_JQ" = true ]; then
+        notifs_count=$(echo "$body" | jq '.notifications | length' 2>/dev/null || echo "0")
+        echo "  Found: $notifs_count notification(s)"
+        if [ "$notifs_count" -gt 0 ]; then
+            echo "  Notifications:"
+            echo "$body" | jq -r '.notifications[] | "    - \(.title)"' 2>/dev/null
+        fi
+    else
+        echo "    Response: $body"
+    fi
+else
+    echo "  ✗ Failed with HTTP $http_code"
+    echo "    $body"
+fi
+
+echo ""
+echo "=========================================="
 echo "Done!"
 echo "=========================================="
 echo ""
@@ -162,6 +198,11 @@ echo "Test ad-block endpoint directly:"
 echo "  curl -X POST $BASE_URL/api/extension/ad-block \\"
 echo "    -H 'Content-Type: application/json' \\"
 echo "    -d '{\"visitorId\":\"$VISITOR_ID\",\"domain\":\"$DOMAIN\"}'"
+echo ""
+echo "Test notifications-only endpoint (no domain):"
+echo "  curl -X POST $BASE_URL/api/extension/notifications \\"
+echo "    -H 'Content-Type: application/json' \\"
+echo "    -d '{\"visitorId\":\"$VISITOR_ID\"}'"
 echo ""
 echo "To test with a different visitor ID:"
 echo "  VISITOR_ID=my-custom-id ./test-extension-log.sh"

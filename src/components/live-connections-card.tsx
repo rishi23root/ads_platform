@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IconCircleFilled } from '@tabler/icons-react';
-import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardAction,
@@ -12,6 +10,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+// IMPORTANT: Must use /api/realtime/stream (auth-required, read-only). Do NOT use
+// /api/extension/live — that endpoint increments the connection count, so dashboard
+// sessions would be incorrectly counted as extension users.
 const STREAM_URL = '/api/realtime/stream';
 const RECONNECT_DELAY_MS = 3000;
 
@@ -51,20 +52,28 @@ export function LiveConnectionsCard() {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardDescription>Active users</CardDescription>
+        <CardDescription>Extension users (live)</CardDescription>
         <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
           {count === null ? (error ? '—' : '…') : count}
         </CardTitle>
-        <CardAction>
-          <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
-            <IconCircleFilled className="size-2.5 animate-pulse" aria-hidden />
-            Online
-          </Badge>
-        </CardAction>
+        {count != null && count > 0 && (
+          <CardAction>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className="size-2 rounded-full bg-red-500 animate-[live-blink_1.5s_ease-in-out_infinite]"
+                aria-hidden
+              />
+              Live
+            </span>
+          </CardAction>
+        )}
       </CardHeader>
       <CardFooter className="flex-col items-start gap-1.5 text-sm">
-        <div className="line-clamp-1 flex gap-2 font-medium text-muted-foreground">
-          Extension users currently connected (live)
+        <div className="line-clamp-1 flex gap-2 font-medium">
+          Extension users currently connected
+        </div>
+        <div className="text-muted-foreground">
+          Live connection count
         </div>
       </CardFooter>
     </Card>

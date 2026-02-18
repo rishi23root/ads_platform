@@ -38,8 +38,8 @@ export function TopDomainsChart({ data }: TopDomainsChartProps) {
   const chartData = data.map((d) => ({ name: d.domain, value: d.count }));
 
   return (
-    <ChartContainer config={chartConfig} className="aspect-square max-h-[160px] w-full">
-      <PieChart>
+    <ChartContainer config={chartConfig} className="aspect-square min-h-[200px] max-h-[240px] w-full overflow-visible">
+      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Pie

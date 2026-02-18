@@ -41,7 +41,7 @@ export function CreateUserDialog() {
       const result = await authClient.admin.createUser({
         email,
         password,
-        name: name || undefined,
+        name: name || '',
         role,
       });
       if (result.error) {

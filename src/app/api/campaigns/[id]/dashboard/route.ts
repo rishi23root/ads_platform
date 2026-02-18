@@ -9,10 +9,11 @@ import {
   platforms,
   ads,
   notifications,
-  visitors,
 } from '@/db/schema';
 import { and, eq, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
+import { getDateRange, fillMissingDays } from '@/lib/date-range';
+import { extractRootDomain, getCanonicalDisplayDomain } from '@/lib/domain-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,47 +24,6 @@ const RANGE_DAYS: Record<RangeKey, number> = {
   '14d': 14,
   '30d': 30,
 };
-
-function getDateRange(range: RangeKey): { start: Date; end: Date; prevStart: Date; prevEnd: Date } {
-  const days = RANGE_DAYS[range] ?? 14;
-  const end = new Date();
-  end.setUTCHours(23, 59, 59, 999);
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - days);
-  start.setUTCHours(0, 0, 0, 0);
-
-  const prevEnd = new Date(start);
-  prevEnd.setUTCMilliseconds(-1);
-  const prevStart = new Date(prevEnd);
-  prevStart.setUTCDate(prevStart.getUTCDate() - days + 1);
-  prevStart.setUTCHours(0, 0, 0, 0);
-
-  return { start, end, prevStart, prevEnd };
-}
-
-function fillMissingDays(
-  start: Date,
-  end: Date,
-  impressionsByDate: Map<string, number>,
-  usersByDate: Map<string, Set<string>>
-): { date: string; impressions: number; users: number }[] {
-  const result: { date: string; impressions: number; users: number }[] = [];
-  const current = new Date(start);
-  current.setUTCHours(0, 0, 0, 0);
-  const endTime = end.getTime();
-
-  while (current.getTime() <= endTime) {
-    const dateStr = current.toISOString().slice(0, 10);
-    result.push({
-      date: dateStr,
-      impressions: impressionsByDate.get(dateStr) ?? 0,
-      users: usersByDate.get(dateStr)?.size ?? 0,
-    });
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-
-  return result;
-}
 
 export async function GET(
   request: NextRequest,
@@ -81,7 +41,7 @@ export async function GET(
     const validRange: RangeKey[] = ['7d', '14d', '30d'];
     const rangeParam = validRange.includes(range) ? range : '14d';
 
-    const { start, end, prevStart, prevEnd } = getDateRange(rangeParam);
+    const { start, end, prevStart, prevEnd } = getDateRange(rangeParam, RANGE_DAYS, 14);
 
     // Current period logs
     const [currentLogs, prevLogs, platformRows, countryRows, adRow, notifRow] = await Promise.all([
@@ -149,11 +109,49 @@ export async function GET(
       if (!usersByDate.has(dateStr)) usersByDate.set(dateStr, new Set());
       usersByDate.get(dateStr)!.add(log.visitorId);
     }
-    const chartData = fillMissingDays(start, end, impressionsByDate, usersByDate);
+    const chartData = fillMissingDays(start, end, (dateStr) => ({
+      impressions: impressionsByDate.get(dateStr) ?? 0,
+      users: usersByDate.get(dateStr)?.size ?? 0,
+    }));
 
-    const [topDomains, countryDistribution] = await Promise.all([
-      db
-        .select({ domain: campaignLogs.domain, count: sql<number>`count(*)` })
+    const topDomainsRaw = await db
+      .select({ domain: campaignLogs.domain, count: sql<number>`count(*)` })
+      .from(campaignLogs)
+      .where(
+        and(
+          eq(campaignLogs.campaignId, id),
+          gte(campaignLogs.createdAt, start),
+          lte(campaignLogs.createdAt, end)
+        )
+      )
+      .groupBy(campaignLogs.domain)
+      .orderBy(desc(sql`count(*)`))
+      .limit(30);
+
+    // Merge domains by root (e.g. www.instagram.com + instagram.com → instagram.com)
+    const mergedByRoot = new Map<string, { displayDomain: string; count: number }>();
+    for (const row of topDomainsRaw) {
+      const domain = (row.domain ?? '').trim();
+      if (!domain) continue;
+      const root = extractRootDomain(domain);
+      const display = getCanonicalDisplayDomain(domain);
+      const count = Number(row.count);
+      const existing = mergedByRoot.get(root);
+      if (existing) {
+        existing.count += count;
+      } else {
+        mergedByRoot.set(root, { displayDomain: display, count });
+      }
+    }
+    const topDomains = Array.from(mergedByRoot.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
+      .map(({ displayDomain, count }) => ({ domain: displayDomain, count }));
+
+    let countryDistribution: { country: string | null; count: number }[] = [];
+    try {
+      countryDistribution = await db
+        .select({ country: campaignLogs.country, count: sql<number>`count(*)` })
         .from(campaignLogs)
         .where(
           and(
@@ -162,24 +160,12 @@ export async function GET(
             lte(campaignLogs.createdAt, end)
           )
         )
-        .groupBy(campaignLogs.domain)
+        .groupBy(campaignLogs.country)
         .orderBy(desc(sql`count(*)`))
-        .limit(10),
-      db
-        .select({ country: visitors.country, count: sql<number>`count(*)` })
-        .from(campaignLogs)
-        .innerJoin(visitors, eq(campaignLogs.visitorId, visitors.visitorId))
-        .where(
-          and(
-            eq(campaignLogs.campaignId, id),
-            gte(campaignLogs.createdAt, start),
-            lte(campaignLogs.createdAt, end)
-          )
-        )
-        .groupBy(visitors.country)
-        .orderBy(desc(sql`count(*)`))
-        .limit(15),
-    ]);
+        .limit(15);
+    } catch {
+      // country column may not exist if migration 0001_add_country_to_campaign_logs hasn't run
+    }
 
     const platformIds = platformRows.map((r) => r.platformId);
     const platformDomains =
@@ -222,7 +208,7 @@ export async function GET(
         usersChange,
       },
       chartData,
-      topDomains: topDomains.map((d) => ({ domain: d.domain, count: Number(d.count) })),
+      topDomains,
       countryDistribution: countryDistribution.map((c) => ({
         country: c.country,
         count: Number(c.count),

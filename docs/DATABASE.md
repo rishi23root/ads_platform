@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes platforms, ads, notifications (global), notification_reads (per-user pull tracking), extension_users, and request_logs.
+The database uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes platforms, ads, notifications (global), notification_reads (per-user pull tracking), visitors (extension user tracking), request_logs (generic API request analytics), and campaign_logs (campaign-specific impressions).
 
 ## Entity Relationship Diagram
 
@@ -10,7 +10,7 @@ The database uses PostgreSQL with Drizzle ORM for type-safe database operations.
 erDiagram
     platforms ||--o{ ads : "has"
     notifications ||--o{ notification_reads : "pulled by"
-    extension_users ||--o{ request_logs : "creates"
+    visitors ||--o{ request_logs : "creates"
     
     platforms {
         uuid id PK
@@ -27,10 +27,6 @@ erDiagram
         text description
         text image_url
         text target_url
-        uuid platform_id FK
-        enum status
-        timestamp start_date
-        timestamp end_date
         timestamp created_at
         timestamp updated_at
     }
@@ -39,9 +35,7 @@ erDiagram
         uuid id PK
         varchar title
         text message
-        timestamp start_date
-        timestamp end_date
-        boolean is_read
+        text cta_link
         timestamp created_at
         timestamp updated_at
     }
@@ -53,14 +47,12 @@ erDiagram
         timestamp read_at
     }
     
-    extension_users {
-        uuid id PK
-        varchar visitor_id UK
+    visitors {
+        varchar visitor_id PK
+        varchar country
         integer total_requests
-        timestamp first_seen_at
-        timestamp last_seen_at
         timestamp created_at
-        timestamp updated_at
+        timestamp last_seen_at
     }
     
     request_logs {
@@ -196,35 +188,32 @@ Tracks which notifications each user has already pulled (so each notification is
 
 ---
 
-### extension_users
+### visitors
 
 Tracks browser extension users and their activity statistics.
 
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
-| `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique user record identifier |
-| `visitor_id` | varchar(255) | NOT NULL, UNIQUE | Extension-provided visitor identifier |
-| `first_seen_at` | timestamp with time zone | NOT NULL, DEFAULT now() | First request timestamp |
+| `visitor_id` | varchar(255) | PRIMARY KEY | Extension-provided visitor identifier |
+| `country` | varchar(2) | NULL | 2-letter country code (from headers or body) |
+| `total_requests` | integer | NOT NULL, DEFAULT 0 | Total number of API requests made |
+| `created_at` | timestamp with time zone | NOT NULL, DEFAULT now() | First request timestamp |
 | `last_seen_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Most recent request timestamp |
-| `total_requests` | integer | NOT NULL, DEFAULT 0 | Total number of requests made |
-| `created_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Record creation timestamp |
-| `updated_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Last update timestamp |
 
 **Relationships:**
-- One-to-many with `request_logs` (via `visitor_id`)
+- One-to-many with `request_logs` (via `visitor_id`, logical relationship)
 
 **Indexes:**
-- Primary key on `id`
-- Unique constraint on `visitor_id`
+- Primary key on `visitor_id`
 
 **Usage:**
-- Created automatically when extension logs first request
+- Created automatically when extension calls any extension API
 - Updated on each request (increments `total_requests`, updates `last_seen_at`)
 - Used for analytics and user tracking
 - `visitor_id` is provided by extension (fingerprint/hash)
 
 **Upsert Behavior:**
-When extension logs a request:
+When extension calls `/api/extension/ad-block` or `/api/extension/notifications`:
 1. If `visitor_id` exists: Update `last_seen_at`, increment `total_requests`
 2. If `visitor_id` doesn't exist: Create new record with `total_requests = 1`
 
@@ -232,13 +221,13 @@ When extension logs a request:
 
 ### request_logs
 
-Logs individual extension requests for analytics purposes.
+Logs individual extension API requests for analytics purposes. Separate from `campaign_logs`, which tracks campaign-specific impressions.
 
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
 | `id` | uuid | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique log entry identifier |
 | `visitor_id` | varchar(255) | NOT NULL | Extension user identifier |
-| `domain` | varchar(255) | NOT NULL | Domain where request originated |
+| `domain` | varchar(255) | NOT NULL | Domain where request originated (use `extension` for notifications-only endpoint) |
 | `request_type` | enum | NOT NULL | Type of request (see enum below) |
 | `created_at` | timestamp with time zone | NOT NULL, DEFAULT now() | Request timestamp |
 
@@ -247,24 +236,23 @@ Logs individual extension requests for analytics purposes.
 - `notification` - Request for notifications
 
 **Relationships:**
-- Many-to-one with `extension_users` (via `visitor_id`, logical relationship)
+- Many-to-one with `visitors` (via `visitor_id`, logical relationship)
 
 **Indexes:**
 - Primary key on `id`
-- No foreign key constraint (visitor_id is varchar, not FK)
+- Index on `(visitor_id, created_at DESC)` for efficient lookups
 
 **Usage:**
-- Created automatically when extension calls `/api/extension/ad-block`
-- Tracks which domains are being accessed
-- Tracks request types (ad vs notification)
+- **User-guided logging**: Inserted only when the user actually receives data (ads or notifications)
+- For ad-block: uses actual domain from request; inserts one row per type that returned data (ad, notification, or both)
+- For notifications-only: uses sentinel domain `extension`; inserts only when notifications were returned
+- Tracks which domains delivered content and request types (not every API call)
 - Used for analytics dashboard
-- Analytics shows last 100 logs (no pagination currently)
 
 **Logging Flow:**
-1. Extension calls `/api/extension/ad-block` with `visitorId`, `domain`, and optional `requestType`
-2. API upserts `extension_users` record
-3. API inserts new `request_logs` record
-4. Both operations happen in same request
+1. Extension calls `/api/extension/ad-block` or `/api/extension/notifications`
+2. API upserts `visitors` record (increments `total_requests`)
+3. API inserts `request_logs` **only when** ads or notifications were actually returned to the user
 
 ---
 
@@ -312,9 +300,9 @@ Request type enumeration for analytics logging.
    - Foreign key: `ads.platform_id` → `platforms.id`
    - On delete: SET NULL (platform deletion doesn't delete ads)
 
-2. **extension_users → request_logs** (logical)
-   - One extension user can have many request logs
-   - Logs reference user via `visitor_id` (varchar, not FK)
+2. **visitors → request_logs** (logical)
+   - One visitor can have many request logs
+   - Logs reference visitor via `visitor_id` (varchar, not FK)
    - No foreign key constraint (flexibility for extension-provided IDs)
 
 ### Notification Read Tracking
@@ -337,7 +325,7 @@ Request type enumeration for analytics logging.
 - `notification_reads.notification_id` → `notifications.id` (ON DELETE CASCADE)
 
 ### Unique Constraints
-- `extension_users.visitor_id` (unique)
+- `visitors.visitor_id` (primary key)
 - `notification_reads (notification_id, visitor_id)` (unique)
 
 ### Implicit Indexes
@@ -433,7 +421,8 @@ const activeAds = await db
 ### Fetching Active Notifications Not Yet Pulled by User
 
 ```typescript
-// Get active notifications that this visitor has not yet pulled (left join notification_reads)
+// Get active notifications that this visitor has not yet pulled.
+// Date filtering lives on campaigns; join notifications → campaignNotification → campaigns.
 const activeNotifications = await db
   .select({
     id: notifications.id,
@@ -441,6 +430,8 @@ const activeNotifications = await db
     message: notifications.message,
   })
   .from(notifications)
+  .innerJoin(campaignNotification, eq(campaignNotification.notificationId, notifications.id))
+  .innerJoin(campaigns, eq(campaigns.id, campaignNotification.campaignId))
   .leftJoin(
     notificationReads,
     and(
@@ -450,41 +441,34 @@ const activeNotifications = await db
   )
   .where(
     and(
-      lte(notifications.startDate, now),
-      gte(notifications.endDate, now),
-      isNull(notificationReads.id)
+      isNull(notificationReads.id),
+      eq(campaigns.status, 'active'),
+      or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
+      or(isNull(campaigns.endDate), gte(campaigns.endDate, now))
     )
   );
 ```
 
-### Upserting Extension User
+### Upserting Visitor (Extension User)
 
 ```typescript
-// Check if user exists
-const existingUser = await db
-  .select()
-  .from(extensionUsers)
-  .where(eq(extensionUsers.visitorId, visitorId))
-  .limit(1);
-
-if (existingUser.length > 0) {
-  // Update existing
-  await db
-    .update(extensionUsers)
-    .set({
-      lastSeenAt: now,
-      totalRequests: existingUser[0].totalRequests + 1,
-    })
-    .where(eq(extensionUsers.visitorId, visitorId));
-} else {
-  // Create new
-  await db.insert(extensionUsers).values({
+await db
+  .insert(visitors)
+  .values({
     visitorId,
-    firstSeenAt: now,
-    lastSeenAt: now,
+    country: resolvedCountry,
     totalRequests: 1,
+    createdAt: now,
+    lastSeenAt: now,
+  })
+  .onConflictDoUpdate({
+    target: visitors.visitorId,
+    set: {
+      lastSeenAt: now,
+      totalRequests: sql`${visitors.totalRequests} + 1`,
+      ...(resolvedCountry !== null && { country: resolvedCountry }),
+    },
   });
-}
 ```
 
 ---

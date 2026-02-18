@@ -20,6 +20,8 @@ interface CampaignLinkedContentDrawerProps {
   onOpenChange: (open: boolean) => void;
   linkedContent: LinkedContent | null;
   isAdmin?: boolean;
+  /** When 'popup', shows "Pop up" instead of "Ad" for ad content */
+  campaignType?: string;
 }
 
 export function CampaignLinkedContentDrawer({
@@ -27,14 +29,15 @@ export function CampaignLinkedContentDrawer({
   onOpenChange,
   linkedContent,
   isAdmin = false,
+  campaignType,
 }: CampaignLinkedContentDrawerProps) {
   if (!linkedContent) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="sm:max-w-md overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+        <SheetHeader className="pr-10">
+          <SheetTitle className="flex items-center gap-2 pr-8">
             {linkedContent.type === 'ad' ? (
               <IconAd2 className="h-5 w-5" />
             ) : (
@@ -43,15 +46,19 @@ export function CampaignLinkedContentDrawer({
             {linkedContent.type === 'ad' ? linkedContent.name : linkedContent.title}
           </SheetTitle>
           <SheetDescription>
-            {linkedContent.type === 'ad' ? 'Linked ad content' : 'Linked notification content'}
+            {linkedContent.type === 'ad'
+              ? campaignType === 'popup'
+                ? 'Linked pop up content (same ad, displayed as popup)'
+                : 'Linked ad content'
+              : 'Linked notification content'}
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-8 px-4 pb-6 space-y-6">
           {linkedContent.type === 'ad' && (
             <>
               {linkedContent.imageUrl && (
-                <div className="rounded-lg border overflow-hidden">
+                <div className="rounded-lg border overflow-hidden my-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={linkedContent.imageUrl}
@@ -61,14 +68,14 @@ export function CampaignLinkedContentDrawer({
                 </div>
               )}
               {linkedContent.description && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Description</p>
-                  <p className="text-sm">{linkedContent.description}</p>
+                <div className="pt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Description</p>
+                  <p className="text-sm leading-relaxed">{linkedContent.description}</p>
                 </div>
               )}
               {linkedContent.targetUrl && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Target URL</p>
+                <div className="pt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Target URL</p>
                   <a
                     href={linkedContent.targetUrl}
                     target="_blank"
@@ -80,10 +87,10 @@ export function CampaignLinkedContentDrawer({
                 </div>
               )}
               {isAdmin && (
-                <Button variant="outline" size="sm" asChild>
+                <Button variant="outline" size="sm" className="mt-4 px-4 py-2" asChild>
                   <Link href={`/ads/${linkedContent.id}/edit`}>
                     <IconPencil className="mr-2 h-4 w-4" />
-                    Edit Ad
+                    {campaignType === 'popup' ? 'Edit Pop up' : 'Edit Ad'}
                   </Link>
                 </Button>
               )}
@@ -92,13 +99,13 @@ export function CampaignLinkedContentDrawer({
 
           {linkedContent.type === 'notification' && (
             <>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Message</p>
-                <p className="text-sm whitespace-pre-wrap">{linkedContent.message}</p>
+              <div className="pt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Message</p>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{linkedContent.message}</p>
               </div>
               {linkedContent.ctaLink && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">CTA Link</p>
+                <div className="pt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">CTA Link</p>
                   <a
                     href={linkedContent.ctaLink}
                     target="_blank"
@@ -110,7 +117,7 @@ export function CampaignLinkedContentDrawer({
                 </div>
               )}
               {isAdmin && (
-                <Button variant="outline" size="sm" asChild>
+                <Button variant="outline" size="sm" className="mt-4 px-4 py-2" asChild>
                   <Link href={`/notifications/${linkedContent.id}/edit`}>
                     <IconPencil className="mr-2 h-4 w-4" />
                     Edit Notification

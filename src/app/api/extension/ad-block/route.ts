@@ -6,6 +6,7 @@ import {
   notifications,
   notificationReads,
   visitors,
+  requestLogs,
   campaigns,
   campaignPlatforms,
   campaignCountries,
@@ -15,33 +16,7 @@ import {
   campaignLogs,
 } from '@/db/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
-
-function normalizeDomainForMatch(domain: string): string {
-  const trimmed = domain.trim().toLowerCase();
-  try {
-    const url = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
-    return new URL(url).hostname;
-  } catch {
-    return trimmed;
-  }
-}
-
-function extractRootDomain(hostname: string): string {
-  const parts = hostname.split('.');
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('.');
-  }
-  return hostname;
-}
-
-function domainsMatch(domain1: string, domain2: string): boolean {
-  const host1 = normalizeDomainForMatch(domain1);
-  const host2 = normalizeDomainForMatch(domain2);
-  if (host1 === host2) return true;
-  const root1 = extractRootDomain(host1);
-  const root2 = extractRootDomain(host2);
-  return root1 === root2 && root1.length > 0;
-}
+import { domainsMatch } from '@/lib/domain-utils';
 
 function isNewUser(createdAt: Date, withinDays = 7): boolean {
   const cutoff = new Date();
@@ -81,6 +56,19 @@ function getCountryFromHeaders(request: NextRequest): string | null {
   if (cf && cf !== 'XX' && /^[A-Z]{2}$/i.test(cf)) return cf.toUpperCase();
   return null;
 }
+
+type CampaignRow = {
+  id: string;
+  targetAudience: string;
+  campaignType: string;
+  frequencyType: string;
+  frequencyCount: number | null;
+  timeStart: string | null;
+  timeEnd: string | null;
+  status: string;
+  startDate: Date | null;
+  endDate: Date | null;
+};
 
 /**
  * POST /api/extension/ad-block
@@ -137,18 +125,23 @@ export async function POST(request: NextRequest) {
         ? String(country).toUpperCase().slice(0, 2)
         : null) ?? getCountryFromHeaders(request);
 
-    // Upsert visitors (optional country)
+    // Upsert visitors (optional country, increment totalRequests)
     await db
       .insert(visitors)
       .values({
         visitorId,
         country: resolvedCountry,
+        totalRequests: 1,
         createdAt: now,
         lastSeenAt: now,
       })
       .onConflictDoUpdate({
         target: visitors.visitorId,
-        set: { lastSeenAt: now, ...(resolvedCountry !== null && { country: resolvedCountry }) },
+        set: {
+          lastSeenAt: now,
+          totalRequests: sql`${visitors.totalRequests} + 1`,
+          ...(resolvedCountry !== null && { country: resolvedCountry }),
+        },
       });
 
     const allPlatformsList = await db
@@ -159,6 +152,7 @@ export async function POST(request: NextRequest) {
     const platform = allPlatformsList.find((p) => domainsMatch(p.domain, domain));
 
     if (!platform) {
+      // No platform for this domain - return empty. Do NOT log (user received no data).
       return NextResponse.json({ ads: [], notifications: [] });
     }
 
@@ -167,7 +161,7 @@ export async function POST(request: NextRequest) {
     let publicAds: AdOut[] = [];
     let publicNotifications: NotifOut[] = [];
 
-    // Resolve campaigns for this platform (include status, startDate, endDate)
+    // Resolve campaigns for this platform
     const campaignsForPlatform = await db
       .select({
         id: campaigns.id,
@@ -185,21 +179,46 @@ export async function POST(request: NextRequest) {
       .innerJoin(campaignPlatforms, eq(campaignPlatforms.campaignId, campaigns.id))
       .where(eq(campaignPlatforms.platformId, platform.id));
 
-    const visitorRow = await db.select().from(visitors).where(eq(visitors.visitorId, visitorId)).limit(1);
+    const campaignIds = campaignsForPlatform.map((c) => c.id);
+
+    const [visitorRow, countryRows, viewRows, campaignAdRows, campaignNotifRows] = await Promise.all([
+      db.select().from(visitors).where(eq(visitors.visitorId, visitorId)).limit(1),
+      campaignIds.length > 0
+        ? db
+          .select({ campaignId: campaignCountries.campaignId, countryCode: campaignCountries.countryCode })
+          .from(campaignCountries)
+          .where(inArray(campaignCountries.campaignId, campaignIds))
+        : [],
+      campaignIds.length > 0
+        ? db
+          .select({ campaignId: campaignVisitorViews.campaignId, viewCount: campaignVisitorViews.viewCount })
+          .from(campaignVisitorViews)
+          .where(
+            and(
+              inArray(campaignVisitorViews.campaignId, campaignIds),
+              eq(campaignVisitorViews.visitorId, visitorId)
+            )
+          )
+        : [],
+      campaignIds.length > 0
+        ? db
+          .select({ campaignId: campaignAd.campaignId, adId: campaignAd.adId })
+          .from(campaignAd)
+          .where(inArray(campaignAd.campaignId, campaignIds))
+        : [],
+      campaignIds.length > 0
+        ? db
+          .select({ campaignId: campaignNotification.campaignId, notificationId: campaignNotification.notificationId })
+          .from(campaignNotification)
+          .where(inArray(campaignNotification.campaignId, campaignIds))
+        : [],
+    ]);
+
     const visitorCreatedAt = visitorRow[0]?.createdAt ?? now;
     const visitorCountry = visitorRow[0]?.country?.toUpperCase().slice(0, 2) ?? null;
     const isNew = isNewUser(visitorCreatedAt);
     const currentMinutes = currentTimeInMinutes();
 
-    // Fetch campaign country targets for all campaigns on this platform
-    const campaignIds = campaignsForPlatform.map((c) => c.id);
-    const countryRows =
-      campaignIds.length > 0
-        ? await db
-          .select({ campaignId: campaignCountries.campaignId, countryCode: campaignCountries.countryCode })
-          .from(campaignCountries)
-          .where(inArray(campaignCountries.campaignId, campaignIds))
-        : [];
     const campaignCountryMap = new Map<string, Set<string>>();
     for (const row of countryRows) {
       if (!campaignCountryMap.has(row.campaignId)) {
@@ -208,7 +227,22 @@ export async function POST(request: NextRequest) {
       campaignCountryMap.get(row.campaignId)!.add(row.countryCode.toUpperCase());
     }
 
-    const qualifyingCampaigns: typeof campaignsForPlatform = [];
+    const viewCountMap = new Map<string, number>();
+    for (const row of viewRows) {
+      viewCountMap.set(row.campaignId, row.viewCount);
+    }
+
+    const campaignAdMap = new Map<string, string>();
+    for (const row of campaignAdRows) {
+      campaignAdMap.set(row.campaignId, row.adId);
+    }
+
+    const campaignNotifMap = new Map<string, string>();
+    for (const row of campaignNotifRows) {
+      campaignNotifMap.set(row.campaignId, row.notificationId);
+    }
+
+    const qualifyingCampaigns: CampaignRow[] = [];
     for (const c of campaignsForPlatform) {
       if (!isCampaignActive(c.status, c.startDate, c.endDate, now)) continue;
       if (c.targetAudience === 'new_users' && !isNew) continue;
@@ -226,21 +260,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (c.frequencyType === 'only_once' || c.frequencyType === 'specific_count') {
-        const [viewRow] = await db
-          .select()
-          .from(campaignVisitorViews)
-          .where(
-            and(
-              eq(campaignVisitorViews.campaignId, c.id),
-              eq(campaignVisitorViews.visitorId, visitorId)
-            )
-          )
-          .limit(1);
-        if (c.frequencyType === 'only_once' && viewRow && viewRow.viewCount >= 1) continue;
-        if (c.frequencyType === 'specific_count' && c.frequencyCount !== null && viewRow && viewRow.viewCount >= c.frequencyCount) continue;
+        const viewCount = viewCountMap.get(c.id) ?? 0;
+        if (c.frequencyType === 'only_once' && viewCount >= 1) continue;
+        if (c.frequencyType === 'specific_count' && c.frequencyCount !== null && viewCount >= c.frequencyCount) continue;
       }
 
-      // Country targeting: if campaign has country targets, visitor must be in one of them
       const campaignCountriesSet = campaignCountryMap.get(c.id);
       if (campaignCountriesSet && campaignCountriesSet.size > 0) {
         if (!visitorCountry) continue;
@@ -255,22 +279,14 @@ export async function POST(request: NextRequest) {
 
     for (const c of qualifyingCampaigns) {
       if (c.campaignType === 'ads' || c.campaignType === 'popup') {
-        const [adRow] = await db
-          .select({ adId: campaignAd.adId })
-          .from(campaignAd)
-          .where(eq(campaignAd.campaignId, c.id))
-          .limit(1);
-        if (adRow) {
-          adIds.set(adRow.adId, c.campaignType === 'popup' ? 'popup' : 'inline');
+        const adId = campaignAdMap.get(c.id);
+        if (adId) {
+          adIds.set(adId, c.campaignType === 'popup' ? 'popup' : 'inline');
         }
       }
       if (c.campaignType === 'notification') {
-        const [notifRow] = await db
-          .select({ notificationId: campaignNotification.notificationId })
-          .from(campaignNotification)
-          .where(eq(campaignNotification.campaignId, c.id))
-          .limit(1);
-        if (notifRow) notificationIds.add(notifRow.notificationId);
+        const notifId = campaignNotifMap.get(c.id);
+        if (notifId) notificationIds.add(notifId);
       }
     }
 
@@ -339,16 +355,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Record campaign views for frequency
-    for (const c of qualifyingCampaigns) {
+    // Bulk upsert campaign views for frequency tracking
+    if (qualifyingCampaigns.length > 0) {
       await db
         .insert(campaignVisitorViews)
-        .values({
-          campaignId: c.id,
-          visitorId,
-          viewCount: 1,
-          lastViewedAt: now,
-        })
+        .values(
+          qualifyingCampaigns.map((c) => ({
+            campaignId: c.id,
+            visitorId,
+            viewCount: 1,
+            lastViewedAt: now,
+          }))
+        )
         .onConflictDoUpdate({
           target: [campaignVisitorViews.campaignId, campaignVisitorViews.visitorId],
           set: {
@@ -358,53 +376,29 @@ export async function POST(request: NextRequest) {
         });
     }
 
-    // Log to campaign_logs (with campaign_id)
+    // Bulk insert campaign logs
+    const logEntries: { campaignId: string; visitorId: string; domain: string; country: string | null; type: 'ad' | 'notification' | 'popup' }[] = [];
     for (const c of qualifyingCampaigns) {
-      if (c.campaignType === 'ads' && shouldFetchAds) {
-        const [adRow] = await db
-          .select({ adId: campaignAd.adId })
-          .from(campaignAd)
-          .where(eq(campaignAd.campaignId, c.id))
-          .limit(1);
-        if (adRow) {
-          await db.insert(campaignLogs).values({
-            campaignId: c.id,
-            visitorId,
-            domain,
-            type: 'ad',
-          });
-        }
+      if (c.campaignType === 'ads' && shouldFetchAds && campaignAdMap.has(c.id)) {
+        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'ad' });
       }
-      if (c.campaignType === 'popup' && shouldFetchAds) {
-        const [adRow] = await db
-          .select({ adId: campaignAd.adId })
-          .from(campaignAd)
-          .where(eq(campaignAd.campaignId, c.id))
-          .limit(1);
-        if (adRow) {
-          await db.insert(campaignLogs).values({
-            campaignId: c.id,
-            visitorId,
-            domain,
-            type: 'popup',
-          });
-        }
+      if (c.campaignType === 'popup' && shouldFetchAds && campaignAdMap.has(c.id)) {
+        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'popup' });
       }
-      if (c.campaignType === 'notification' && shouldFetchNotifications) {
-        const [notifRow] = await db
-          .select({ notificationId: campaignNotification.notificationId })
-          .from(campaignNotification)
-          .where(eq(campaignNotification.campaignId, c.id))
-          .limit(1);
-        if (notifRow) {
-          await db.insert(campaignLogs).values({
-            campaignId: c.id,
-            visitorId,
-            domain,
-            type: 'notification',
-          });
-        }
+      if (c.campaignType === 'notification' && shouldFetchNotifications && campaignNotifMap.has(c.id)) {
+        logEntries.push({ campaignId: c.id, visitorId, domain, country: resolvedCountry, type: 'notification' });
       }
+    }
+    if (logEntries.length > 0) {
+      await db.insert(campaignLogs).values(logEntries);
+    }
+
+    // Insert request_logs only when user actually receives data (user-guided logging)
+    const requestLogEntries: { visitorId: string; domain: string; requestType: 'ad' | 'notification' }[] = [];
+    if (publicAds.length > 0 && shouldFetchAds) requestLogEntries.push({ visitorId, domain, requestType: 'ad' });
+    if (publicNotifications.length > 0 && shouldFetchNotifications) requestLogEntries.push({ visitorId, domain, requestType: 'notification' });
+    if (requestLogEntries.length > 0) {
+      await db.insert(requestLogs).values(requestLogEntries);
     }
 
     return NextResponse.json({

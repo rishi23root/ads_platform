@@ -5,6 +5,7 @@ import {
   REALTIME_CHANNEL,
   REALTIME_COUNT_KEY,
 } from '@/lib/redis';
+import { checkLiveRateLimit } from '@/lib/rate-limit';
 
 export const maxDuration = 300;
 
@@ -22,6 +23,9 @@ function sseEvent(name: string, data: string): Uint8Array {
  * Connection may close after platform timeout (~5 min); extension should reconnect.
  */
 export async function GET(request: NextRequest) {
+  const rateLimitRes = await checkLiveRateLimit(request);
+  if (rateLimitRes) return rateLimitRes;
+
   const stream = new ReadableStream({
     async start(controller) {
       const client = await createRedisClient();
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
 
       try {
         subscriber = client.duplicate();
-        subscriber.on('error', () => {});
+        subscriber.on('error', () => { });
         await subscriber.connect();
 
         const count = await client.incr(REALTIME_COUNT_KEY);

@@ -86,13 +86,13 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
-  .map(([key, itemConfig]) => {
-    const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
-  })
-  .join("\n")}
+                .map(([key, itemConfig]) => {
+                  const color =
+                    itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+                    itemConfig.color
+                  return color ? `  --color-${key}: ${color};` : null
+                })
+                .join("\n")}
 }
 `
           )
@@ -272,7 +272,7 @@ function ChartLegendContent({
   return (
     <div
       className={cn(
-        "flex items-center justify-center gap-4",
+        "flex flex-wrap items-center justify-center gap-x-4 gap-y-2",
         verticalAlign === "top" ? "pb-3" : "pt-3",
         className
       )}
@@ -283,12 +283,29 @@ function ChartLegendContent({
           const key = `${nameKey || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
+          const label = itemConfig?.label
+          const payloadValue =
+            typeof item === "object" &&
+              item !== null &&
+              "payload" in item &&
+              typeof item.payload === "object" &&
+              item.payload !== null &&
+              "value" in item.payload
+              ? (item.payload as { value: unknown }).value
+              : undefined
+          const title =
+            typeof label === "string"
+              ? payloadValue != null
+                ? `${label} ${payloadValue}`
+                : label
+              : undefined
           return (
             <div
               key={item.value}
               className={cn(
-                "[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
+                "[&>svg]:text-muted-foreground flex min-w-0 max-w-full shrink-0 items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
               )}
+              title={title}
             >
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
@@ -300,7 +317,7 @@ function ChartLegendContent({
                   }}
                 />
               )}
-              {itemConfig?.label}
+              <span className="truncate">{label}</span>
             </div>
           )
         })}
@@ -320,8 +337,8 @@ function getPayloadConfigFromPayload(
 
   const payloadPayload =
     "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
+      typeof payload.payload === "object" &&
+      payload.payload !== null
       ? payload.payload
       : undefined
 

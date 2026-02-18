@@ -18,6 +18,11 @@ function sseEvent(name: string, data: string): Uint8Array {
  * GET /api/realtime/stream
  * SSE stream for live connection count. Subscribes to Redis; sends connection_count events.
  * Admin-only (requires valid session). Dashboard uses this instead of polling GET /api/realtime/count.
+ *
+ * CRITICAL: This endpoint must NEVER call incrConnectionCount/decrConnectionCount. Dashboard
+ * connections to this stream must not be counted — only extension users on /api/extension/live
+ * increment the Redis count. Counting dashboard sessions here would incorrectly inflate the
+ * extension user count.
  */
 export async function GET(request: NextRequest) {
   const session = await verifySession();
@@ -66,7 +71,7 @@ export async function GET(request: NextRequest) {
         controller.enqueue(sseEvent('connection_count', String(initialCount)));
 
         subscriber = client.duplicate();
-        subscriber.on('error', () => {});
+        subscriber.on('error', () => { });
         await subscriber.connect();
 
         await subscriber.subscribe(REALTIME_COUNT_CHANNEL, (message: string) => {

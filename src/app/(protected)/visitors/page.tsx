@@ -11,9 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { IconUsers } from '@tabler/icons-react';
 import { VisitorsFilters } from '@/components/visitors-filters';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { VisitorIdCell } from '@/components/visitor-id-cell';
 import { getCountryName } from '@/lib/countries';
 
@@ -101,6 +101,14 @@ export default async function VisitorsPage({
     .filter((c): c is string => c != null)
     .map((code) => ({ code, name: getCountryName(code) }));
 
+  const filterParams: Record<string, string> = {};
+  if (visitorId) filterParams.visitorId = visitorId;
+  if (joinedFrom) filterParams.joinedFrom = joinedFrom;
+  if (joinedTo) filterParams.joinedTo = joinedTo;
+  if (lastSeenFrom) filterParams.lastSeenFrom = lastSeenFrom;
+  if (lastSeenTo) filterParams.lastSeenTo = lastSeenTo;
+  if (country) filterParams.country = country;
+
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div>
@@ -120,23 +128,38 @@ export default async function VisitorsPage({
         countryOptions={countryOptions}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <IconUsers className="h-5 w-5" />
-            Visitors ({totalCount.toLocaleString()})
-          </CardTitle>
-          <CardDescription>
-            Filter by date joined, last seen, or country code
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div>
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              <IconUsers className="h-5 w-5" />
+              Visitors ({totalCount.toLocaleString()})
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Filter by date joined, last seen, or country
+            </p>
+          </div>
+          {totalCount > 0 && (
+            <div className="shrink-0">
+              <TablePagination
+                mode="link"
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                basePath="/visitors"
+                filterParams={filterParams}
+              />
+            </div>
+          )}
+        </div>
+        <div className="rounded-md border">
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Visitor ID</TableHead>
                   <TableHead>Country</TableHead>
+                  <TableHead className="text-center">Total Visits</TableHead>
                   <TableHead>Date Joined</TableHead>
                   <TableHead>Last Seen</TableHead>
                 </TableRow>
@@ -144,7 +167,7 @@ export default async function VisitorsPage({
               <TableBody>
                 {visitorsList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       No visitors match your filters. Try adjusting the date range or country.
                     </TableCell>
                   </TableRow>
@@ -161,6 +184,9 @@ export default async function VisitorsPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-center tabular-nums">
+                        {v.totalRequests.toLocaleString()}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(v.createdAt).toLocaleString()}
                       </TableCell>
@@ -172,51 +198,8 @@ export default async function VisitorsPage({
                 )}
               </TableBody>
             </Table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </p>
-              <div className="flex gap-2">
-                {page > 1 && (
-                  <a
-                    href={`/visitors?${new URLSearchParams({
-                      ...(visitorId && { visitorId }),
-                      ...(joinedFrom && { joinedFrom }),
-                      ...(joinedTo && { joinedTo }),
-                      ...(lastSeenFrom && { lastSeenFrom }),
-                      ...(lastSeenTo && { lastSeenTo }),
-                      ...(country && { country }),
-                      page: String(page - 1),
-                    }).toString()}`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    ← Previous
-                  </a>
-                )}
-                {page < totalPages && (
-                  <a
-                    href={`/visitors?${new URLSearchParams({
-                      ...(visitorId && { visitorId }),
-                      ...(joinedFrom && { joinedFrom }),
-                      ...(joinedTo && { joinedTo }),
-                      ...(lastSeenFrom && { lastSeenFrom }),
-                      ...(lastSeenTo && { lastSeenTo }),
-                      ...(country && { country }),
-                      page: String(page + 1),
-                    }).toString()}`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Next →
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

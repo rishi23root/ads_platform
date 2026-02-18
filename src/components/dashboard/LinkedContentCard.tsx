@@ -12,9 +12,11 @@ type LinkedContent =
 interface LinkedContentCardProps {
   linkedContent: LinkedContent | null;
   isAdmin?: boolean;
+  /** When 'popup', shows "Pop up" instead of "Ad" for ad content */
+  campaignType?: string;
 }
 
-export function LinkedContentCard({ linkedContent, isAdmin = false }: LinkedContentCardProps) {
+export function LinkedContentCard({ linkedContent, isAdmin = false, campaignType }: LinkedContentCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   if (!linkedContent) {
@@ -27,6 +29,8 @@ export function LinkedContentCard({ linkedContent, isAdmin = false }: LinkedCont
   }
 
   const isAd = linkedContent.type === 'ad';
+  const isPopup = isAd && campaignType === 'popup';
+  const label = isAd ? (isPopup ? 'Pop up' : 'Ad') : 'Notification';
 
   return (
     <>
@@ -38,7 +42,7 @@ export function LinkedContentCard({ linkedContent, isAdmin = false }: LinkedCont
         <div className="flex items-center gap-2 mb-1.5">
           <Badge variant={isAd ? 'default' : 'secondary'} className="text-xs gap-1">
             {isAd ? <IconAd2 className="h-3 w-3" /> : <IconBell className="h-3 w-3" />}
-            {isAd ? 'Ad' : 'Notification'}
+            {label}
           </Badge>
         </div>
         {isAd ? (
@@ -76,6 +80,7 @@ export function LinkedContentCard({ linkedContent, isAdmin = false }: LinkedCont
         onOpenChange={setDrawerOpen}
         linkedContent={linkedContent}
         isAdmin={isAdmin}
+        campaignType={campaignType}
       />
     </>
   );

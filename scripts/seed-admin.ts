@@ -1,18 +1,17 @@
 /**
  * Seed default admin user when no users exist.
  * Set ADMIN_EMAIL and ADMIN_PASSWORD in .env.local to enable.
- * Run: npm run db:seed-admin
+ * Run: npm run db:seed-admin (or runs automatically on dev/start via instrumentation)
  */
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 
-async function seedAdmin() {
+export async function seedAdmin(): Promise<void> {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
 
   if (!email || !password) {
     console.log('Skipping admin seed: ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env.local');
-    process.exit(0);
     return;
   }
 
@@ -27,35 +26,34 @@ async function seedAdmin() {
 
   const [row] = await db.select({ n: count() }).from(user);
   if (row && row.n > 0) {
-    console.log('Users already exist. Skipping admin seed.');
-    process.exit(0);
     return;
   }
 
-  try {
-    const result = await auth.api.signUpEmail({
-      body: {
-        email,
-        password,
-        name: 'Admin',
-      },
-    });
+  const result = await auth.api.signUpEmail({
+    body: {
+      email,
+      password,
+      name: 'Admin',
+    },
+  });
 
-    if (result.error) {
-      console.error('Failed to create admin:', result.error.message);
-      process.exit(1);
-    }
-
-    if (result.data?.user) {
-      await db.update(user).set({ role: 'admin' }).where(eq(user.id, result.data.user.id));
-      console.log(`Admin user created: ${email}`);
-    }
-  } catch (err) {
-    console.error('Seed failed:', err);
-    process.exit(1);
+  if ('error' in result && result.error) {
+    const err = result.error as { message?: string };
+    throw new Error(err.message ?? String(err));
   }
 
-  process.exit(0);
+  if ('user' in result && result.user) {
+    await db.update(user).set({ role: 'admin' }).where(eq(user.id, result.user.id));
+    console.log(`Admin user created: ${email}`);
+  }
 }
 
-seedAdmin();
+// Run when executed directly (pnpm db:seed-admin), not when imported by instrumentation
+if (process.argv[1]?.includes('seed-admin')) {
+  seedAdmin()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('Seed failed:', err);
+      process.exit(1);
+    });
+}

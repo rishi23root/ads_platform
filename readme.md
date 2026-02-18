@@ -19,7 +19,7 @@ This admin dashboard provides a complete solution for managing:
 - **Database**: PostgreSQL (via Docker Compose)
 - **ORM**: Drizzle ORM + Drizzle Kit
 - **UI**: Tailwind CSS 4 + shadcn/ui components
-- **Authentication**: JWT-based session management
+- **Authentication**: Better Auth (email/password, session cookies)
 - **Icons**: Tabler Icons
 - **Charts**: Recharts
 
@@ -53,24 +53,31 @@ POSTGRES_PASSWORD=your_password
 # Application
 NODE_ENV=development
 
-# Admin Authentication
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your_secure_password
-JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
+# Better Auth (required for login)
+BETTER_AUTH_SECRET=your-super-secret-at-least-32-characters-long
+BETTER_AUTH_BASE_URL=http://localhost:3000
+
+# Redis (optional, for realtime features)
+REDIS_URL=redis://localhost:6379
 
 # Optional
 DATABASE_POOL_MAX=10
+
+# Optional: seed default admin when no users exist (run: pnpm db:seed-admin)
+# ADMIN_EMAIL=admin@example.com
+# ADMIN_PASSWORD=your-secure-password
 ```
 
 **Required environment variables:**
 - `DATABASE_URL` - PostgreSQL connection string
 - `NODE_ENV` - Environment mode (development/production)
-- `ADMIN_USERNAME` - Admin login username
-- `ADMIN_PASSWORD` - Admin login password
-- `JWT_SECRET` - Secret key for JWT tokens (minimum 32 characters)
+- `BETTER_AUTH_SECRET` - Secret for Better Auth (minimum 32 characters)
+- `BETTER_AUTH_BASE_URL` - Base URL of your app (e.g. http://localhost:3000)
 
 **Optional variables:**
 - `DATABASE_POOL_MAX` - Database connection pool size (default: 10)
+- `REDIS_URL` - Redis URL for realtime connection count and notifications
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD` - For seeding first admin user
 
 ### 3. Install Dependencies
 
@@ -108,32 +115,35 @@ The application will be available at `http://localhost:3000`.
 
 ## Authentication
 
-The dashboard uses JWT-based authentication with secure HTTP-only cookies.
+The dashboard uses Better Auth with email/password and secure session cookies.
 
-- **Login**: Navigate to `/login` and use your `ADMIN_USERNAME` and `ADMIN_PASSWORD`
-- **Session**: Sessions last 7 days
+- **Login**: Navigate to `/login` and sign in with your email and password
+- **Sign up**: New users can create an account at `/sign-up` (first user becomes admin)
+- **Session**: Sessions are managed by Better Auth
 - **Protected Routes**: All dashboard routes under `/(protected)` require authentication
 - **Logout**: Available from the user menu in the sidebar
 
 ## Features
 
 ### Dashboard
-- Overview statistics (ads, platforms, notifications, extension users)
+- Overview statistics (campaigns, extension users, request logs)
 - Interactive charts for analytics
-- Recent ads table with quick actions
+- Recent campaigns table with quick actions
 
 ### Platform Management
 - Create, edit, and delete platforms
 - Configure domain names for ad targeting
 - Activate/deactivate platforms
 
+### Campaign Management
+- Create and manage campaigns (ads, popup, or notification type)
+- Target platforms, countries, and audience (new users vs all)
+- Frequency controls (always, time-based, only once, specific count)
+- Status and date range per campaign
+
 ### Ad Management
-- Full CRUD operations for advertisements
-- Image and target URL configuration
-- Status management (active, inactive, scheduled, expired)
-- Date range scheduling (start/end dates)
-- Automatic expiration when end date passes
-- Platform association
+- Content library for ads (name, image, target URL, HTML)
+- Ads are linked to campaigns (one ad per campaign for ad/popup types)
 
 ### Notification Management
 - Create time-bound notifications
@@ -178,16 +188,10 @@ admin_dashboard/
 │   ├── components/
 │   │   ├── ui/                 # shadcn/ui components
 │   │   ├── app-sidebar.tsx     # Main sidebar navigation
-│   │   ├── dashboard-ads-table.tsx
 │   │   ├── chart-area-interactive.tsx
 │   │   └── ...                 # Other components
 │   ├── db/
-│   │   ├── schema/             # Database schemas
-│   │   │   ├── ads.ts
-│   │   │   ├── extension-users.ts
-│   │   │   ├── notifications.ts
-│   │   │   ├── platforms.ts
-│   │   │   └── request-logs.ts
+│   │   ├── schema.ts           # Database schema (campaigns, ads, platforms, etc.)
 │   │   └── index.ts            # Database connection
 │   ├── lib/
 │   │   ├── auth.ts             # Authentication utilities
@@ -276,8 +280,7 @@ The database connection uses a singleton pattern compatible with Next.js dev mod
 
 ### Authentication
 
-- JWT tokens stored in HTTP-only cookies
-- 7-day session expiration
+- Better Auth handles sessions and cookies
 - Secure cookies in production (HTTPS required)
 - Session validation on protected routes
 
@@ -294,6 +297,11 @@ The database connection uses a singleton pattern compatible with Next.js dev mod
 ## API Endpoints
 
 ### Admin API (Protected)
+- `GET /api/campaigns` - List campaigns
+- `POST /api/campaigns` - Create campaign (admin only)
+- `GET /api/campaigns/[id]` - Get campaign
+- `PUT /api/campaigns/[id]` - Update campaign (admin only)
+- `DELETE /api/campaigns/[id]` - Delete campaign (admin only)
 - `GET /api/platforms` - List all platforms
 - `POST /api/platforms` - Create platform
 - `GET /api/platforms/[id]` - Get platform
@@ -315,9 +323,8 @@ The database connection uses a singleton pattern compatible with Next.js dev mod
 ### Extension API (Public)
 - `POST /api/extension/ad-block` - Get ads and/or notifications for domain and automatically log visit(s). Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}`.
 
-### Authentication API
-- `POST /api/auth/login` - Admin login
-- `POST /api/auth/logout` - Admin logout
+### Authentication API (Better Auth)
+- `GET/POST /api/auth/*` - Better Auth catch-all (sign-in, sign-up, sign-out, session, etc.)
 
 See [docs/EXTENSION_AD_BLOCK_API.md](./docs/EXTENSION_AD_BLOCK_API.md) and [docs/EXTENSION_API_DOCS.md](./docs/EXTENSION_API_DOCS.md) for detailed extension API documentation.
 
@@ -334,10 +341,10 @@ Key documents:
 
 ## Production Deployment
 
-- Ensure all environment variables are set in production
-- Use strong `JWT_SECRET` (minimum 32 characters)
-- Use secure `ADMIN_PASSWORD`
-- Run migrations before deploying: `pnpm db:migrate`
+- Ensure all environment variables are set in production (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_BASE_URL`)
+- Use strong `BETTER_AUTH_SECRET` (minimum 32 characters)
+- **Migrations run automatically** on app startup (via `instrumentation.ts`) — no manual `pnpm db:migrate` needed
+- The single migration `0000_final_schema` is idempotent and safe to run on fresh or existing databases
 - Database connection handles graceful shutdown
 - Use production-ready connection pooling settings
 - Enable HTTPS for secure cookie transmission

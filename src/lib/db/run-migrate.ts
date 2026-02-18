@@ -6,13 +6,15 @@ import path from 'path';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import { normalizeDatabaseUrl } from './connection-url';
 
 export async function runMigrations(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) {
     console.warn('[migrate] DATABASE_URL not set, skipping migrations');
     return;
   }
+  const url = normalizeDatabaseUrl(rawUrl);
 
   const migrationsFolder =
     process.env.DRIZZLE_MIGRATIONS_DIR ??

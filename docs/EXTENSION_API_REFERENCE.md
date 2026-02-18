@@ -66,15 +66,49 @@ Use this flow so users are marked **live**, the dashboard shows the right **conn
 
 | Endpoint | Method | Purpose | Domain Required |
 |----------|--------|---------|-----------------|
+| `/api/extension/domains` | GET | **List** all active target domains | ❌ No |
 | `/api/extension/notifications` | POST | **Pull** notifications only | ❌ No |
 | `/api/extension/ad-block` | POST | **Pull** ads and/or notifications | ✅ Yes |
 | `/api/extension/live` | GET | **Push** real-time notifications + connection count (SSE) | ❌ No |
 
 **Quick decision:**
+- **List active domains** → `GET /api/extension/domains` (no auth; returns `{ domains: [...] }`)
 - **Pull notifications only** → `POST /api/extension/notifications` (no domain needed)
 - **Pull ads only** → `POST /api/extension/ad-block` with `requestType: "ad"`
 - **Pull both** → `POST /api/extension/ad-block` (omit `requestType`)
 - **Push notifications (real-time)** → `GET /api/extension/live` (SSE stream; reconnect on close)
+
+---
+
+## Endpoint 0: Active Domains (list)
+
+**Public GET** – returns all active target domains where the extension will load ads and notifications. Use this to know which domains to make ad-block requests for (e.g. avoid calling ad-block on every domain).
+
+### Request
+
+**URL:** `GET {BASE_URL}/api/extension/domains`
+
+No body or headers required.
+
+### Response (200 OK)
+
+```json
+{
+  "domains": ["instagram.com", "youtube.com", "example.com"]
+}
+```
+
+**Response rules:**
+- `domains` is always an **array** of strings (hostnames)
+- Only includes domains from **active** platforms (`is_active = true`)
+- Domains are normalized (e.g. `www.instagram.com` → `instagram.com`)
+- Empty array `[]` if no active platforms
+
+### cURL
+
+```bash
+curl http://localhost:3000/api/extension/domains
+```
 
 ---
 
@@ -109,7 +143,8 @@ Content-Type: application/json
   "notifications": [
     {
       "title": "Notification Title",
-      "message": "Notification message"
+      "message": "Notification message",
+      "ctaLink": "https://example.com/action"
     }
   ]
 }
@@ -174,13 +209,16 @@ Content-Type: application/json
       "title": "Ad Title",
       "image": "https://example.com/image.jpg",
       "description": "Ad description",
-      "redirectUrl": "https://example.com/target"
+      "redirectUrl": "https://example.com/target",
+      "htmlCode": null,
+      "displayAs": "inline"
     }
   ],
   "notifications": [
     {
       "title": "Notification Title",
-      "message": "Notification message"
+      "message": "Notification message",
+      "ctaLink": "https://example.com/action"
     }
   ]
 }
@@ -188,11 +226,22 @@ Content-Type: application/json
 
 **Response rules:**
 - Both `ads` and `notifications` are always **arrays** (one may be empty)
-- **`ads`**: Array for the requested `domain` (platform resolved via domain). Empty if domain has no active ads or domain is not configured
+- **`ads`**: Array for the requested `domain` (platform resolved via domain). Each ad has `displayAs`: `"inline"` (simple ad) or `"popup"` (show as popup). Empty if domain has no active ads or domain is not configured
 - **`notifications`**: Array of **global** notifications this user has **not** already pulled. Empty if none or all already shown
 - If `requestType: "ad"` → `notifications` is `[]`
 - If `requestType: "notification"` → `ads` is `[]`
 - If `requestType` omitted → both arrays may contain items
+
+### Ad rendering behavior
+
+How to render each ad based on `displayAs`:
+
+| `displayAs` | Behavior |
+|-------------|----------|
+| **`inline`** | Inject the ad content directly into the page. If `htmlCode` is present, insert that HTML into the page as-is. Otherwise, render using `title`, `image`, `description`, `redirectUrl`. |
+| **`popup`** | Create a **modal** (overlay) and render the ad inside it. If `htmlCode` is present, insert that HTML into the modal body. Otherwise, render using `title`, `image`, `description`, `redirectUrl`. |
+
+**Notifications** are always shown as banners/toasts (title + message + optional ctaLink). Use a modal or inline banner per your UX.
 
 ### Request Examples
 
@@ -317,11 +366,12 @@ SSE is not well suited to cURL (streaming). Use an EventSource in the extension 
 Use these types in your extension code:
 
 ```typescript
-// Notifications endpoint response
+// Notifications endpoint response (both /notifications and ad-block)
 interface NotificationsResponse {
   notifications: Array<{
     title: string;
     message: string;
+    ctaLink?: string | null;
   }>;
 }
 
@@ -332,10 +382,13 @@ interface AdBlockResponse {
     image: string | null;
     description: string | null;
     redirectUrl: string | null;
+    htmlCode?: string | null;
+    displayAs?: 'inline' | 'popup';
   }>;
   notifications: Array<{
     title: string;
     message: string;
+    ctaLink?: string | null;
   }>;
 }
 

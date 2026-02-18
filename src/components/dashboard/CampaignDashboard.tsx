@@ -96,7 +96,6 @@ export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps)
         campaign={campaign}
         platformDomains={meta.platformDomains}
         countryCodes={meta.countryCodes}
-        linkedContent={meta.linkedContent}
         isAdmin={isAdmin}
       />
 
@@ -121,7 +120,7 @@ export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps)
                 value={data.kpis.uniqueUsers}
                 change={data.kpis.usersChange}
               />
-              <LinkedContentCard linkedContent={meta.linkedContent} isAdmin={isAdmin} />
+              <LinkedContentCard linkedContent={meta.linkedContent} isAdmin={isAdmin} campaignType={campaign.campaignType} />
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

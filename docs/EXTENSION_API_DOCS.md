@@ -2,9 +2,9 @@
 
 This document contains the API endpoint for browser extensions to fetch ads and notifications with automatic visit logging.
 
-**Base URL:** `https://your-admin-dashboard-domain.com/api`
+**Base URL:** `https://your-admin-dashboard-domain.com` (paths are relative, e.g. `/api/extension/ad-block`)
 
-> **Note**: This document focuses on the recommended `/api/extension/ad-block` endpoint. For complete details, see [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
+> **Note**: For the full reference including `/api/extension/notifications`, `/api/extension/live` (SSE), and recommended flow, see [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md). For a compact cheat sheet, see [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
 
 ---
 
@@ -58,13 +58,16 @@ POST /api/extension/ad-block
       "title": "Summer Sale Banner",
       "image": "https://cdn.example.com/banner.jpg",
       "description": "Promotional banner for summer sale",
-      "redirectUrl": "https://example.com/sale"
+      "redirectUrl": "https://example.com/sale",
+      "htmlCode": null,
+      "displayAs": "inline"
     }
   ],
   "notifications": [
     {
       "title": "System Maintenance",
-      "message": "We will be performing scheduled maintenance on Saturday."
+      "message": "We will be performing scheduled maintenance on Saturday.",
+      "ctaLink": "https://example.com/maintenance"
     }
   ]
 }
@@ -87,8 +90,10 @@ This endpoint automatically logs visits:
 ### Example Request
 
 ```javascript
+const BASE_URL = 'https://your-admin-dashboard-domain.com';
+
 // Get both ads and notifications (recommended)
-const response = await fetch('https://your-admin-dashboard-domain.com/api/extension/ad-block', {
+const response = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -105,7 +110,7 @@ const { ads, notifications } = await response.json();
 
 ```javascript
 // Get ads only
-const response = await fetch('https://your-admin-dashboard-domain.com/api/extension/ad-block', {
+const response = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -140,15 +145,20 @@ interface PublicAd {
   image: string | null;          // URL to ad image/banner
   description: string | null;    // Optional description
   redirectUrl: string | null;   // URL to redirect when ad is clicked
+  htmlCode?: string | null;      // Optional HTML content
+  displayAs?: 'inline' | 'popup'; // "inline" = simple ad, "popup" = show as popup
 }
 
 interface PublicNotification {
   title: string;                 // Notification title
   message: string;               // Notification message/content
+  ctaLink?: string | null;       // Optional call-to-action link
 }
 ```
 
 **Note:** The ad-block endpoint returns public fields only (no IDs, status, or date ranges). Visit logging happens automatically and does not appear in the response.
+
+**Ad rendering:** `displayAs: "inline"` → inject `htmlCode` (or image/title/link) into the page. `displayAs: "popup"` → create a modal and render the ad inside it.
 
 ---
 
@@ -160,7 +170,7 @@ interface PublicNotification {
 
 ```javascript
 // Configuration
-const API_BASE_URL = 'https://your-admin-dashboard-domain.com/api';
+const API_BASE_URL = 'https://your-admin-dashboard-domain.com';
 
 // Get current domain
 function getCurrentDomain() {
@@ -195,7 +205,7 @@ async function fetchAdBlock(requestType) {
       body.requestType = requestType; // 'ad' or 'notification'
     }
     
-    const response = await fetch(`${API_BASE_URL}/extension/ad-block`, {
+    const response = await fetch(`${API_BASE_URL}/api/extension/ad-block`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -271,29 +281,9 @@ loadExtensionContent();
 ### TypeScript Example
 
 ```typescript
-// types.ts
-export interface Ad {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl: string | null;
-  targetUrl: string | null;
-  status: 'active' | 'inactive' | 'scheduled' | 'expired';
-  startDate: string | null;
-  endDate: string | null;
-}
-
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  startDate: string;
-  endDate: string;
-}
-
-// api.ts
-const API_BASE_URL = 'https://your-admin-dashboard-domain.com/api';
-
+// Use the PublicAd and PublicNotification types from Response Schemas above.
+// The API returns public fields only (no IDs, status, or date ranges).
+const API_BASE_URL = 'https://your-admin-dashboard-domain.com';
 ```
 
 ---
@@ -353,14 +343,12 @@ async function fetchWithErrorHandling(url) {
    - Cache ads/notifications for a short period (e.g., 5-10 minutes)
    - Invalidate cache when user navigates to a new domain
 
-4. **Rate Limiting**: Be mindful of API rate limits. The logging endpoint can be called less frequently (e.g., once per session per domain).
-
-5. **Privacy**: The `visitorId` should be a persistent but anonymous identifier. Consider using:
+4. **Privacy**: The `visitorId` should be a persistent but anonymous identifier. Consider using:
    - Browser fingerprinting
    - localStorage-based UUID
    - Extension-specific user ID
 
-6. **CORS**: Ensure your admin dashboard CORS settings allow requests from your extension's origin.
+5. **CORS**: Ensure your admin dashboard CORS settings allow requests from your extension's origin.
 
 ---
 

@@ -1,24 +1,17 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { IconPencil } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
-import { CampaignLinkedContentDrawer } from './CampaignLinkedContentDrawer';
 import { getCountryName } from '@/lib/countries';
 import type { Campaign } from '@/db/schema';
-
-type LinkedContent =
-  | { type: 'ad'; id: string; name: string; description: string | null; imageUrl: string | null; targetUrl: string | null }
-  | { type: 'notification'; id: string; title: string; message: string; ctaLink: string | null };
 
 interface CampaignHeaderProps {
   campaign: Campaign;
   platformDomains: string[];
   countryCodes: string[];
-  linkedContent: LinkedContent | null;
   isAdmin?: boolean;
 }
 
@@ -26,10 +19,8 @@ export function CampaignHeader({
   campaign,
   platformDomains,
   countryCodes,
-  linkedContent,
   isAdmin = false,
 }: CampaignHeaderProps) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const dateRange =
     campaign.startDate || campaign.endDate
       ? `${campaign.startDate ? new Date(campaign.startDate).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'} – ${campaign.endDate ? new Date(campaign.endDate).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}`
@@ -70,18 +61,6 @@ export function CampaignHeader({
           <div className="rounded-lg border bg-card px-3 py-2">
             <p className="text-xs font-medium text-muted-foreground mb-0.5">Date</p>
             <p className="text-sm font-medium">{dateRange}</p>
-          </div>
-        )}
-        {linkedContent && (
-          <div className="rounded-lg border bg-card px-3 py-2">
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">Linked</p>
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="text-sm font-medium text-foreground hover:underline cursor-pointer text-left"
-            >
-              {linkedContent.type === 'ad' ? linkedContent.name : linkedContent.title}
-            </button>
           </div>
         )}
         {(platformDomains.length > 0 || countryCodes.length >= 0) && (
@@ -139,12 +118,6 @@ export function CampaignHeader({
           </>
         )}
       </div>
-      <CampaignLinkedContentDrawer
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        linkedContent={linkedContent ?? null}
-        isAdmin={isAdmin}
-      />
     </header>
   );
 }

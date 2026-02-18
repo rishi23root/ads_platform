@@ -10,8 +10,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { VisitorIdCell } from '@/components/visitor-id-cell';
 
 interface LogEntry {
   id: string;
@@ -71,6 +71,8 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
     );
   }
 
+  const pageSize = 25;
+
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -82,33 +84,16 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             Extension requests for this campaign. Paginated for performance.
           </p>
         </div>
-        {totalPages > 1 && !loading && (
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {page} of {totalPages}
-            </span>
-            <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setPage((p) => p - 1)}
-                disabled={page <= 1}
-                aria-label="Previous page"
-                className="h-7 w-7"
-              >
-                <IconChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= totalPages}
-                aria-label="Next page"
-                className="h-7 w-7"
-              >
-                <IconChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+        {!loading && (
+          <div className="shrink-0">
+            <TablePagination
+              mode="button"
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>
@@ -138,8 +123,8 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             ) : (
               logs.map((log) => (
                 <TableRow key={log.id}>
-                  <TableCell className="font-mono text-sm">
-                    {log.visitorId.length > 24 ? `${log.visitorId.slice(0, 24)}…` : log.visitorId}
+                  <TableCell>
+                    <VisitorIdCell visitorId={log.visitorId} />
                   </TableCell>
                   <TableCell className="text-sm">{log.domain}</TableCell>
                   <TableCell>

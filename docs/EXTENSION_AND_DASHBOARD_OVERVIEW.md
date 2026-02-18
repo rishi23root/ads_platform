@@ -40,7 +40,7 @@ This document explains how the **browser extension** and **admin dashboard** wor
 ```
 
 - **Admin Dashboard**: backend + UI. It stores platforms, ads, notifications, and request logs. It exposes **public** endpoints for the extension and **protected** endpoints for the admin UI.
-- **Extension**: runs in the user’s browser, calls the dashboard’s **public** API to get ads/notifications and to send logs. There is **no direct connection** from dashboard to extension (no push); the extension always **pulls** from the dashboard.
+- **Extension**: runs in the user’s browser, calls the dashboard’s **public** API to get ads/notifications and to send logs. For real-time notification signals, connect to `GET /api/extension/live` (SSE); when the admin creates a notification, the server pushes an event and the extension pulls the new content.
 
 ---
 
@@ -53,7 +53,7 @@ This document explains how the **browser extension** and **admin dashboard** wor
 | **Database**         | `platforms`, `ads`, `notifications`, `notification_reads`, `extension_users`, `request_logs`. |
 | **Redis**           | Used for admin session (login). Not used for extension traffic. |
 
-There is **no real-time push** (e.g. WebSockets) from dashboard to extension. All “notification” content is just **data** the extension fetches via the same API; “notification” in the API means “notification-type content,” not a push notification.
+**Real-time:** Connect to `GET /api/extension/live` (SSE) to receive a `notification` event when the admin creates/updates a notification; on that event, call `POST /api/extension/notifications` to pull and show. This marks the user as live (dashboard shows connection count).
 
 ---
 
@@ -65,9 +65,11 @@ All communication is **HTTP (REST)**. The extension is the only client of these 
 
 | Purpose              | Method | Endpoint                          | When extension typically calls |
 |----------------------|--------|-----------------------------------|---------------------------------|
-| Get ads/notifications and log visit | POST   | `/api/extension/ad-block`        | On page load or when domain matches. Fetches ads and/or notifications and automatically logs visit(s). |
+| Live SSE (real-time notification signal) | GET | `/api/extension/live` | Keep open while extension is active. Marks user as live; receive `notification` event when admin creates/updates. |
+| Pull notifications only | POST | `/api/extension/notifications` | On first connect or when SSE `notification` event received. Body: `{ visitorId }`. No domain needed. |
+| Get ads/notifications and log visit | POST   | `/api/extension/ad-block`        | On page load or when domain matches. Body: `{ visitorId, domain, requestType? }`. Fetches ads and/or notifications; logging is automatic. |
 
-- **Ad Block**: extension sends `{ visitorId, domain, requestType? }`. `visitorId` is provided by the extension (stable user ID). Ads are resolved by domain; notifications are global and only those not yet pulled by this `visitorId` are returned. Response is always `{ads: [...], notifications: [...]}` (arrays). Visit(s) are logged automatically.
+- **Ad Block**: extension sends `{ visitorId, domain, requestType? }`. Ads are resolved by domain; notifications are global and only those not yet pulled by this `visitorId` are returned. Response is always `{ads: [...], notifications: [...]}` (arrays).
 
 ### 3.2 Dashboard → Extension
 
@@ -168,7 +170,9 @@ So “many requests each second” usually means: **frequent calls to `/api/exte
 
 | Endpoint                | Method | Purpose |
 |-------------------------|--------|--------|
-| `/api/extension/ad-block` | POST   | Get ads (by domain) and/or notifications (global, per-user). Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}` (always arrays). Logging is automatic. |
+| `/api/extension/live` | GET   | SSE stream. Marks user as live; sends `notification` event when admin creates/updates. Reconnect on close. |
+| `/api/extension/notifications` | POST   | Pull notifications only. Body: `{visitorId}`. No domain. Returns `{notifications: [...]}`. |
+| `/api/extension/ad-block` | POST   | Get ads (by domain) and/or notifications. Body: `{visitorId, domain, requestType?}`. Returns `{ads: [...], notifications: [...]}`. Logging is automatic. |
 
 ### User ID and response format
 

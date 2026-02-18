@@ -99,6 +99,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!Array.isArray(platformIds) || platformIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Select at least one domain (platform)' },
+        { status: 400 }
+      );
+    }
+
+    if ((campaignType === 'ads' || campaignType === 'popup') && !adId) {
+      return NextResponse.json(
+        { error: `Select an ${campaignType === 'popup' ? 'pop up' : 'ad'}` },
+        { status: 400 }
+      );
+    }
+    if (campaignType === 'notification' && !notificationId) {
+      return NextResponse.json(
+        { error: 'Select a notification' },
+        { status: 400 }
+      );
+    }
+
     const [inserted] = await db
       .insert(campaigns)
       .values({

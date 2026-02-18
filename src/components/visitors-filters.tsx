@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +36,12 @@ export function VisitorsFilters({
 }: VisitorsFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const ALL_COUNTRIES_VALUE = '__all__';
+  const [countryValue, setCountryValue] = useState(country ?? ALL_COUNTRIES_VALUE);
+
+  useEffect(() => {
+    queueMicrotask(() => setCountryValue(country ?? ALL_COUNTRIES_VALUE));
+  }, [country]);
 
   const updateFilters = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -57,18 +63,18 @@ export function VisitorsFilters({
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
-    const countryVal = (formData.get('country') as string)?.trim();
     updateFilters({
       visitorId: (formData.get('visitorId') as string)?.trim() || undefined,
       joinedFrom: (formData.get('joinedFrom') as string) || undefined,
       joinedTo: (formData.get('joinedTo') as string) || undefined,
       lastSeenFrom: (formData.get('lastSeenFrom') as string) || undefined,
       lastSeenTo: (formData.get('lastSeenTo') as string) || undefined,
-      country: countryVal || undefined,
+      country: countryValue && countryValue !== ALL_COUNTRIES_VALUE ? countryValue.trim() : undefined,
     });
   };
 
   const handleClear = () => {
+    setCountryValue(ALL_COUNTRIES_VALUE);
     router.push('/visitors');
   };
 
@@ -80,7 +86,7 @@ export function VisitorsFilters({
           Filters
         </CardTitle>
         <CardDescription>
-          Search by visitor ID or filter by date joined, last seen, or country code (e.g. US, IN)
+          Search by visitor ID or filter by date joined, last seen, or country
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -138,15 +144,18 @@ export function VisitorsFilters({
               />
             </div>
           </div>
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="space-y-2 min-w-[180px]">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
+            <div className="space-y-2">
               <Label htmlFor="country">Country</Label>
-              <Select name="country" defaultValue={country ?? ''}>
+              <Select
+                value={countryValue}
+                onValueChange={setCountryValue}
+              >
                 <SelectTrigger id="country" className="w-full">
                   <SelectValue placeholder="All countries" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All countries</SelectItem>
+                  <SelectItem value={ALL_COUNTRIES_VALUE}>All countries</SelectItem>
                   {countryOptions.map(({ code, name }) => (
                     <SelectItem key={code} value={code}>
                       {name} ({code})
@@ -155,7 +164,7 @@ export function VisitorsFilters({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 lg:col-span-3 lg:justify-end">
               <Button type="submit">Apply filters</Button>
               <Button type="button" variant="outline" onClick={handleClear}>
                 Clear

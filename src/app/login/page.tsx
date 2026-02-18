@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,9 +14,18 @@ import {
 } from '@/components/ui/card';
 import Link from 'next/link';
 import { IconLoader2 } from '@tabler/icons-react';
+import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('reason') === 'unauthorized') {
+      toast.error('Not authenticated. Please log in.');
+    }
+  }, [searchParams]);
+
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { ads } from '@/db/schema';
+import { getSessionWithRole } from '@/lib/dal';
 
 // GET all ads (content-only, no platform/status/dates)
 export async function GET() {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const allAds = await db.select().from(ads).orderBy(ads.createdAt);
     return NextResponse.json(allAds);
   } catch (error) {
@@ -13,9 +19,16 @@ export async function GET() {
   }
 }
 
-// POST create new ad
+// POST create new ad (admin only)
 export async function POST(request: NextRequest) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const body = await request.json();
     const { name, description, imageUrl, targetUrl, htmlCode } = body;
 

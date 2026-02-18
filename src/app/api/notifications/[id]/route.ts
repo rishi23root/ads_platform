@@ -3,6 +3,7 @@ import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { publishRealtimeNotification } from '@/lib/redis';
+import { getSessionWithRole } from '@/lib/dal';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -11,6 +12,11 @@ type RouteContext = {
 // GET single notification
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
 
     const [notification] = await db
@@ -30,9 +36,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
-// PUT update notification (content-only)
+// PUT update notification (content-only) (admin only)
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = await context.params;
     const body = await request.json();
     const { title, message, ctaLink } = body;
@@ -75,9 +89,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE notification
+// DELETE notification (admin only)
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = await context.params;
 
     const [deletedNotification] = await db

@@ -25,7 +25,8 @@ export function CampaignContentDrawer({ campaignId, type }: CampaignContentDrawe
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  const handleAdSuccess = async (adId: string) => {
+  const handleAdSuccess = async (adId?: string) => {
+    if (!adId) return;
     const res = await fetch(`/api/campaigns/${campaignId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -40,7 +41,8 @@ export function CampaignContentDrawer({ campaignId, type }: CampaignContentDrawe
     router.refresh();
   };
 
-  const handleNotificationSuccess = async (notificationId: string) => {
+  const handleNotificationSuccess = async (notificationId?: string) => {
+    if (!notificationId) return;
     const res = await fetch(`/api/campaigns/${campaignId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

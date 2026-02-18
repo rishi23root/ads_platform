@@ -79,14 +79,14 @@ export function SectionCards({
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Active Users</CardDescription>
+          <CardDescription>Extension users</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {activeUsers}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
               <IconUsers className="size-3" />
-              {liveUsers !== undefined ? `${liveUsers} live` : 'Visitors'}
+              {liveUsers !== undefined ? `${liveUsers} live` : 'Total'}
             </Badge>
           </CardAction>
         </CardHeader>

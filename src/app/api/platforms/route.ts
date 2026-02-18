@@ -2,24 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { platforms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-
-function normalizeDomain(domain: string): string {
-  const trimmed = domain.trim();
-  if (!trimmed) return trimmed;
-  
-  try {
-    // If it looks like a URL, extract hostname
-    const url = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
-    return new URL(url).hostname;
-  } catch {
-    // If not a valid URL, assume it's already a domain
-    return trimmed;
-  }
-}
+import { getSessionWithRole } from '@/lib/dal';
+import { normalizeDomain } from '@/lib/domain-utils';
 
 // GET all platforms
 export async function GET() {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const allPlatforms = await db.select().from(platforms).orderBy(platforms.createdAt);
     return NextResponse.json(allPlatforms);
   } catch (error) {
@@ -28,9 +21,17 @@ export async function GET() {
   }
 }
 
-// POST create new platform
+// POST create new platform (admin only)
 export async function POST(request: NextRequest) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, domain, isActive } = body;
 
@@ -44,16 +45,21 @@ export async function POST(request: NextRequest) {
     // Normalize domain (extract hostname from URL if needed)
     const normalizedDomain = normalizeDomain(domain);
 
-    // Check if name already exists
-    const existingPlatform = await db
-      .select()
-      .from(platforms)
-      .where(eq(platforms.name, name))
-      .limit(1);
+    // Check if name or domain already exists
+    const [existingByName, existingByDomain] = await Promise.all([
+      db.select().from(platforms).where(eq(platforms.name, name)).limit(1),
+      db.select().from(platforms).where(eq(platforms.domain, normalizedDomain)).limit(1),
+    ]);
 
-    if (existingPlatform.length > 0) {
+    if (existingByName.length > 0) {
       return NextResponse.json(
         { error: 'A platform with this name already exists' },
+        { status: 409 }
+      );
+    }
+    if (existingByDomain.length > 0) {
+      return NextResponse.json(
+        { error: 'A platform with this domain already exists' },
         { status: 409 }
       );
     }

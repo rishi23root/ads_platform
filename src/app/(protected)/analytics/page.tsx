@@ -22,18 +22,20 @@ const typeColors: Record<string, 'default' | 'secondary' | 'outline' | 'destruct
 };
 
 export default async function AnalyticsPage() {
-  // Fetch analytics data (visitors, campaign_logs)
-  const [allVisitors, allLogs, adLogs, notificationLogs] = await Promise.all([
-    db.select().from(visitors),
-    db.select().from(campaignLogs).orderBy(desc(campaignLogs.createdAt)).limit(100),
-    db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'ad')),
-    db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'notification')),
-  ]);
+  // Fetch analytics data (counts + recent logs for table)
+  const [visitorsCount, totalLogsCount, adLogsCount, notificationLogsCount, recentLogs] =
+    await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(visitors),
+      db.select({ count: sql<number>`count(*)` }).from(campaignLogs),
+      db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'ad')),
+      db.select({ count: sql<number>`count(*)` }).from(campaignLogs).where(eq(campaignLogs.type, 'notification')),
+      db.select().from(campaignLogs).orderBy(desc(campaignLogs.createdAt)).limit(100),
+    ]);
 
-  const totalUsers = allVisitors.length;
-  const totalRequests = allLogs.length;
-  const adsServed = Number(adLogs[0]?.count || 0);
-  const notificationsSent = Number(notificationLogs[0]?.count || 0);
+  const totalUsers = Number(visitorsCount[0]?.count ?? 0);
+  const totalRequests = Number(totalLogsCount[0]?.count ?? 0);
+  const adsServed = Number(adLogsCount[0]?.count ?? 0);
+  const notificationsSent = Number(notificationLogsCount[0]?.count ?? 0);
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -65,7 +67,7 @@ export default async function AnalyticsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{totalRequests}</div>
             <CardDescription className="text-xs">
-              Recent requests (last 100)
+              Total campaign log entries
             </CardDescription>
           </CardContent>
         </Card>
@@ -114,14 +116,14 @@ export default async function AnalyticsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {allLogs.length === 0 ? (
+            {recentLogs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   No campaign logs found. Extension requests will appear here.
                 </TableCell>
               </TableRow>
             ) : (
-              allLogs.map((log) => (
+              recentLogs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="font-mono text-sm">
                     {log.visitorId}

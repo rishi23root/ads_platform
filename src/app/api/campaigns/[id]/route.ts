@@ -93,6 +93,35 @@ export async function PUT(
       notificationId,
     } = body;
 
+    const effectivePlatformIds = platformIds ?? (await db.select({ platformId: campaignPlatforms.platformId }).from(campaignPlatforms).where(eq(campaignPlatforms.campaignId, id))).map((r) => r.platformId);
+    if (!Array.isArray(effectivePlatformIds) || effectivePlatformIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Select at least one domain (platform)' },
+        { status: 400 }
+      );
+    }
+
+    const effectiveCampaignType = campaignType ?? existing.campaignType;
+    if (effectiveCampaignType === 'ads' || effectiveCampaignType === 'popup') {
+      const [adRow] = await db.select({ adId: campaignAd.adId }).from(campaignAd).where(eq(campaignAd.campaignId, id)).limit(1);
+      const effectiveAdId = adId !== undefined ? adId : adRow?.adId;
+      if (!effectiveAdId) {
+        return NextResponse.json(
+          { error: `Select an ${effectiveCampaignType === 'popup' ? 'pop up' : 'ad'}` },
+          { status: 400 }
+        );
+      }
+    } else if (effectiveCampaignType === 'notification') {
+      const [notifRow] = await db.select({ notificationId: campaignNotification.notificationId }).from(campaignNotification).where(eq(campaignNotification.campaignId, id)).limit(1);
+      const effectiveNotifId = notificationId !== undefined ? notificationId : notifRow?.notificationId;
+      if (!effectiveNotifId) {
+        return NextResponse.json(
+          { error: 'Select a notification' },
+          { status: 400 }
+        );
+      }
+    }
+
     const now = new Date();
     await db
       .update(campaigns)

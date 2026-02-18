@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaignLogs } from '@/db/schema';
 import { and, gte, lte } from 'drizzle-orm';
+import { getSessionWithRole } from '@/lib/dal';
+import { getStartDate, fillMissingDays } from '@/lib/date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,47 +21,19 @@ export interface ChartDataPoint {
   notification: number;
 }
 
-function getStartDate(range: RangeKey): Date {
-  const days = RANGE_DAYS[range] ?? 90;
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - days);
-  start.setUTCHours(0, 0, 0, 0);
-  return start;
-}
-
-function fillMissingDays(
-  start: Date,
-  end: Date,
-  dataByDate: Map<string, { ad: number; notification: number }>
-): ChartDataPoint[] {
-  const result: ChartDataPoint[] = [];
-  const current = new Date(start);
-  current.setUTCHours(0, 0, 0, 0);
-  const endTime = end.getTime();
-
-  while (current.getTime() <= endTime) {
-    const dateStr = current.toISOString().slice(0, 10);
-    const point = dataByDate.get(dateStr) ?? { ad: 0, notification: 0 };
-    result.push({
-      date: dateStr,
-      ad: point.ad,
-      notification: point.notification,
-    });
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-
-  return result;
-}
-
 export async function GET(request: NextRequest) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const range = (searchParams.get('range') ?? '90d') as RangeKey;
     const validRange: RangeKey[] = ['7d', '30d', '90d'];
     const rangeParam = validRange.includes(range) ? range : '90d';
 
-    const start = getStartDate(rangeParam);
+    const start = getStartDate(rangeParam, RANGE_DAYS, 90);
     const end = new Date();
 
     const logs = await db
@@ -88,7 +62,9 @@ export async function GET(request: NextRequest) {
       dataByDate.set(dateStr, existing);
     }
 
-    const chartData = fillMissingDays(start, end, dataByDate);
+    const chartData = fillMissingDays(start, end, (dateStr) =>
+      dataByDate.get(dateStr) ?? { ad: 0, notification: 0 }
+    ) as ChartDataPoint[];
 
     return NextResponse.json(chartData);
   } catch (error) {

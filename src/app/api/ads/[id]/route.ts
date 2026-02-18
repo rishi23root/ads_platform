@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { ads } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getSessionWithRole } from '@/lib/dal';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -10,6 +11,11 @@ type RouteContext = {
 // GET single ad
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
 
     const [ad] = await db
@@ -29,9 +35,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   }
 }
 
-// PUT update ad
+// PUT update ad (admin only)
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = await context.params;
     const body = await request.json();
     const { name, description, imageUrl, targetUrl, htmlCode } = body;
@@ -64,9 +78,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE ad
+// DELETE ad (admin only)
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = await context.params;
 
     const [deletedAd] = await db

@@ -43,7 +43,7 @@ Fetches **global** notifications this user has not yet pulled. **No domain requi
 ```json
 {
   "notifications": [
-    { "title": "Notification Title", "message": "Notification message" }
+    { "title": "Notification Title", "message": "Notification message", "ctaLink": "https://example.com/action" }
   ]
 }
 ```
@@ -208,13 +208,16 @@ Fetches ads for the current domain and/or global notifications (pull). the user 
       "title": "Ad Title",
       "image": "https://example.com/image.jpg",
       "description": "Ad description",
-      "redirectUrl": "https://example.com/target"
+      "redirectUrl": "https://example.com/target",
+      "htmlCode": null,
+      "displayAs": "inline"
     }
   ],
   "notifications": [
     {
       "title": "Notification Title",
-      "message": "Notification message"
+      "message": "Notification message",
+      "ctaLink": "https://example.com/action"
     }
   ]
 }
@@ -222,11 +225,18 @@ Fetches ads for the current domain and/or global notifications (pull). the user 
 
 ### Response rules
 
-- **`ads`**: Array of ad objects for the requested `domain` (platform resolved via domain). Empty array if domain has no active ads or domain is not configured.
+- **`ads`**: Array of ad objects for the requested `domain` (platform resolved via domain). Each ad has `displayAs`: `"inline"` (simple ad) or `"popup"` (show as popup). Empty array if domain has no active ads or domain is not configured.
 - **`notifications`**: Array of **global** notifications this user has **not** already pulled. Each notification is returned only once per user (tracked by `visitorId`). Empty array if none or all already shown.
 - If `requestType` is `"ad"`, `notifications` is `[]`.
 - If `requestType` is `"notification"`, `ads` is `[]`.
 - If `requestType` is omitted, both arrays may contain items.
+
+### Ad rendering behavior
+
+| `displayAs` | Behavior |
+|-------------|----------|
+| **`inline`** | Inject ad content into the page. If `htmlCode` exists, insert that HTML directly. Otherwise use `title`, `image`, `description`, `redirectUrl`. |
+| **`popup`** | Create a **modal** and render the ad inside it. If `htmlCode` exists, insert that HTML into the modal. Otherwise use `title`, `image`, `description`, `redirectUrl`. |
 
 ### TypeScript types (for extension)
 
@@ -238,10 +248,13 @@ interface AdBlockResponse {
     image: string | null;
     description: string | null;
     redirectUrl: string | null;
+    htmlCode?: string | null;
+    displayAs?: 'inline' | 'popup';
   }>;
   notifications: Array<{
     title: string;
     message: string;
+    ctaLink?: string | null;
   }>;
 }
 ```

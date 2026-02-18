@@ -33,7 +33,7 @@ export default function SignUpPage() {
       const result = await authClient.signUp.email({
         email,
         password,
-        name: name || undefined,
+        name: name || '',
       });
 
       if (result.error) {

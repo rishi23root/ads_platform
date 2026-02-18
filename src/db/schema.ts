@@ -210,8 +210,20 @@ export const campaignVisitorViews = pgTable(
 export const visitors = pgTable('visitors', {
   visitorId: varchar('visitor_id', { length: 255 }).primaryKey(),
   country: varchar('country', { length: 2 }),
+  totalRequests: integer('total_requests').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ============ Request Logs (generic API request analytics) ============
+export const requestLogTypeEnum = pgEnum('request_log_type', ['ad', 'notification', 'popup']);
+
+export const requestLogs = pgTable('request_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  visitorId: varchar('visitor_id', { length: 255 }).notNull(),
+  domain: varchar('domain', { length: 255 }).notNull(),
+  requestType: requestLogTypeEnum('request_type').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ============ Campaign Logs ============
@@ -224,6 +236,7 @@ export const campaignLogs = pgTable('campaign_logs', {
     .references(() => campaigns.id, { onDelete: 'cascade' }),
   visitorId: varchar('visitor_id', { length: 255 }).notNull(),
   domain: varchar('domain', { length: 255 }).notNull(),
+  country: varchar('country', { length: 2 }),
   type: campaignLogTypeEnum('type').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -259,5 +272,7 @@ export type CampaignVisitorView = typeof campaignVisitorViews.$inferSelect;
 export type NewCampaignVisitorView = typeof campaignVisitorViews.$inferInsert;
 export type Visitor = typeof visitors.$inferSelect;
 export type NewVisitor = typeof visitors.$inferInsert;
+export type RequestLog = typeof requestLogs.$inferSelect;
+export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type CampaignLog = typeof campaignLogs.$inferSelect;
 export type NewCampaignLog = typeof campaignLogs.$inferInsert;

@@ -3,14 +3,17 @@ import { database as db } from '@/db';
 import {
   notifications,
   notificationReads,
+  visitors,
+  requestLogs,
+  campaignNotification,
+  campaigns,
 } from '@/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql, or, lte, gte } from 'drizzle-orm';
 
 /**
  * POST /api/extension/notifications
  * Returns global notifications this user has not yet pulled. No domain required.
- * Notifications are content-only; date filtering is on campaigns (handled by ad-block route).
- * This endpoint returns all unread notifications (simplified for MVP).
+ * Filters by campaign startDate, endDate, and status (only active campaigns in date range).
  * Body: { visitorId: string }
  * Response: { notifications: [...] }
  */
@@ -45,14 +48,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch notifications not yet read by this visitor (content-only, no date filter)
+    const now = new Date();
+
+    // Upsert visitors (update lastSeenAt, increment totalRequests)
+    await db
+      .insert(visitors)
+      .values({
+        visitorId,
+        totalRequests: 1,
+        createdAt: now,
+        lastSeenAt: now,
+      })
+      .onConflictDoUpdate({
+        target: visitors.visitorId,
+        set: {
+          lastSeenAt: now,
+          totalRequests: sql`${visitors.totalRequests} + 1`,
+        },
+      });
+
+    // Fetch notifications not yet read by this visitor, filtered by campaign dates and status
     const activeNotifications = await db
       .select({
         id: notifications.id,
         title: notifications.title,
         message: notifications.message,
+        ctaLink: notifications.ctaLink,
       })
       .from(notifications)
+      .innerJoin(campaignNotification, eq(campaignNotification.notificationId, notifications.id))
+      .innerJoin(campaigns, eq(campaigns.id, campaignNotification.campaignId))
       .leftJoin(
         notificationReads,
         and(
@@ -60,12 +85,20 @@ export async function POST(request: NextRequest) {
           eq(notificationReads.visitorId, visitorId)
         )
       )
-      .where(isNull(notificationReads.id))
+      .where(
+        and(
+          isNull(notificationReads.id),
+          eq(campaigns.status, 'active'),
+          or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
+          or(isNull(campaigns.endDate), gte(campaigns.endDate, now))
+        )
+      )
       .orderBy(notifications.createdAt);
 
     const publicNotifications = activeNotifications.map((notif) => ({
       title: notif.title,
       message: notif.message,
+      ctaLink: notif.ctaLink ?? null,
     }));
 
     // Record that these notifications were pulled by this visitor
@@ -80,6 +113,12 @@ export async function POST(request: NextRequest) {
       } catch {
         // Ignore duplicate key (already read)
       }
+      // Insert request_logs only when user actually receives data (user-guided logging)
+      await db.insert(requestLogs).values({
+        visitorId,
+        domain: 'extension',
+        requestType: 'notification',
+      });
     }
 
     return NextResponse.json({ notifications: publicNotifications });

@@ -10,11 +10,17 @@ import { IconLoader2 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import type { Platform } from '@/db/schema';
 
+export interface NewPlatformResult {
+  id: string;
+  name: string;
+  domain: string;
+}
+
 interface PlatformFormProps {
   platform?: Platform;
   mode: 'create' | 'edit';
-  /** When provided, called on success instead of navigating (e.g. drawer mode) */
-  onSuccess?: () => void | Promise<void>;
+  /** When provided, called on success instead of navigating (e.g. drawer mode). In create mode, receives the new platform. */
+  onSuccess?: (newPlatform?: NewPlatformResult) => void | Promise<void>;
   /** When provided, called on Cancel instead of navigating (e.g. drawer mode) */
   onCancel?: () => void;
 }
@@ -69,7 +75,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
 
       toast.success(mode === 'create' ? 'Platform created successfully' : 'Platform updated successfully');
       if (onSuccess) {
-        await onSuccess();
+        await onSuccess(mode === 'create' ? data : undefined);
       } else {
         router.push('/platforms');
         router.refresh();

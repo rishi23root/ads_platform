@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
 import { publishRealtimeNotification } from '@/lib/redis';
+import { getSessionWithRole } from '@/lib/dal';
 
 // GET all notifications (global, no domain filtering)
 export async function GET() {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Return all notifications for admin dashboard
     const allNotifications = await db
       .select()
@@ -19,9 +25,17 @@ export async function GET() {
   }
 }
 
-// POST create new notification (content-only, no dates)
+// POST create new notification (content-only, no dates) (admin only)
 export async function POST(request: NextRequest) {
   try {
+    const sessionWithRole = await getSessionWithRole();
+    if (!sessionWithRole) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (sessionWithRole.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { title, message, ctaLink } = body;
 

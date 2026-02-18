@@ -2,6 +2,7 @@ import 'server-only';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { serverConfig } from '@/lib/config/server';
+import { normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import * as schema from './schema';
 
 let client: postgres.Sql | null = null;
@@ -13,7 +14,7 @@ function getDatabase() {
   }
 
   if (!client) {
-    const connectionString = serverConfig.database.url;
+    const connectionString = normalizeDatabaseUrl(serverConfig.database.url);
     const poolMax = serverConfig.database.poolMax;
 
     client = postgres(connectionString, {
