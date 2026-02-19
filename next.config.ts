@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  allowedDevOrigins: ["test.buildyourresume.in"],
+  allowedDevOrigins: [process.env.DOMAIN ?? 'example.com'],
+  // need to build for our domain
   experimental: {
     authInterrupts: true,
   },
