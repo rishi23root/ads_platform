@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
+    "db:squash": "rm -f drizzle/migrations/*.sql && pnpm db:generate",
     "db:migrate": "NODE_OPTIONS='--dns-result-order=ipv4first' drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed-admin": "npx tsx scripts/seed-admin.ts",

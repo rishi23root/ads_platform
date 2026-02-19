@@ -4,6 +4,16 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Debug: verify env loading (remove after confirming)
+    const dbUrl = process.env.DATABASE_URL;
+    const dbHost = dbUrl ? new URL(dbUrl.replace(/^postgresql:\/\//, 'http://')).hostname : 'NOT SET';
+    const envCheck = {
+      DATABASE_URL: dbUrl ? '✓' : '✗',
+      'DB host': dbHost,
+      REDIS_URL: process.env.REDIS_URL ? '✓' : '✗',
+      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ? '✓' : '✗',
+    };
+    console.log('[ENV]', envCheck);
     const { runMigrations } = await import('./src/lib/db/run-migrate');
     await runMigrations();
 

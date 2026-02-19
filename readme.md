@@ -46,9 +46,6 @@ Create `.env.local` file with the following required variables:
 ```bash
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-POSTGRES_DB=ads_platform
-POSTGRES_USER=ads_admin
-POSTGRES_PASSWORD=your_password
 
 # Application
 NODE_ENV=development

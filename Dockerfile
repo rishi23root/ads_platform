@@ -29,6 +29,7 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 FROM base AS builder
 COPY --from=deps-dev /app/node_modules ./node_modules
 COPY . .
+
 # Next.js 16 requires DATABASE_URL during build for some static optimizations
 # ENV DATABASE_URL=postgresql://user:password@localhost:5432/app_db
 RUN pnpm build

@@ -1,34 +1,13 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1739548800000,
-            "tag": "0000_final_schema",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1739808000000,
-            "tag": "0001_consolidate_visitors",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "7",
-            "when": 1739894400000,
-            "tag": "0003_add_status_code_to_visitors",
-            "breakpoints": true
-        },
-        {
-            "idx": 3,
-            "version": "7",
-            "when": 1739980800000,
-            "tag": "0004_drop_notification_reads",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1771513360938,
+      "tag": "0000_final_schema",
+      "breakpoints": true
+    }
+  ]
 }
