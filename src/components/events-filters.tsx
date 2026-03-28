@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { useCloseFilterPanel } from '@/components/filter-panel-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,6 +57,7 @@ export function EventsFilters({
 }: EventsFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const closeFilterPanel = useCloseFilterPanel();
   const [typeValue, setTypeValue] = useState(type ?? ALL_TYPES);
   const [fromValue, setFromValue] = useState(from ?? '');
   const [toValue, setToValue] = useState(to ?? '');
@@ -127,6 +129,7 @@ export function EventsFilters({
     setEmailValue('');
     setCampaignIdValue('');
     router.push('/events');
+    closeFilterPanel?.();
   };
 
   return (
@@ -250,10 +253,10 @@ export function EventsFilters({
               />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
             <Button type="submit">Apply filters</Button>
             <Button type="button" variant="outline" onClick={handleClear}>
-              Clear all
+              Clear
             </Button>
           </div>
         </form>

@@ -41,11 +41,11 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const range = (searchParams.get('range') ?? '14d') as RangeKey;
+    const range = (searchParams.get('range') ?? '7d') as RangeKey;
     const validRange: RangeKey[] = ['7d', '14d', '30d'];
-    const rangeParam = validRange.includes(range) ? range : '14d';
+    const rangeParam = validRange.includes(range) ? range : '7d';
 
-    const { start, end, prevStart, prevEnd } = getDateRange(rangeParam, RANGE_DAYS, 14);
+    const { start, end, prevStart, prevEnd } = getDateRange(rangeParam, RANGE_DAYS, 7);
 
     const utcDay = sql`( ${enduserEvents.createdAt} AT TIME ZONE 'UTC' )::date`;
 
@@ -177,13 +177,13 @@ export async function GET(
       | { type: 'ad'; id: string; name: string; description: string | null; imageUrl: string | null; targetUrl: string | null }
       | { type: 'notification'; id: string; title: string; message: string; ctaLink: string | null }
       | {
-          type: 'redirect';
-          id: string;
-          name: string;
-          sourceDomain: string;
-          includeSubdomains: boolean;
-          destinationUrl: string;
-        }
+        type: 'redirect';
+        id: string;
+        name: string;
+        sourceDomain: string;
+        includeSubdomains: boolean;
+        destinationUrl: string;
+      }
       | null = null;
     const linking = linkingRow;
     if (linking?.adId) {

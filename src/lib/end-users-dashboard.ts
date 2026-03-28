@@ -3,12 +3,15 @@ import 'server-only';
 import { database as db } from '@/db';
 import { endUsers, enduserSessions } from '@/db/schema';
 import { and, desc, eq, gte, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
+import { getCountryName } from '@/lib/countries';
 import { computeExtensionDaysLeft, formatExtensionDaysLeftCell } from '@/lib/extension-user-subscription';
 import { getQueryParam } from '@/lib/url-search-params';
 import { escapeCsvCell, escapeIlikePattern } from '@/lib/utils';
 
 export type EndUsersDashboardFilters = {
   q?: string;
+  /** Toolbar / quick search: partial match on email only (distinct from multi-field `q`). */
+  email?: string;
   joinedFrom?: string;
   joinedTo?: string;
   lastSeenFrom?: string;
@@ -33,6 +36,7 @@ export function parseEndUsersDashboardFilters(
       : undefined;
   return {
     q: q ?? endUserId,
+    email: getQueryParam(sp, 'email'),
     joinedFrom: getQueryParam(sp, 'joinedFrom'),
     joinedTo: getQueryParam(sp, 'joinedTo'),
     lastSeenFrom: getQueryParam(sp, 'lastSeenFrom'),
@@ -52,9 +56,17 @@ const sessionStats = db
   .groupBy(enduserSessions.endUserId)
   .as('session_stats');
 
+/** Text equality so `end_users.id` (uuid) joins legacy `end_user_id` stored as varchar. */
+const endUserSessionJoin = sql`cast(${endUsers.id} as text) = cast(${sessionStats.endUserId} as text)`;
+
 /** Shared filter predicates (same join keys as list query). */
 function buildEndUsersWhereConditions(filters: EndUsersDashboardFilters): SQL[] {
   const conditions: SQL[] = [];
+
+  if (filters.email?.trim()) {
+    const escaped = escapeIlikePattern(filters.email.trim());
+    conditions.push(ilike(endUsers.email, `%${escaped}%`));
+  }
 
   if (filters.q) {
     const escaped = escapeIlikePattern(filters.q);
@@ -81,16 +93,20 @@ function buildEndUsersWhereConditions(filters: EndUsersDashboardFilters): SQL[] 
 
   if (filters.lastSeenFrom) {
     const d = new Date(filters.lastSeenFrom);
-    conditions.push(
-      sql`coalesce(${sessionStats.lastSessionAt}, ${endUsers.createdAt}) >= ${d}`
-    );
+    if (!Number.isNaN(d.getTime())) {
+      conditions.push(
+        sql`coalesce(${sessionStats.lastSessionAt}, ${endUsers.createdAt}) >= ${d.toISOString()}`
+      );
+    }
   }
   if (filters.lastSeenTo) {
     const end = new Date(filters.lastSeenTo);
-    if (!filters.lastSeenTo.includes('T')) end.setHours(23, 59, 59, 999);
-    conditions.push(
-      sql`coalesce(${sessionStats.lastSessionAt}, ${endUsers.createdAt}) <= ${end}`
-    );
+    if (!Number.isNaN(end.getTime())) {
+      if (!filters.lastSeenTo.includes('T')) end.setHours(23, 59, 59, 999);
+      conditions.push(
+        sql`coalesce(${sessionStats.lastSessionAt}, ${endUsers.createdAt}) <= ${end.toISOString()}`
+      );
+    }
   }
 
   if (filters.country) {
@@ -106,6 +122,108 @@ function buildEndUsersWhereConditions(filters: EndUsersDashboardFilters): SQL[] 
   }
 
   return conditions;
+}
+
+export type UsersFilterChipDescriptor = {
+  id: string;
+  /** Query keys to remove when clearing this chip (e.g. search clears both `q` and `endUserId`). */
+  urlKeys: string[];
+  label: string;
+  display: string;
+};
+
+function usersChipTruncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+function usersChipDateTimeDisplay(raw: string): string {
+  const t = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const d = new Date(t);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  }
+  return usersChipTruncate(t, 42);
+}
+
+/** Active-filter chips for the users list (matches URL + `parseEndUsersDashboardFilters`). */
+export function usersFilterChips(
+  filters: EndUsersDashboardFilters,
+  urlFlags: { hasQParam: boolean; hasEndUserIdParam: boolean }
+): UsersFilterChipDescriptor[] {
+  const chips: UsersFilterChipDescriptor[] = [];
+  if (filters.email?.trim()) {
+    chips.push({
+      id: 'email',
+      urlKeys: ['email'],
+      label: 'Email',
+      display: usersChipTruncate(filters.email.trim(), 36),
+    });
+  }
+  if (filters.q?.trim()) {
+    const label =
+      urlFlags.hasEndUserIdParam && !urlFlags.hasQParam ? 'End user' : 'Search';
+    chips.push({
+      id: 'search',
+      urlKeys: ['q', 'endUserId'],
+      label,
+      display: usersChipTruncate(filters.q.trim(), 36),
+    });
+  }
+  if (filters.joinedFrom)
+    chips.push({
+      id: 'joinedFrom',
+      urlKeys: ['joinedFrom'],
+      label: 'Joined from',
+      display: usersChipDateTimeDisplay(filters.joinedFrom),
+    });
+  if (filters.joinedTo)
+    chips.push({
+      id: 'joinedTo',
+      urlKeys: ['joinedTo'],
+      label: 'Joined to',
+      display: usersChipDateTimeDisplay(filters.joinedTo),
+    });
+  if (filters.lastSeenFrom)
+    chips.push({
+      id: 'lastSeenFrom',
+      urlKeys: ['lastSeenFrom'],
+      label: 'Last session from',
+      display: usersChipDateTimeDisplay(filters.lastSeenFrom),
+    });
+  if (filters.lastSeenTo)
+    chips.push({
+      id: 'lastSeenTo',
+      urlKeys: ['lastSeenTo'],
+      label: 'Last session to',
+      display: usersChipDateTimeDisplay(filters.lastSeenTo),
+    });
+  if (filters.country) {
+    const cc = filters.country.toUpperCase().slice(0, 2);
+    const name = getCountryName(cc);
+    chips.push({
+      id: 'country',
+      urlKeys: ['country'],
+      label: 'Country',
+      display: name && name !== cc ? `${cc} · ${name}` : cc,
+    });
+  }
+  if (filters.plan)
+    chips.push({
+      id: 'plan',
+      urlKeys: ['plan'],
+      label: 'Plan',
+      display: filters.plan === 'paid' ? 'Paid' : 'Trial',
+    });
+  if (filters.status)
+    chips.push({
+      id: 'status',
+      urlKeys: ['status'],
+      label: 'Status',
+      display: filters.status.charAt(0).toUpperCase() + filters.status.slice(1),
+    });
+  return chips;
 }
 
 export type EndUserListRow = {
@@ -147,7 +265,7 @@ export function buildEndUsersListBaseQuery(
       lastSessionAt: sessionStats.lastSessionAt,
     })
     .from(endUsers)
-    .leftJoin(sessionStats, eq(endUsers.id, sessionStats.endUserId))
+    .leftJoin(sessionStats, endUserSessionJoin)
     .$dynamic();
 
   if (whereClause) {
@@ -183,7 +301,7 @@ export async function countEndUsersListQuery(
   let q = db
     .select({ n: sql<number>`count(${endUsers.id})::int`.as('n') })
     .from(endUsers)
-    .leftJoin(sessionStats, eq(endUsers.id, sessionStats.endUserId))
+    .leftJoin(sessionStats, endUserSessionJoin)
     .$dynamic();
 
   if (whereClause) {

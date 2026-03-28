@@ -5,7 +5,8 @@ import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns, enduserEvents, endUsers } from '@/db/schema';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { DASHBOARD_SERVED_EVENT_TYPES } from '@/lib/events-dashboard';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
@@ -27,13 +28,14 @@ export default async function DashboardPage() {
     ? db.select({ count: sql<number>`count(*)` }).from(campaigns).where(campaignScope)
     : db.select({ count: sql<number>`count(*)` }).from(campaigns);
 
-  const logsCountPromise = campaignScope
+  const impressionsCountPromise = campaignScope
     ? db
       .select({ count: sql<number>`count(*)` })
       .from(enduserEvents)
       .where(
         and(
           isNotNull(enduserEvents.campaignId),
+          inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES),
           sql`exists (
               select 1 from ${campaigns} c
               where c.id = ${enduserEvents.campaignId}
@@ -44,7 +46,12 @@ export default async function DashboardPage() {
     : db
       .select({ count: sql<number>`count(*)` })
       .from(enduserEvents)
-      .where(isNotNull(enduserEvents.campaignId));
+      .where(
+        and(
+          isNotNull(enduserEvents.campaignId),
+          inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES)
+        )
+      );
 
   const recentCampaignsPromise = campaignScope
     ? db
@@ -74,37 +81,37 @@ export default async function DashboardPage() {
             )
           );
 
-  const [activeCampaignsCount, totalCampaignsCount, logsCount, extensionUsersCount, recentCampaigns] =
+  const [activeCampaignsCount, totalCampaignsCount, impressionsCount, extensionUsersCount, recentCampaigns] =
     await Promise.all([
       db
         .select({ count: sql<number>`count(*)` })
         .from(campaigns)
         .where(campaignActiveWhere),
       totalCampaignsPromise,
-      logsCountPromise,
+      impressionsCountPromise,
       extensionUsersPromise,
       recentCampaignsPromise,
     ]);
 
   const activeCampaigns = Number(activeCampaignsCount[0]?.count || 0);
   const totalCampaigns = Number(totalCampaignsCount[0]?.count || 0);
-  const campaignLogsCount = Number(logsCount[0]?.count || 0);
+  const campaignImpressions = Number(impressionsCount[0]?.count || 0);
   const activeUsers = Number(extensionUsersCount[0]?.count || 0);
   const isAdmin = session.role === 'admin';
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div>
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Extension activity, request volume, and recent campaigns.
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Extension activity, campaign impressions, and recent campaigns.
         </p>
       </div>
 
       <SectionCards
         activeCampaigns={activeCampaigns}
         totalCampaigns={totalCampaigns}
-        campaignLogs={campaignLogsCount}
+        campaignImpressions={campaignImpressions}
         activeUsers={activeUsers}
         extensionUsersCaption={
           isAdmin ? undefined : 'Distinct extension users with activity on your campaigns'
@@ -115,7 +122,7 @@ export default async function DashboardPage() {
       <ChartAreaInteractiveDynamic />
 
       <section className="relative z-10 isolate">
-        <div className="rounded-md border bg-card">
+        <div className="rounded-xl border border-border bg-card/40 shadow-none">
           <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0 space-y-1">
               <h2 className="text-lg font-semibold">Recent campaigns</h2>
@@ -128,7 +135,7 @@ export default async function DashboardPage() {
                 <Link href="/campaigns">View all</Link>
               </Button>
               {isAdmin && (
-                <Button size="sm" asChild>
+                <Button variant="outline" size="sm" asChild>
                   <Link href="/campaigns/new">
                     <IconPlus className="h-4 w-4" />
                     New campaign

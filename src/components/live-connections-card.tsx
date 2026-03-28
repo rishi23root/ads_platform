@@ -61,7 +61,7 @@ export function LiveConnectionsCard() {
   }, [onDashboard]);
 
   return (
-    <Card className="py-4">
+    <Card className="border-border bg-card/40 py-4 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">Live connections</CardTitle>
         {displayCount != null && displayCount > 0 ? (
@@ -77,10 +77,15 @@ export function LiveConnectionsCard() {
         )}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold tabular-nums">
+        <div
+          className="text-2xl font-bold tabular-nums"
+          aria-live="polite"
+          aria-busy={displayCount === null && !displayError}
+          aria-atomic="true"
+        >
           {displayCount === null ? (displayError ? '—' : '…') : displayCount}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           Open browser connections from the extension right now
         </p>
       </CardContent>

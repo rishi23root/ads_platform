@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { IconFilter } from '@tabler/icons-react';
+import { CloseFilterPanelContext } from '@/components/filter-panel-context';
 import { cn } from '@/lib/utils';
 
 interface UsersPageLayoutProps {
@@ -12,8 +13,10 @@ interface UsersPageLayoutProps {
 
 export function UsersPageLayout({ filterContent, children }: UsersPageLayoutProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const closeFilterPanel = useCallback(() => setShowFilters(false), []);
 
   return (
+    <CloseFilterPanelContext.Provider value={closeFilterPanel}>
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-row items-center justify-between gap-3">
@@ -62,5 +65,6 @@ export function UsersPageLayout({ filterContent, children }: UsersPageLayoutProp
         {children}
       </div>
     </div>
+    </CloseFilterPanelContext.Provider>
   );
 }

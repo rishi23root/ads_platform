@@ -8,7 +8,7 @@ export const ChartAreaInteractiveDynamic = nextDynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="rounded-xl border border-border bg-card/40 p-4 shadow-none">
         <Skeleton className="h-[312px] w-full rounded-lg" />
       </div>
     ),

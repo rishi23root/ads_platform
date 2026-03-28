@@ -1,4 +1,4 @@
-import { IconChartBar, IconTrendingUp, IconUsers } from "@tabler/icons-react"
+import { IconEye, IconTrendingUp, IconUsers } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -11,7 +11,7 @@ import {
 interface SectionCardsProps {
   activeCampaigns: number;
   totalCampaigns: number;
-  campaignLogs: number;
+  campaignImpressions: number;
   activeUsers: number;
   liveUsers?: number;
   /** Footer under extension user count when `liveUsers` is not set (e.g. scoped metric for non-admins). */
@@ -23,7 +23,7 @@ interface SectionCardsProps {
 export function SectionCards({
   activeCampaigns,
   totalCampaigns,
-  campaignLogs,
+  campaignImpressions,
   activeUsers,
   liveUsers,
   extensionUsersCaption,
@@ -32,9 +32,12 @@ export function SectionCards({
   const activePercentage = totalCampaigns > 0 ? Math.round((activeCampaigns / totalCampaigns) * 100) : 0;
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <section
+      aria-label="Key metrics"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"
+    >
       {extraCard}
-      <Card className="py-4">
+      <Card className="border-border bg-card/40 py-4 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Active campaigns</CardTitle>
           <Badge
@@ -47,33 +50,37 @@ export function SectionCards({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold tabular-nums">{activeCampaigns}</div>
-          <p className="text-xs text-muted-foreground">{totalCampaigns} total campaigns</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {totalCampaigns} total campaigns
+          </p>
         </CardContent>
       </Card>
-      <Card className="py-4">
+      <Card className="border-border bg-card/40 py-4 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Requests</CardTitle>
-          <IconChartBar className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <CardTitle className="text-sm font-medium">Impressions</CardTitle>
+          <IconEye className="h-4 w-4 text-muted-foreground" aria-hidden />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold tabular-nums">{campaignLogs}</div>
-          <p className="text-xs text-muted-foreground">Ads, notifications, and content items served</p>
+          <div className="text-2xl font-bold tabular-nums">{campaignImpressions}</div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Ad, popup, and notification events on campaigns (all time)
+          </p>
         </CardContent>
       </Card>
-      <Card className="py-4">
+      <Card className="border-border bg-card/40 py-4 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Extension users</CardTitle>
           <IconUsers className="h-4 w-4 text-muted-foreground" aria-hidden />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold tabular-nums">{activeUsers}</div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             {liveUsers !== undefined
               ? `${liveUsers} live right now`
               : extensionUsersCaption ?? 'All accounts registered with the extension'}
           </p>
         </CardContent>
       </Card>
-    </div>
+    </section>
   )
 }

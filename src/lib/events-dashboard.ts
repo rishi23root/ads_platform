@@ -236,6 +236,68 @@ export function eventsFilterParamsRecord(filters: EventsDashboardFilters): Recor
   return o;
 }
 
+export type EventsFilterChipDescriptor = {
+  param:
+    | 'type'
+    | 'from'
+    | 'to'
+    | 'domain'
+    | 'country'
+    | 'endUserId'
+    | 'email'
+    | 'campaignId';
+  label: string;
+  display: string;
+};
+
+function chipDateDisplay(raw: string): string {
+  const t = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const prefix = t.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefix) return prefix[1];
+  const d = new Date(t);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return t.length > 36 ? `${t.slice(0, 33)}…` : t;
+}
+
+function chipTruncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+/** Human-readable chips for the events UI (active filters bar). */
+export function eventsFilterChips(filters: EventsDashboardFilters): EventsFilterChipDescriptor[] {
+  const chips: EventsFilterChipDescriptor[] = [];
+  if (filters.type) chips.push({ param: 'type', label: 'Type', display: filters.type });
+  if (filters.from)
+    chips.push({ param: 'from', label: 'From', display: chipDateDisplay(filters.from) });
+  if (filters.to) chips.push({ param: 'to', label: 'To', display: chipDateDisplay(filters.to) });
+  if (filters.domain)
+    chips.push({ param: 'domain', label: 'Domain', display: chipTruncate(filters.domain, 40) });
+  if (filters.country)
+    chips.push({ param: 'country', label: 'Country', display: filters.country.toUpperCase() });
+  if (filters.endUserId)
+    chips.push({
+      param: 'endUserId',
+      label: 'End user',
+      display: chipTruncate(filters.endUserId, 22),
+    });
+  if (filters.email)
+    chips.push({ param: 'email', label: 'Email', display: chipTruncate(filters.email, 32) });
+  if (filters.campaignId)
+    chips.push({
+      param: 'campaignId',
+      label: 'Campaign',
+      display: chipTruncate(filters.campaignId, 16),
+    });
+  return chips;
+}
+
 export function eventsToCsvLines(rows: EventLogRow[]): string[] {
   const header = [
     'id',

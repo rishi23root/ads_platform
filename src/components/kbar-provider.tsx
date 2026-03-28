@@ -71,7 +71,7 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
       id: "events",
       name: "Events",
       shortcut: ["e", "e"],
-      keywords: "events logs extension activity charts requests",
+      keywords: "events logs extension activity charts impressions",
       section: "Overview",
       icon: <IconChartBar className="size-4" />,
       perform: () => router.push("/events"),

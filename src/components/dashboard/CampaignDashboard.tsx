@@ -60,7 +60,7 @@ interface CampaignDashboardProps {
 }
 
 export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps) {
-  const [range, setRange] = React.useState('14d');
+  const [range, setRange] = React.useState('7d');
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);

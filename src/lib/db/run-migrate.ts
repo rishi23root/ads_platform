@@ -2,7 +2,7 @@
  * Runs Drizzle migrations programmatically. Used on app startup and in Docker.
  * Does not import server-only so it can run in instrumentation and standalone.
  */
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -92,6 +92,32 @@ export function ensureRedirectsSchemaOnce(): Promise<void> {
   return redirectsSchemaEnsurePromise;
 }
 
+/**
+ * Idempotent SQL from 0001_end_users_short_id_status_legacy.sql.
+ * Runs after migrate() so DBs that missed 0001 (journal/hash drift, manual DB, etc.) still get short_id + status.
+ */
+async function applyEndUsersLegacySchemaPatch(client: postgres.Sql): Promise<void> {
+  if (!(await tableExists(client, 'end_users'))) {
+    return;
+  }
+  const migrationsFolder = resolveMigrationsFolder();
+  const patchPath = path.join(migrationsFolder, '0001_end_users_short_id_status_legacy.sql');
+  if (!existsSync(patchPath)) {
+    console.warn('[migrate] end_users legacy patch not found:', patchPath);
+    return;
+  }
+  const raw = readFileSync(patchPath, 'utf8');
+  const segments = raw
+    .split('--> statement-breakpoint')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  for (const segment of segments) {
+    await client.unsafe(segment);
+  }
+  console.log('[migrate] end_users legacy column patch applied (idempotent)');
+}
+
 export async function runMigrations(): Promise<void> {
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl) {
@@ -109,6 +135,7 @@ export async function runMigrations(): Promise<void> {
   try {
     await migrate(db, { migrationsFolder });
     console.log('[migrate] Drizzle migrate() finished');
+    await applyEndUsersLegacySchemaPatch(client);
   } finally {
     await client.end();
   }

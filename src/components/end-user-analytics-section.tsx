@@ -116,7 +116,7 @@ export type EndUserAnalyticsSectionProps = {
 
 export function EndUserAnalyticsSection({ endUserId, className }: EndUserAnalyticsSectionProps) {
   const [mounted, setMounted] = useState(false)
-  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d")
+  const [range, setRange] = useState<"7d" | "30d" | "90d">("7d")
   const [data, setData] = useState<AnalyticsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

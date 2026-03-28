@@ -1,5 +1,6 @@
 import { CopyableIdCell } from '@/components/copyable-id-cell';
 import { EventsFilters } from '@/components/events-filters';
+import { EventsActiveFilterChips } from '@/components/events-visual-filters';
 import { EventsPageLayout } from '@/components/events-page-layout';
 import { ExportEventsCsvButton } from '@/components/export-events-csv-button';
 import { RefreshDataButton } from '@/components/refresh-data-button';
@@ -16,6 +17,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { getSessionWithRole } from '@/lib/dal';
 import {
   countEvents,
+  eventsFilterChips,
   eventsFilterParamsRecord,
   listEventsPage,
   parseEventsDashboardFilters,
@@ -52,6 +54,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
   const offset = (page - 1) * PAGE_SIZE;
 
   const filterRecord = eventsFilterParamsRecord(filters);
+  const filterChips = eventsFilterChips(filters);
 
   const [totalCount, pageRows] = await Promise.all([
     countEvents(session.role, session.user.id, filters),
@@ -101,6 +104,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
             <RefreshDataButton ariaLabel="Refresh events" />
           </div>
         </div>
+        <EventsActiveFilterChips chips={filterChips} />
         <div className="rounded-md border min-w-0">
           <div className="w-full overflow-x-auto">
             <Table className="w-full table-auto">

@@ -8,6 +8,13 @@
       "when": 1743177600000,
       "tag": "0000_squashed",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1743225600000,
+      "tag": "0001_end_users_short_id_status_legacy",
+      "breakpoints": true
     }
   ]
 }

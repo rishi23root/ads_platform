@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const range = (searchParams.get('range') ?? '90d') as RangeKey;
+    const range = (searchParams.get('range') ?? '7d') as RangeKey;
     const validRange: RangeKey[] = ['7d', '30d', '90d'];
-    const rangeParam = validRange.includes(range) ? range : '90d';
+    const rangeParam = validRange.includes(range) ? range : '7d';
 
-    const start = getStartDate(rangeParam, RANGE_DAYS, 90);
+    const start = getStartDate(rangeParam, RANGE_DAYS, 7);
     const end = new Date();
 
     const utcDay = sql`( ${enduserEvents.createdAt} AT TIME ZONE 'UTC' )::date`;

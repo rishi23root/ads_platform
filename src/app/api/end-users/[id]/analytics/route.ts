@@ -26,8 +26,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { searchParams } = new URL(request.url);
-    const rangeRaw = (searchParams.get('range') ?? '30d') as EndUserAnalyticsRange;
-    const range = VALID_RANGE.includes(rangeRaw) ? rangeRaw : '30d';
+    const rangeRaw = (searchParams.get('range') ?? '7d') as EndUserAnalyticsRange;
+    const range = VALID_RANGE.includes(rangeRaw) ? rangeRaw : '7d';
 
     const payload = await getEndUserAnalyticsBundle(
       sessionWithRole.role,

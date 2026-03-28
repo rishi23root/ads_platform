@@ -5,6 +5,8 @@ import { endUsers } from '@/db/schema';
 import { isNotNull } from 'drizzle-orm';
 import { IconUsers } from '@tabler/icons-react';
 import { UsersFilters } from '@/components/users-filters';
+import { UsersEmailSearch } from '@/components/users-email-search';
+import { UsersActiveFilterChips } from '@/components/users-visual-filters';
 import { UsersPageLayout } from '@/components/users-page-layout';
 import { UsersTable } from '@/components/users-table';
 import { RefreshDataButton } from '@/components/refresh-data-button';
@@ -16,12 +18,16 @@ import {
   parseEndUsersDashboardFilters,
   runEndUsersListQuery,
   countEndUsersListQuery,
+  usersFilterChips,
 } from '@/lib/end-users-dashboard';
+import { getQueryParam } from '@/lib/url-search-params';
 
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<{
   q?: string;
+  email?: string;
+  /** Deep-link alias; merged into search (`q`) for filtering. */
   endUserId?: string;
   joinedFrom?: string;
   joinedTo?: string;
@@ -46,6 +52,9 @@ export default async function UsersPage({
 
   const params = await searchParams;
   const filters = parseEndUsersDashboardFilters(params);
+  const hasQParam = Boolean(getQueryParam(params, 'q')?.trim());
+  const hasEndUserIdParam = Boolean(getQueryParam(params, 'endUserId')?.trim());
+  const filterChips = usersFilterChips(filters, { hasQParam, hasEndUserIdParam });
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
   const pageSize = 25;
   const offset = (page - 1) * pageSize;
@@ -71,6 +80,7 @@ export default async function UsersPage({
     .map((code) => ({ code, name: getCountryName(code) }));
 
   const filterParams: Record<string, string> = {};
+  if (filters.email) filterParams.email = filters.email;
   if (filters.q) filterParams.q = filters.q;
   if (filters.joinedFrom) filterParams.joinedFrom = filters.joinedFrom;
   if (filters.joinedTo) filterParams.joinedTo = filters.joinedTo;
@@ -97,12 +107,13 @@ export default async function UsersPage({
       }
     >
       <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
+          <div className="min-w-0 flex-1 space-y-3">
             <h2 className="text-base font-semibold flex items-center gap-2">
               <IconUsers className="h-5 w-5" />
               Extension users ({totalCount.toLocaleString()})
             </h2>
+            <UsersEmailSearch />
           </div>
           <div className="shrink-0 flex flex-wrap items-center gap-2">
             {totalCount > 0 && (
@@ -121,6 +132,7 @@ export default async function UsersPage({
             <AddEndUserDialog />
           </div>
         </div>
+        <UsersActiveFilterChips chips={filterChips} />
         <div className="rounded-md border">
           <UsersTable rows={usersList} />
         </div>

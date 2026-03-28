@@ -211,7 +211,7 @@ export async function getEndUserAnalyticsBundle(
   series: EndUserDailySeriesRow[];
   topDomains: EndUserDomainRow[];
 }> {
-  const start = getStartDate(range, END_USER_ANALYTICS_RANGE_DAYS, 90);
+  const start = getStartDate(range, END_USER_ANALYTICS_RANGE_DAYS, 7);
   const end = new Date();
 
   const [summary, series, topDomains] = await Promise.all([

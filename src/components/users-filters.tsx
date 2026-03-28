@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { useCloseFilterPanel } from "@/components/filter-panel-context"
 import { Button } from "@/components/ui/button"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Input } from "@/components/ui/input"
@@ -45,6 +46,7 @@ export function UsersFilters({
 }: UsersFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const closeFilterPanel = useCloseFilterPanel()
   const [countryValue, setCountryValue] = useState(country ?? ALL_COUNTRIES_VALUE)
   const [planValue, setPlanValue] = useState(plan ?? ALL_PLANS_VALUE)
   const [statusValue, setStatusValue] = useState(status ?? ALL_STATUS_VALUE)
@@ -128,6 +130,7 @@ export function UsersFilters({
     setPlanValue(ALL_PLANS_VALUE)
     setStatusValue(ALL_STATUS_VALUE)
     router.push("/users")
+    closeFilterPanel?.()
   }
 
   return (
@@ -271,38 +274,6 @@ export function UsersFilters({
             </Button>
           </div>
         </form>
-
-        <div
-          className="mt-6 rounded-lg border border-border/80 bg-muted/30 px-4 py-3 text-sm text-foreground/75 dark:text-foreground/70"
-          role="note"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/85 mb-2">
-            How the table uses your filters
-          </p>
-          <ul className="list-none space-y-2 text-xs leading-relaxed">
-            <li>
-              <span className="font-medium text-foreground">Dates</span> — Ranges are inclusive. If you
-              pick a date without a time for &quot;to&quot;, we include the rest of that calendar day.
-            </li>
-            <li>
-              <span className="font-medium text-foreground">Country</span> — Stored on the extension
-              user profile (updated when the extension calls the API with geo headers).
-            </li>
-            <li>
-              <span className="font-medium text-foreground">Plan / status</span> — Taken from the
-              extension user record.
-            </li>
-            <li>
-              <span className="font-medium text-foreground">Last session</span> — Latest extension auth
-              token row in <code className="text-[10px]">enduser_sessions</code> (one active session per
-              user). Falls back to profile created time when none.
-            </li>
-            <li>
-              <span className="font-medium text-foreground">Search</span> — Matches short id, email,
-              UUID, name, or installation id (partial, case-insensitive).
-            </li>
-          </ul>
-        </div>
       </CardContent>
     </Card>
   )

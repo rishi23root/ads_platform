@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { EventsSummaryPanel } from '@/components/events-summary-panel';
 import { Button } from '@/components/ui/button';
+import { CloseFilterPanelContext } from '@/components/filter-panel-context';
 import { cn } from '@/lib/utils';
 import { IconChartBar, IconFilter } from '@tabler/icons-react';
 
@@ -17,8 +18,10 @@ export function EventsPageLayout({
 }: EventsPageLayoutProps) {
   const [showFilters, setShowFilters] = React.useState(false);
   const [showStatus, setShowStatus] = React.useState(false);
+  const closeFilterPanel = React.useCallback(() => setShowFilters(false), []);
 
   return (
+    <CloseFilterPanelContext.Provider value={closeFilterPanel}>
     <div className="flex flex-col gap-4 p-4 md:p-6">
       {/* No gap between header and panels: flex gap would add space even when both panels are collapsed (0fr). */}
       <div className="flex flex-col">
@@ -112,5 +115,6 @@ export function EventsPageLayout({
 
       {children}
     </div>
+    </CloseFilterPanelContext.Provider>
   );
 }

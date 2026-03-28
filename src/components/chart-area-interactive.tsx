@@ -3,7 +3,6 @@
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 
-import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Card,
   CardContent,
@@ -24,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   ToggleGroup,
@@ -39,7 +39,7 @@ interface ChartDataPoint {
 
 const chartConfig = {
   ad: {
-    label: "Ad",
+    label: "Ad & popup",
     color: "var(--chart-1)",
   },
   notification: {
@@ -63,20 +63,14 @@ export interface ChartAreaInteractiveProps {
 }
 
 export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
-  const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
-  const [timeRange, setTimeRange] = React.useState("90d")
+  const [timeRange, setTimeRange] = React.useState("7d")
   const [chartData, setChartData] = React.useState<ChartDataPoint[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [retryKey, setRetryKey] = React.useState(0)
 
   React.useEffect(() => setMounted(true), [])
-
-  React.useEffect(() => {
-    if (isMobile) {
-      setTimeRange("7d")
-    }
-  }, [isMobile])
 
   React.useEffect(() => {
     let cancelled = false
@@ -106,18 +100,24 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
     return () => {
       cancelled = true
     }
-  }, [timeRange])
+  }, [timeRange, retryKey])
 
-  const descriptionText = rangeLabels[timeRange] ?? "Last 3 months"
+  const descriptionText = rangeLabels[timeRange] ?? "Last 7 days"
 
   return (
-    <Card className={cn("@container/card relative z-0 py-4 overflow-hidden", className)}>
+    <Card
+      className={cn(
+        "@container/card relative z-0 border-border bg-card/40 py-4 shadow-none overflow-hidden",
+        className
+      )}
+    >
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle className="text-sm font-medium">Extension events</CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs leading-relaxed">
             <span className="hidden @[540px]/card:block">
-              Ad and notification events from the extension — {descriptionText.toLowerCase()}
+              Campaign-linked impressions: ad and popup (one series), plus notification —{" "}
+              {descriptionText.toLowerCase()}
             </span>
             <span className="@[540px]/card:hidden">{descriptionText}</span>
           </CardDescription>
@@ -142,7 +142,7 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
                   size="sm"
                   aria-label="Select time range"
                 >
-                  <SelectValue placeholder="Last 3 months" />
+                  <SelectValue placeholder="Last 7 days" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="90d" className="rounded-lg">
@@ -159,7 +159,7 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
             </>
           ) : (
             <span className="text-xs text-muted-foreground">
-              {rangeLabels[timeRange] ?? "Last 3 months"}
+              {rangeLabels[timeRange] ?? "Last 7 days"}
             </span>
           )}
         </div>
@@ -168,15 +168,32 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
         {loading ? (
           <Skeleton className="h-[264px] w-full rounded-lg" />
         ) : error ? (
-          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-            {error}
+          <div
+            className="flex h-[264px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-4 text-center"
+            role="alert"
+          >
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRetryKey((k) => k + 1)}
+            >
+              Retry
+            </Button>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div
+            className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground"
+            role="status"
+          >
             No event data for this period
           </div>
         ) : isAllZeroChartData(chartData) ? (
-          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div
+            className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground"
+            role="status"
+          >
             No event data for this period
           </div>
         ) : (
