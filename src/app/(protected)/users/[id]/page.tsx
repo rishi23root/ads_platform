@@ -1,17 +1,17 @@
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { AdminEndUserSessionsCard } from '@/components/admin-end-user-sessions-card';
-import { EndUserAnalyticsSection } from '@/components/end-user-analytics-section';
+import { notFound, redirect } from 'next/navigation';
+import { desc, eq } from 'drizzle-orm';
+import { database as db } from '@/db';
+import { endUsers, payments } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
-import { isValidEndUserUuid } from '@/lib/end-user-id';
+import { endUserPublicPayload } from '@/lib/enduser-auth';
+import {
+  EndUserDetailClient,
+  type EndUserDetailInitialUser,
+  type EndUserPaymentListItem,
+} from '@/components/end-user-detail-client';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Extension user detail shell: activity analytics + sessions.
- * Merge with a full profile/payments client when that module exists in your tree.
- */
 export default async function EndUserDetailPage({
   params,
 }: {
@@ -22,17 +22,51 @@ export default async function EndUserDetailPage({
   if (sessionWithRole.role !== 'admin') redirect('/');
 
   const { id } = await params;
-  if (!isValidEndUserUuid(id)) redirect('/users');
+
+  const [user] = await db.select().from(endUsers).where(eq(endUsers.id, id)).limit(1);
+  if (!user) notFound();
+
+  const paymentRows = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.endUserId, id))
+    .orderBy(desc(payments.paymentDate), desc(payments.createdAt));
+
+  const raw = endUserPublicPayload(user);
+  const initialUser: EndUserDetailInitialUser = {
+    id: String(raw.id),
+    email: raw.email,
+    shortId: raw.shortId,
+    installationId: raw.installationId,
+    name: raw.name,
+    plan: String(raw.plan),
+    status: String(raw.status),
+    country: raw.country,
+    startDate:
+      raw.startDate instanceof Date ? raw.startDate.toISOString() : String(raw.startDate),
+    endDate: raw.endDate
+      ? raw.endDate instanceof Date
+        ? raw.endDate.toISOString()
+        : String(raw.endDate)
+      : null,
+    createdAt:
+      raw.createdAt instanceof Date ? raw.createdAt.toISOString() : String(raw.createdAt),
+  };
+
+  const initialPayments: EndUserPaymentListItem[] = paymentRows.map((p) => ({
+    id: p.id,
+    endUserId: p.endUserId,
+    amount: p.amount,
+    currency: p.currency,
+    status: p.status,
+    description: p.description,
+    paymentDate: p.paymentDate.toISOString(),
+    createdAt: p.createdAt.toISOString(),
+  }));
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6 max-w-6xl">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/users">Back to users</Link>
-        </Button>
-      </div>
-      <EndUserAnalyticsSection endUserId={id} />
-      <AdminEndUserSessionsCard userId={id} />
+    <div className="p-4 md:p-6 max-w-6xl">
+      <EndUserDetailClient initialUser={initialUser} initialPayments={initialPayments} />
     </div>
   );
 }
