@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { database as db } from '@/db';
-import { endUsers, enduserSessions } from '@/db/schema';
+import { endUsers, enduserEvents, enduserSessions } from '@/db/schema';
 import { and, desc, eq, gte, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
 import { getCountryName } from '@/lib/countries';
 import { computeExtensionDaysLeft, formatExtensionDaysLeftCell } from '@/lib/extension-user-subscription';
@@ -240,6 +240,8 @@ export type EndUserListRow = {
   createdAt: Date;
   /** Latest session row created_at (extension auth), if any. */
   lastSessionAt: Date | null;
+  /** All `enduser_events` rows for this user (`enduser_id` or matching email). */
+  impressionCount: number;
 };
 
 export function buildEndUsersListBaseQuery(
@@ -263,6 +265,16 @@ export function buildEndUsersListBaseQuery(
       endDate: endUsers.endDate,
       createdAt: endUsers.createdAt,
       lastSessionAt: sessionStats.lastSessionAt,
+      impressionCount: sql<number>`(
+        select count(*)::int
+        from ${enduserEvents}
+        where cast(${enduserEvents.endUserId} as text) = cast(${endUsers.id} as text)
+        or (
+          ${endUsers.email} is not null
+          and ${enduserEvents.email} is not null
+          and lower(${enduserEvents.email}) = lower(${endUsers.email})
+        )
+      )`.as('impression_count'),
     })
     .from(endUsers)
     .leftJoin(sessionStats, endUserSessionJoin)
@@ -289,7 +301,11 @@ export async function runEndUsersListQuery(
   if (options?.limit !== undefined) {
     q = q.limit(options.limit).offset(options.offset ?? 0);
   }
-  return (await q) as EndUserListRow[];
+  const rows = await q;
+  return rows.map((r) => ({
+    ...r,
+    impressionCount: Number(r.impressionCount ?? 0),
+  })) as EndUserListRow[];
 }
 
 export async function countEndUsersListQuery(
@@ -319,6 +335,7 @@ export function endUsersToCsvLines(rows: EndUserListRow[]): string[] {
     'Installation ID',
     'Email',
     'Name',
+    'Impressions',
     'Plan',
     'Status',
     'Country',
@@ -337,6 +354,7 @@ export function endUsersToCsvLines(rows: EndUserListRow[]): string[] {
       row.installationId ?? '',
       row.email ?? '',
       row.name ?? '',
+      String(row.impressionCount),
       row.plan,
       row.status,
       row.country ?? '',

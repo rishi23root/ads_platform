@@ -15,6 +15,11 @@ import {
   parsePaymentsDashboardFilters,
   runPaymentsListQuery,
 } from '@/lib/payments-dashboard';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Payments',
+};
 
 export const dynamic = 'force-dynamic';
 

@@ -16,7 +16,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard",
+  title: {
+    default: "Admin Dashboard",
+    template: "%s | Admin Dashboard",
+  },
   description: "Admin Dashboard Application",
 };
 

@@ -2,6 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { PlatformForm } from '../platform-form';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'New platform',
+};
 
 export default async function NewPlatformPage() {
   const sessionWithRole = await getSessionWithRole();

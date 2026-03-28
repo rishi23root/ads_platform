@@ -2,6 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { NotificationForm } from '../notification-form';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'New notification',
+};
 
 export default async function NewNotificationPage() {
   const sessionWithRole = await getSessionWithRole();

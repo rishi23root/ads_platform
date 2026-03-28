@@ -2,7 +2,7 @@ import 'server-only';
 
 import { database as db } from '@/db';
 import { campaigns, enduserEvents } from '@/db/schema';
-import { and, desc, eq, gte, ilike, isNotNull, lte, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lte, sql, type SQL } from 'drizzle-orm';
 import { getQueryParam } from '@/lib/url-search-params';
 import { escapeCsvCell, escapeIlikePattern } from '@/lib/utils';
 

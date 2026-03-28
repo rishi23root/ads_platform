@@ -72,7 +72,11 @@ export async function GET(
       .offset(offset);
 
     const totalCount = rows.length > 0 ? Number(rows[0].totalCount) : 0;
-    const logs = rows.map(({ totalCount: _totalCount, ...log }) => log);
+    const logs = rows.map((row) => {
+      const { totalCount: strip, ...log } = row;
+      void strip;
+      return log;
+    });
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return NextResponse.json({

@@ -11,6 +11,11 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { AccountSessionsCard } from '@/components/account-sessions-card';
 import { AccountPasswordForm } from '@/components/account-password-form';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Account',
+};
 
 export const dynamic = 'force-dynamic';
 

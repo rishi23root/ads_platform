@@ -21,6 +21,11 @@ import {
   usersFilterChips,
 } from '@/lib/end-users-dashboard';
 import { getQueryParam } from '@/lib/url-search-params';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Users',
+};
 
 export const dynamic = 'force-dynamic';
 

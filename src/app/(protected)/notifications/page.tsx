@@ -4,6 +4,11 @@ import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
 import { NotificationsTableWithDrawer } from '@/components/notifications-table-with-drawer';
 import { getLinkedCampaignCountByNotificationId } from '@/lib/campaign-linked-counts';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Notifications',
+};
 
 export const dynamic = 'force-dynamic';
 

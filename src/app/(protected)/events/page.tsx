@@ -24,7 +24,12 @@ import {
 } from '@/lib/events-dashboard';
 import { getCountryName } from '@/lib/countries';
 import { IconChartBar } from '@tabler/icons-react';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+
+export const metadata: Metadata = {
+  title: 'Events',
+};
 
 export const dynamic = 'force-dynamic';
 

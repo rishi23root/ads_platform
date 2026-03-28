@@ -7,6 +7,11 @@ import { desc, eq } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { CampaignsListTable } from '@/components/campaigns-list-table';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Campaigns',
+};
 
 export const dynamic = 'force-dynamic';
 

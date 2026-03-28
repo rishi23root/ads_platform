@@ -3,6 +3,11 @@ import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns, platforms } from '@/db/schema';
 import { PlatformsTableWithDrawer } from '@/components/platforms-table-with-drawer';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Platforms',
+};
 
 export const dynamic = 'force-dynamic';
 

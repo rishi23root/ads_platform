@@ -16,7 +16,7 @@ interface UsersTableProps {
 }
 
 export function UsersTable({ rows }: UsersTableProps) {
-  const colCount = 8;
+  const colCount = 10;
 
   return (
     <div className="w-full overflow-x-auto">
@@ -27,7 +27,9 @@ export function UsersTable({ rows }: UsersTableProps) {
             <TableHead className="min-w-[72px]">Plan</TableHead>
             <TableHead className="min-w-[88px]">Status</TableHead>
             <TableHead className="w-[88px]">Country</TableHead>
+            <TableHead className="text-right w-[96px] tabular-nums">Impressions</TableHead>
             <TableHead className="min-w-[140px]">Start date</TableHead>
+            <TableHead className="min-w-[140px]">End date</TableHead>
             <TableHead className="min-w-[140px]">Last session</TableHead>
             <TableHead className="text-center w-[96px]">Days left</TableHead>
             <TableHead className="min-w-[100px] text-right">Actions</TableHead>
@@ -64,8 +66,12 @@ export function UsersTable({ rows }: UsersTableProps) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{v.impressionCount}</TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(v.startDate).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {v.endDate ? new Date(v.endDate).toLocaleString() : '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {v.lastSessionAt ? new Date(v.lastSessionAt).toLocaleString() : '—'}

@@ -11,6 +11,11 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { RecentCampaignsTable } from '@/components/recent-campaigns-table';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+};
 
 export const dynamic = 'force-dynamic';
 

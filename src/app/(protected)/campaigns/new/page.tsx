@@ -3,6 +3,11 @@ import { redirect } from 'next/navigation';
 import { CampaignForm } from '../campaign-form';
 import { CampaignFormShell } from '../campaign-form-shell';
 import { getCampaignFormOptionLists } from '../campaign-form-data';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'New campaign',
+};
 
 export const dynamic = 'force-dynamic';
 

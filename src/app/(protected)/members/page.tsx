@@ -4,6 +4,11 @@ import { database as db } from '@/db';
 import { user } from '@/db/schema';
 import { CreateUserDialog } from '@/components/create-user-dialog';
 import { MembersTable } from '@/components/members-table';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Members',
+};
 
 export const dynamic = 'force-dynamic';
 

@@ -2,6 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { AdForm } from '../ad-form';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'New ad',
+};
 
 export default async function NewAdPage() {
   const sessionWithRole = await getSessionWithRole();

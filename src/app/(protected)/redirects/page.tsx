@@ -4,6 +4,11 @@ import { database as db } from '@/db';
 import { redirects } from '@/db/schema';
 import { RedirectsTableWithDrawer } from '@/components/redirects-table-with-drawer';
 import { getLinkedCampaignCountByRedirectId } from '@/lib/campaign-linked-counts';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Redirects',
+};
 
 export const dynamic = 'force-dynamic';
 

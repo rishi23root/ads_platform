@@ -9,14 +9,36 @@ import {
   type EndUserDetailInitialUser,
   type EndUserPaymentListItem,
 } from '@/components/end-user-detail-client';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const session = await getSessionWithRole();
+  if (!session || session.role !== 'admin') {
+    return { title: 'User' };
+  }
+
+  const { id } = await params;
+  const [user] = await db
+    .select({ name: endUsers.name, email: endUsers.email, shortId: endUsers.shortId })
+    .from(endUsers)
+    .where(eq(endUsers.id, id))
+    .limit(1);
+
+  if (!user) return { title: 'User' };
+
+  const label = user.name ?? user.email ?? user.shortId ?? 'User';
+  return { title: label };
+}
+
 export default async function EndUserDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+}: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
   if (sessionWithRole.role !== 'admin') redirect('/');

@@ -4,6 +4,11 @@ import { database as db } from '@/db';
 import { ads } from '@/db/schema';
 import { AdsTableWithDrawer } from '@/components/ads-table-with-drawer';
 import { getLinkedCampaignCountByAdId } from '@/lib/campaign-linked-counts';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Ads',
+};
 
 export const dynamic = 'force-dynamic';
 

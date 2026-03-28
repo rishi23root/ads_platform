@@ -7,14 +7,28 @@ import {
   getCampaignByIdOrUndefined,
   campaignRowToFormInitial,
 } from '../../campaign-form-data';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const sessionWithRole = await getSessionWithRole();
+  if (!sessionWithRole || sessionWithRole.role !== 'admin') {
+    return { title: 'Edit campaign' };
+  }
+
+  const { id } = await params;
+  const c = await getCampaignByIdOrUndefined(id);
+  return { title: c ? `Edit · ${c.name}` : 'Edit campaign' };
+}
+
 export default async function EditCampaignPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+}: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
   if (sessionWithRole.role !== 'admin') redirect('/campaigns');

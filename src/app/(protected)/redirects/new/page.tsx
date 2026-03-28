@@ -2,6 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { RedirectForm } from '../redirect-form';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'New redirect',
+};
 
 export default async function NewRedirectPage() {
   const sessionWithRole = await getSessionWithRole();

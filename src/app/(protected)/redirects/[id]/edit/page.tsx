@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getSessionWithRole } from '@/lib/dal';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Edit redirect',
+};
 
 type PageProps = {
   params: Promise<{ id: string }>;

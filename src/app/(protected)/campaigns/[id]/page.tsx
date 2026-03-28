@@ -4,14 +4,33 @@ import { database as db } from '@/db';
 import { campaigns } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { CampaignDashboard } from '@/components/dashboard/CampaignDashboard';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const sessionWithRole = await getSessionWithRole();
+  if (!sessionWithRole) {
+    return { title: 'Campaign' };
+  }
+
+  const { id } = await params;
+  const [row] = await db
+    .select({ name: campaigns.name })
+    .from(campaigns)
+    .where(eq(campaigns.id, id))
+    .limit(1);
+
+  return { title: row?.name ?? 'Campaign' };
+}
+
 export default async function CampaignDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+}: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
 
