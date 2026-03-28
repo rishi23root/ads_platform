@@ -9,9 +9,34 @@ export type { CampaignFormInitial, CampaignFormOptionLists };
 export async function getCampaignFormOptionLists(): Promise<CampaignFormOptionLists> {
   const [platformsList, adsRows, notificationsRows, redirectsRows, counts] = await Promise.all([
     db.select({ id: platforms.id, name: platforms.name, domain: platforms.domain }).from(platforms).orderBy(platforms.name),
-    db.select({ id: ads.id, name: ads.name }).from(ads).orderBy(ads.name),
-    db.select({ id: notifications.id, title: notifications.title }).from(notifications).orderBy(notifications.title),
-    db.select({ id: redirects.id, name: redirects.name }).from(redirects).orderBy(redirects.name),
+    db
+      .select({
+        id: ads.id,
+        name: ads.name,
+        imageUrl: ads.imageUrl,
+        description: ads.description,
+        targetUrl: ads.targetUrl,
+      })
+      .from(ads)
+      .orderBy(ads.name),
+    db
+      .select({
+        id: notifications.id,
+        title: notifications.title,
+        message: notifications.message,
+        ctaLink: notifications.ctaLink,
+      })
+      .from(notifications)
+      .orderBy(notifications.title),
+    db
+      .select({
+        id: redirects.id,
+        name: redirects.name,
+        sourceDomain: redirects.sourceDomain,
+        destinationUrl: redirects.destinationUrl,
+      })
+      .from(redirects)
+      .orderBy(redirects.name),
     getAllContentLinkedCampaignCounts(),
   ]);
   const { byAdId, byNotificationId, byRedirectId } = counts;

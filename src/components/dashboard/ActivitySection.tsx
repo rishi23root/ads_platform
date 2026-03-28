@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface ActivitySectionProps {
   chartData: { date: string; impressions: number; users: number }[];
@@ -15,6 +16,8 @@ interface ActivitySectionProps {
   onRangeChange: (range: string) => void;
   loading?: boolean;
   showTitle?: boolean;
+  /** Extra classes for the Activity heading when showTitle is true */
+  titleClassName?: string;
   showRangeOnly?: boolean;
   showChartOnly?: boolean;
 }
@@ -31,6 +34,7 @@ export function ActivitySection({
   onRangeChange,
   loading = false,
   showTitle = true,
+  titleClassName,
   showRangeOnly = false,
   showChartOnly = false,
 }: ActivitySectionProps) {
@@ -56,12 +60,16 @@ export function ActivitySection({
   }
 
   return (
-    <section className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        {showTitle && <h2 className="text-sm font-medium">Activity</h2>}
+    <section className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        {showTitle && (
+          <h2 className={cn('text-sm font-medium text-muted-foreground', titleClassName)}>Activity</h2>
+        )}
         {rangeSelect}
       </div>
-      <ActivityChart data={chartData} loading={loading} error={null} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ActivityChart data={chartData} loading={loading} error={null} fillHeight />
+      </div>
     </section>
   );
 }

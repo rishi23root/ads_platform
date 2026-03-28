@@ -20,7 +20,26 @@ export type CampaignFormInitial = {
 
 export type CampaignFormOptionLists = {
   platforms: { id: string; name: string; domain: string }[];
-  adsList: { id: string; name: string; linkedCampaignCount: number }[];
-  notificationsList: { id: string; title: string; linkedCampaignCount: number }[];
-  redirectsList: { id: string; name: string; linkedCampaignCount: number }[];
+  adsList: {
+    id: string;
+    name: string;
+    linkedCampaignCount: number;
+    imageUrl: string | null;
+    description: string | null;
+    targetUrl: string | null;
+  }[];
+  notificationsList: {
+    id: string;
+    title: string;
+    linkedCampaignCount: number;
+    message: string;
+    ctaLink: string | null;
+  }[];
+  redirectsList: {
+    id: string;
+    name: string;
+    linkedCampaignCount: number;
+    sourceDomain: string;
+    destinationUrl: string;
+  }[];
 };

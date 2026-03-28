@@ -15,23 +15,13 @@ import {
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getSessionWithRole } from '@/lib/dal';
 import {
-  aggregateEventStats,
-  endEventsAccessWhere,
+  countEvents,
   eventsFilterParamsRecord,
   listEventsPage,
   parseEventsDashboardFilters,
-  type EventStatsRow,
 } from '@/lib/events-dashboard';
 import { getCountryName } from '@/lib/countries';
-import {
-  IconAd2,
-  IconBell,
-  IconChartBar,
-  IconRoute,
-  IconWebhook,
-  IconWindow,
-  IconWorld,
-} from '@tabler/icons-react';
+import { IconChartBar } from '@tabler/icons-react';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -47,22 +37,6 @@ const typeColors: Record<string, 'default' | 'secondary' | 'outline' | 'destruct
   visit: 'secondary',
 };
 
-const typeKpiConfig: {
-  key: keyof Pick<
-    EventStatsRow,
-    'ad' | 'popup' | 'notification' | 'redirect' | 'visit' | 'request'
-  >;
-  label: string;
-  icon: typeof IconAd2;
-}[] = [
-  { key: 'ad', label: 'Ad', icon: IconAd2 },
-  { key: 'popup', label: 'Popup', icon: IconWindow },
-  { key: 'notification', label: 'Notification', icon: IconBell },
-  { key: 'redirect', label: 'Redirect', icon: IconRoute },
-  { key: 'visit', label: 'Visit', icon: IconWorld },
-  { key: 'request', label: 'Request', icon: IconWebhook },
-];
-
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function EventsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -77,15 +51,12 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
   const page = Math.max(1, parseInt(pageStr ?? '1', 10));
   const offset = (page - 1) * PAGE_SIZE;
 
-  const accessWhere = endEventsAccessWhere(session.role, session.user.id);
   const filterRecord = eventsFilterParamsRecord(filters);
 
-  const [stats, pageRows] = await Promise.all([
-    aggregateEventStats(accessWhere, filters),
-    listEventsPage(accessWhere, filters, { limit: PAGE_SIZE, offset }),
+  const [totalCount, pageRows] = await Promise.all([
+    countEvents(session.role, session.user.id, filters),
+    listEventsPage(session.role, session.user.id, filters, { limit: PAGE_SIZE, offset }),
   ]);
-
-  const totalCount = Number(stats?.total ?? 0);
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const paginationEl =
@@ -101,46 +72,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
       />
     ) : null;
 
-  const statusSection = (
-    <section aria-label="Event totals and counts by type" className="space-y-3 pt-2">
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-md border bg-muted/20 px-4 py-3 text-sm">
-        <span className="tabular-nums">
-          <span className="font-semibold text-foreground">{totalCount.toLocaleString()}</span>{' '}
-          <span className="text-muted-foreground">total events (filtered)</span>
-        </span>
-        <span className="text-muted-foreground" aria-hidden>
-          ·
-        </span>
-        <span className="tabular-nums">
-          <span className="font-semibold text-foreground">
-            {Number(stats?.uniqueUsers ?? 0).toLocaleString()}
-          </span>{' '}
-          <span className="text-muted-foreground">unique end users (filtered)</span>
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {typeKpiConfig.map(({ key, label, icon: Icon }) => (
-          <div
-            key={key}
-            className="flex flex-col gap-0.5 rounded-md border bg-card px-3 py-2 shadow-sm"
-          >
-            <div className="flex items-center justify-between gap-1 text-muted-foreground">
-              <span className="text-xs leading-tight">{label}</span>
-              <Icon className="size-3.5 shrink-0 opacity-70" aria-hidden />
-            </div>
-            <p className="text-lg font-semibold tabular-nums leading-none text-foreground">
-              {Number(stats?.[key] ?? 0).toLocaleString()}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-
   return (
     <EventsPageLayout
-      statusContent={statusSection}
       filterContent={
         <EventsFilters
           type={filters.type}
@@ -149,6 +82,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
           domain={filters.domain}
           country={filters.country}
           endUserId={filters.endUserId}
+          email={filters.email}
           campaignId={filters.campaignId}
         />
       }
@@ -174,6 +108,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
+                <col style={{ width: 'auto' }} />
                 <col style={{ width: '80px' }} />
                 <col style={{ width: 'minmax(120px, 1fr)' }} />
                 <col style={{ width: '90px' }} />
@@ -184,6 +119,9 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                 <TableRow>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     End-user ID
+                  </TableHead>
+                  <TableHead className="text-muted-foreground text-xs font-normal">
+                    Email
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     Campaign
@@ -211,7 +149,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
               <TableBody>
                 {pageRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                       No events match the current filters. Extension activity will appear here.
                     </TableCell>
                   </TableRow>
@@ -224,6 +162,15 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                           truncateLength={12}
                           copyLabel="End-user ID copied to clipboard"
                         />
+                      </TableCell>
+                      <TableCell className="py-2 overflow-hidden text-sm">
+                        {log.email ? (
+                          <span className="truncate block max-w-[180px]" title={log.email}>
+                            {log.email}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="py-2 overflow-hidden">
                         {log.campaignId ? (

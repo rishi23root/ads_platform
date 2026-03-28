@@ -1,20 +1,18 @@
 'use client';
 
 import * as React from 'react';
+import { EventsSummaryPanel } from '@/components/events-summary-panel';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { IconChartBar, IconFilter } from '@tabler/icons-react';
 
 type EventsPageLayoutProps = {
   filterContent: React.ReactNode;
-  /** Totals / KPI strip — hidden until user opens Summary (same pattern as Filter). */
-  statusContent: React.ReactNode;
   children: React.ReactNode;
 };
 
 export function EventsPageLayout({
   filterContent,
-  statusContent,
   children,
 }: EventsPageLayoutProps) {
   const [showFilters, setShowFilters] = React.useState(false);
@@ -106,7 +104,7 @@ export function EventsPageLayout({
               aria-hidden={!showStatus}
               inert={!showStatus ? true : undefined}
             >
-              {statusContent}
+              <EventsSummaryPanel expanded={showStatus} />
             </div>
           </div>
         </div>

@@ -21,21 +21,14 @@ interface LinkedCampaignsProps {
 }
 
 /**
- * One short fade/slide after data is ready. Double rAF so the "hidden" frame paints before
- * transitioning — works when parent drawer was opening or off-screen (CSS `@keyframes` often
- * completes invisibly in that case).
+ * One short fade/slide after data is ready. Double rAF after mount so the "hidden" frame
+ * paints before transitioning. Parent must pass `key={...}` when content changes so this
+ * remounts (initial `visible` is false again).
  */
-function DrawerContentReveal({
-  contentKey,
-  children,
-}: {
-  contentKey: string;
-  children: ReactNode;
-}) {
+function DrawerContentReveal({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(false);
 
   useLayoutEffect(() => {
-    setVisible(false);
     let r2 = 0;
     const r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => setVisible(true));
@@ -44,7 +37,7 @@ function DrawerContentReveal({
       cancelAnimationFrame(r1);
       cancelAnimationFrame(r2);
     };
-  }, [contentKey]);
+  }, []);
 
   return (
     <div
@@ -124,29 +117,34 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
 
     const cached = peekLinkedCampaignsCache(apiPath);
     if (cached) {
-      setCampaigns(cached);
-      setIsLoading(false);
-      setError(null);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setCampaigns(cached);
+        setIsLoading(false);
+        setError(null);
+      });
       return () => {
         cancelled = true;
       };
     }
 
-    setError(null);
-    setCampaigns([]);
-    setIsLoading(true);
-
-    loadLinkedCampaigns(apiPath)
-      .then((data) => {
-        if (!cancelled) setCampaigns(data);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setError(null);
+      setCampaigns([]);
+      setIsLoading(true);
+      void loadLinkedCampaigns(apiPath)
+        .then((data) => {
+          if (!cancelled) setCampaigns(data);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : 'Failed to load');
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    });
 
     return () => {
       cancelled = true;
@@ -183,7 +181,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
   if (campaigns.length === 0) {
     if (embedded) {
       return (
-        <DrawerContentReveal contentKey={revealKey}>
+        <DrawerContentReveal key={revealKey}>
           <p className="px-4 py-3 text-sm leading-relaxed text-muted-foreground">
             {type === 'platform'
               ? 'No campaigns include this platform in their target list yet.'
@@ -193,7 +191,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
       );
     }
     return (
-      <DrawerContentReveal contentKey={revealKey}>
+      <DrawerContentReveal key={revealKey}>
         <div className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-4 py-3">
           <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <IconTargetArrow className="h-4 w-4 shrink-0" aria-hidden />
@@ -209,7 +207,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
 
   if (embedded) {
     return (
-      <DrawerContentReveal contentKey={revealKey}>
+      <DrawerContentReveal key={revealKey}>
         <ul className="divide-y divide-border" aria-label={listLabel}>
           {campaigns.map((c) => (
             <li key={c.id}>
@@ -265,7 +263,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
   );
 
   return (
-    <DrawerContentReveal contentKey={revealKey}>
+    <DrawerContentReveal key={revealKey}>
       <div className="space-y-2">
         <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
           <IconTargetArrow className="h-4 w-4 shrink-0" aria-hidden />

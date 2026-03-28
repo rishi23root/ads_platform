@@ -34,7 +34,7 @@ Push to your connected branch; Vercel builds and deploys. Migrations run on cold
 
 ### 4. Optional checks
 
-- [ ] `src/middleware.ts` adds baseline security headers (frame deny, nosniff, HSTS in production)
+- [ ] `src/proxy.ts` adds baseline security headers (frame deny, nosniff, HSTS in production)
 - [ ] `BETTER_AUTH_BASE_URL` matches the production domain (no trailing slash)
 - [ ] Postgres allows connections from Vercel (IP allowlists / pooler docs from your DB provider)
 - [ ] Redis (if used) allows TLS and serverless-friendly connection limits

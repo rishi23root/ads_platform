@@ -1,5 +1,5 @@
 {
-  "id": "b41f26f6-6f6e-4196-be8a-407828699569",
+  "id": "1cc7fbe9-85e8-408d-a888-a57997dce9d7",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -306,7 +306,53 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "campaigns_ad_id_idx": {
+          "name": "campaigns_ad_id_idx",
+          "columns": [
+            {
+              "expression": "ad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "campaigns_notification_id_idx": {
+          "name": "campaigns_notification_id_idx",
+          "columns": [
+            {
+              "expression": "notification_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "campaigns_redirect_id_idx": {
+          "name": "campaigns_redirect_id_idx",
+          "columns": [
+            {
+              "expression": "redirect_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "campaigns_ad_id_ads_id_fk": {
           "name": "campaigns_ad_id_ads_id_fk",
@@ -382,11 +428,23 @@
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "password_hash": {
           "name": "password_hash",
           "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "installation_id": {
+          "name": "installation_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "short_id": {
+          "name": "short_id",
+          "type": "varchar(12)",
           "primaryKey": false,
           "notNull": true
         },
@@ -455,6 +513,20 @@
           "nullsNotDistinct": false,
           "columns": [
             "email"
+          ]
+        },
+        "end_users_installation_id_unique": {
+          "name": "end_users_installation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "installation_id"
+          ]
+        },
+        "end_users_short_id_unique": {
+          "name": "end_users_short_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "short_id"
           ]
         }
       },
@@ -538,7 +610,167 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "enduser_events_enduser_id_idx": {
+          "name": "enduser_events_enduser_id_idx",
+          "columns": [
+            {
+              "expression": "enduser_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_email_idx": {
+          "name": "enduser_events_email_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_campaign_id_idx": {
+          "name": "enduser_events_campaign_id_idx",
+          "columns": [
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_type_idx": {
+          "name": "enduser_events_type_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_created_at_idx": {
+          "name": "enduser_events_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_enduser_created_idx": {
+          "name": "enduser_events_enduser_created_idx",
+          "columns": [
+            {
+              "expression": "enduser_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_email_created_idx": {
+          "name": "enduser_events_email_created_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_campaign_created_idx": {
+          "name": "enduser_events_campaign_created_idx",
+          "columns": [
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "enduser_events_enduser_campaign_idx": {
+          "name": "enduser_events_enduser_campaign_idx",
+          "columns": [
+            {
+              "expression": "enduser_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "enduser_events_campaign_id_campaigns_id_fk": {
           "name": "enduser_events_campaign_id_campaigns_id_fk",
@@ -826,13 +1058,6 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         },
         "created_at": {
           "name": "created_at",
@@ -1163,7 +1388,8 @@
         "notification",
         "popup",
         "request",
-        "redirect"
+        "redirect",
+        "visit"
       ]
     },
     "public.enduser_user_plan": {

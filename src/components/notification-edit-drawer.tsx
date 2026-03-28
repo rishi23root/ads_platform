@@ -20,6 +20,10 @@ interface NotificationEditDrawerProps {
   notification?: Notification | null;
   notificationId?: string;
   initialMode?: 'view' | 'edit';
+  /** When false, view mode has no Edit control. Use only when `session.role === 'admin'`. Default true */
+  showEditAction?: boolean;
+  /** Hide Linked campaigns when opened from a campaign detail view. Default false */
+  hideLinkedCampaigns?: boolean;
 }
 
 const detailRow =
@@ -34,10 +38,14 @@ function NotificationEditDrawerContent({
   notification,
   notificationId,
   initialMode,
+  showEditAction = true,
+  hideLinkedCampaigns = false,
 }: {
   notification?: Notification | null;
   notificationId?: string;
   initialMode: 'view' | 'edit';
+  showEditAction?: boolean;
+  hideLinkedCampaigns?: boolean;
 }) {
   const router = useRouter();
   const [fetchedNotification, setFetchedNotification] = useState<Notification | null>(null);
@@ -104,7 +112,7 @@ function NotificationEditDrawerContent({
       : 'Update title, message, and CTA';
 
   const headerActions =
-    mode === 'view' && resolvedNotification ? (
+    mode === 'view' && resolvedNotification && showEditAction ? (
       <Button type="button" size="sm" variant="outline" onClick={() => setMode('edit')}>
         <IconPencil className="mr-2 h-4 w-4" />
         Edit
@@ -185,17 +193,19 @@ function NotificationEditDrawerContent({
                   </dl>
                 </div>
               </section>
-              <section className="min-w-0 space-y-3" aria-labelledby="notification-campaigns-heading">
-                <h3
-                  id="notification-campaigns-heading"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Linked campaigns
-                </h3>
-                <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
-                  <LinkedCampaigns type="notification" entityId={resolvedNotification.id} embedded />
-                </div>
-              </section>
+              {!hideLinkedCampaigns ? (
+                <section className="min-w-0 space-y-3" aria-labelledby="notification-campaigns-heading">
+                  <h3
+                    id="notification-campaigns-heading"
+                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Linked campaigns
+                  </h3>
+                  <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
+                    <LinkedCampaigns type="notification" entityId={resolvedNotification.id} embedded />
+                  </div>
+                </section>
+              ) : null}
             </div>
           ) : (
             <NotificationForm
@@ -217,6 +227,8 @@ export function NotificationEditDrawer({
   notification,
   notificationId,
   initialMode = 'view',
+  showEditAction = true,
+  hideLinkedCampaigns = false,
 }: NotificationEditDrawerProps) {
   return (
     <CrudResourceDrawerRoot open={open} onOpenChange={onOpenChange} direction="right">
@@ -226,6 +238,8 @@ export function NotificationEditDrawer({
           notification={notification}
           notificationId={notificationId}
           initialMode={initialMode}
+          showEditAction={showEditAction}
+          hideLinkedCampaigns={hideLinkedCampaigns}
         />
       ) : null}
     </CrudResourceDrawerRoot>

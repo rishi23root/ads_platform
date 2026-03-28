@@ -1,6 +1,6 @@
 CREATE TYPE "public"."campaign_status" AS ENUM('active', 'inactive', 'scheduled', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."campaign_type" AS ENUM('ads', 'popup', 'notification', 'redirect');--> statement-breakpoint
-CREATE TYPE "public"."enduser_event_type" AS ENUM('ad', 'notification', 'popup', 'request', 'redirect');--> statement-breakpoint
+CREATE TYPE "public"."enduser_event_type" AS ENUM('ad', 'notification', 'popup', 'request', 'redirect', 'visit');--> statement-breakpoint
 CREATE TYPE "public"."enduser_user_plan" AS ENUM('trial', 'paid');--> statement-breakpoint
 CREATE TYPE "public"."enduser_status" AS ENUM('active', 'suspended', 'churned');--> statement-breakpoint
 CREATE TYPE "public"."frequency_type" AS ENUM('full_day', 'time_based', 'only_once', 'always', 'specific_count');--> statement-breakpoint
@@ -58,8 +58,10 @@ CREATE TABLE "campaigns" (
 --> statement-breakpoint
 CREATE TABLE "end_users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"email" varchar(255) NOT NULL,
-	"password_hash" varchar(255) NOT NULL,
+	"email" varchar(255),
+	"password_hash" varchar(255),
+	"installation_id" varchar(255),
+	"short_id" varchar(12) NOT NULL,
 	"name" varchar(255),
 	"plan" "enduser_user_plan" DEFAULT 'trial' NOT NULL,
 	"status" "enduser_status" DEFAULT 'active' NOT NULL,
@@ -68,7 +70,9 @@ CREATE TABLE "end_users" (
 	"end_date" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "end_users_email_unique" UNIQUE("email")
+	CONSTRAINT "end_users_email_unique" UNIQUE("email"),
+	CONSTRAINT "end_users_installation_id_unique" UNIQUE("installation_id"),
+	CONSTRAINT "end_users_short_id_unique" UNIQUE("short_id")
 );
 --> statement-breakpoint
 CREATE TABLE "enduser_events" (
@@ -120,7 +124,6 @@ CREATE TABLE "platforms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"domain" varchar(255) NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -178,5 +181,17 @@ ALTER TABLE "enduser_events" ADD CONSTRAINT "enduser_events_campaign_id_campaign
 ALTER TABLE "enduser_sessions" ADD CONSTRAINT "enduser_sessions_end_user_id_end_users_id_fk" FOREIGN KEY ("end_user_id") REFERENCES "public"."end_users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_end_user_id_end_users_id_fk" FOREIGN KEY ("end_user_id") REFERENCES "public"."end_users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "campaigns_ad_id_idx" ON "campaigns" USING btree ("ad_id");--> statement-breakpoint
+CREATE INDEX "campaigns_notification_id_idx" ON "campaigns" USING btree ("notification_id");--> statement-breakpoint
+CREATE INDEX "campaigns_redirect_id_idx" ON "campaigns" USING btree ("redirect_id");--> statement-breakpoint
+CREATE INDEX "enduser_events_enduser_id_idx" ON "enduser_events" USING btree ("enduser_id");--> statement-breakpoint
+CREATE INDEX "enduser_events_email_idx" ON "enduser_events" USING btree ("email");--> statement-breakpoint
+CREATE INDEX "enduser_events_campaign_id_idx" ON "enduser_events" USING btree ("campaign_id");--> statement-breakpoint
+CREATE INDEX "enduser_events_type_idx" ON "enduser_events" USING btree ("type");--> statement-breakpoint
+CREATE INDEX "enduser_events_created_at_idx" ON "enduser_events" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "enduser_events_enduser_created_idx" ON "enduser_events" USING btree ("enduser_id","created_at");--> statement-breakpoint
+CREATE INDEX "enduser_events_email_created_idx" ON "enduser_events" USING btree ("email","created_at");--> statement-breakpoint
+CREATE INDEX "enduser_events_campaign_created_idx" ON "enduser_events" USING btree ("campaign_id","created_at");--> statement-breakpoint
+CREATE INDEX "enduser_events_enduser_campaign_idx" ON "enduser_events" USING btree ("enduser_id","campaign_id");--> statement-breakpoint
 CREATE INDEX "idx_enduser_sessions_end_user_id" ON "enduser_sessions" USING btree ("end_user_id");--> statement-breakpoint
 CREATE INDEX "idx_payments_end_user_id" ON "payments" USING btree ("end_user_id");

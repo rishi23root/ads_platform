@@ -11,7 +11,7 @@ export function KpiCard({ label, value, change, empty }: KpiCardProps) {
   const isNegative = showChange && change < 0;
 
   return (
-    <div className="min-h-[88px] rounded-md border bg-card/40 px-4 py-3 flex flex-col justify-center">
+    <div className="min-h-[88px] rounded-md border border-border bg-card/40 px-3 py-3 sm:px-4 sm:py-4 flex flex-col justify-center">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-xl font-bold tabular-nums">

@@ -18,7 +18,15 @@ async function getCampaignsWithDetails(createdByUserId?: string) {
       : base;
   const list = await filtered.orderBy(desc(campaignsTable.createdAt));
   return list.map((c) => ({
-    ...c,
+    id: c.id,
+    name: c.name,
+    campaignType: c.campaignType,
+    targetAudience: c.targetAudience,
+    frequencyType: c.frequencyType,
+    status: c.status,
+    startDate: c.startDate ? c.startDate.toISOString() : null,
+    endDate: c.endDate ? c.endDate.toISOString() : null,
+    createdAt: c.createdAt.toISOString(),
     platformIds: [...(c.platformIds ?? [])],
     countryCodes: [...(c.countryCodes ?? [])],
     adId: c.adId ?? null,

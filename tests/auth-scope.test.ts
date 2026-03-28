@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { endEventsAccessWhere } from '@/lib/events-dashboard';
+import { endEventsOwnedCampaignJoin, endEventsRequiresCampaignOwnerJoin } from '@/lib/events-dashboard';
 
 const dbMocks = vi.hoisted(() => ({
   limit: vi.fn(),
@@ -19,14 +19,17 @@ vi.mock('@/db', () => ({
 
 import { getAccessibleCampaignById } from '@/lib/campaign-access';
 
-describe('endEventsAccessWhere', () => {
-  it('returns undefined for admin (no extra filter)', () => {
-    expect(endEventsAccessWhere('admin', 'user-1')).toBeUndefined();
+describe('end events campaign owner access', () => {
+  it('does not require campaign join for admin', () => {
+    expect(endEventsRequiresCampaignOwnerJoin('admin')).toBe(false);
   });
 
-  it('returns a SQL fragment for non-admin', () => {
-    const w = endEventsAccessWhere('user', 'user-1');
-    expect(w).toBeDefined();
+  it('requires campaign join for non-admin', () => {
+    expect(endEventsRequiresCampaignOwnerJoin('user')).toBe(true);
+  });
+
+  it('exposes INNER JOIN condition for non-admin queries', () => {
+    expect(endEventsOwnedCampaignJoin('user-1')).toBeDefined();
   });
 });
 

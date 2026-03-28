@@ -128,43 +128,46 @@ export const frequencyTypeEnum = pgEnum('frequency_type', [
 export const targetAudienceEnum = pgEnum('target_audience', ['new_users', 'all_users']);
 export const campaignStatusEnum = pgEnum('campaign_status', ['active', 'inactive', 'scheduled', 'expired']);
 
-export const campaigns = pgTable('campaigns', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  targetAudience: targetAudienceEnum('target_audience').notNull().default('all_users'),
-  campaignType: campaignTypeEnum('campaign_type').notNull(),
-  frequencyType: frequencyTypeEnum('frequency_type').notNull(),
-  frequencyCount: integer('frequency_count'),
-  timeStart: time('time_start'),
-  timeEnd: time('time_end'),
-  status: campaignStatusEnum('status').notNull().default('inactive'),
-  startDate: timestamp('start_date', { withTimezone: true }),
-  endDate: timestamp('end_date', { withTimezone: true }),
-  adId: uuid('ad_id').references(() => ads.id, { onDelete: 'set null' }),
-  notificationId: uuid('notification_id').references(() => notifications.id, { onDelete: 'set null' }),
-  redirectId: uuid('redirect_id').references(() => redirects.id, { onDelete: 'set null' }),
-  /** Target platforms (empty = all domains for notification/redirect; ads/popup must set at least one in app validation) */
-  platformIds: uuid('platform_ids')
-    .array()
-    .notNull()
-    .default(sql`'{}'::uuid[]`),
-  /** Target ISO country codes (empty = all countries) */
-  countryCodes: varchar('country_codes', { length: 2 })
-    .array()
-    .notNull()
-    .default(sql`'{}'::varchar(2)[]`),
-  createdBy: varchar('created_by', { length: 255 })
-    .notNull()
-    .default(SYSTEM_USER_ID)
-    .references(() => user.id, { onDelete: 'set default' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-},
-(t) => [
-  index('campaigns_ad_id_idx').on(t.adId),
-  index('campaigns_notification_id_idx').on(t.notificationId),
-  index('campaigns_redirect_id_idx').on(t.redirectId),
-]);
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    targetAudience: targetAudienceEnum('target_audience').notNull().default('all_users'),
+    campaignType: campaignTypeEnum('campaign_type').notNull(),
+    frequencyType: frequencyTypeEnum('frequency_type').notNull(),
+    frequencyCount: integer('frequency_count'),
+    timeStart: time('time_start'),
+    timeEnd: time('time_end'),
+    status: campaignStatusEnum('status').notNull().default('inactive'),
+    startDate: timestamp('start_date', { withTimezone: true }),
+    endDate: timestamp('end_date', { withTimezone: true }),
+    adId: uuid('ad_id').references(() => ads.id, { onDelete: 'set null' }),
+    notificationId: uuid('notification_id').references(() => notifications.id, { onDelete: 'set null' }),
+    redirectId: uuid('redirect_id').references(() => redirects.id, { onDelete: 'set null' }),
+    /** Target platforms (empty = all domains for notification/redirect; ads/popup must set at least one in app validation) */
+    platformIds: uuid('platform_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    /** Target ISO country codes (empty = all countries) */
+    countryCodes: varchar('country_codes', { length: 2 })
+      .array()
+      .notNull()
+      .default(sql`'{}'::varchar(2)[]`),
+    createdBy: varchar('created_by', { length: 255 })
+      .notNull()
+      .default(SYSTEM_USER_ID)
+      .references(() => user.id, { onDelete: 'set default' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('campaigns_ad_id_idx').on(t.adId),
+    index('campaigns_notification_id_idx').on(t.notificationId),
+    index('campaigns_redirect_id_idx').on(t.redirectId),
+  ]
+);
 
 // ============ Extension end-user events (one row per serve / request; distinct from Better Auth `user`) ============
 export const enduserEventTypeEnum = pgEnum('enduser_event_type', [
@@ -238,19 +241,33 @@ export const payments = pgTable(
   (t) => [index('idx_payments_end_user_id').on(t.endUserId)]
 );
 
-export const enduserEvents = pgTable('enduser_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  endUserId: varchar('enduser_id', { length: 255 }).notNull(),
-  email: varchar('email', { length: 255 }),
-  plan: enduserPlanEnum('plan').notNull().default('trial'),
-  campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
-  domain: varchar('domain', { length: 255 }),
-  type: enduserEventTypeEnum('type').notNull(),
-  country: varchar('country', { length: 2 }),
-  statusCode: integer('status_code'),
-  userAgent: text('user_agent'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const enduserEvents = pgTable(
+  'enduser_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    endUserId: varchar('enduser_id', { length: 255 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    plan: enduserPlanEnum('plan').notNull().default('trial'),
+    campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
+    domain: varchar('domain', { length: 255 }),
+    type: enduserEventTypeEnum('type').notNull(),
+    country: varchar('country', { length: 2 }),
+    statusCode: integer('status_code'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('enduser_events_enduser_id_idx').on(t.endUserId),
+    index('enduser_events_email_idx').on(t.email),
+    index('enduser_events_campaign_id_idx').on(t.campaignId),
+    index('enduser_events_type_idx').on(t.type),
+    index('enduser_events_created_at_idx').on(t.createdAt),
+    index('enduser_events_enduser_created_idx').on(t.endUserId, t.createdAt),
+    index('enduser_events_email_created_idx').on(t.email, t.createdAt),
+    index('enduser_events_campaign_created_idx').on(t.campaignId, t.createdAt),
+    index('enduser_events_enduser_campaign_idx').on(t.endUserId, t.campaignId),
+  ]
+);
 
 // ============ Types ============
 export type User = typeof user.$inferSelect;

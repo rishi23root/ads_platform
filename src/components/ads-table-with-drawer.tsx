@@ -78,7 +78,9 @@ export function AdsTableWithDrawer({ ads, initialEditId }: AdsTableWithDrawerPro
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Name</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Target URL</TableHead>
+                <TableHead className="h-12 w-[35%] min-w-0 px-4 py-3 font-medium">
+                  Target URL
+                </TableHead>
                 <TableHead className="h-12 min-w-0 px-4 py-3 text-center font-medium tabular-nums">
                   Campaigns
                 </TableHead>
@@ -108,13 +110,14 @@ export function AdsTableWithDrawer({ ads, initialEditId }: AdsTableWithDrawerPro
                     }}
                   >
                     <TableCell className="min-w-0 px-4 py-3 align-middle font-medium">{ad.name}</TableCell>
-                    <TableCell className="max-w-xs min-w-0 px-4 py-3 align-middle">
+                    <TableCell className="max-w-xs min-w-0 overflow-hidden px-4 py-3 align-middle whitespace-normal">
                       {ad.targetUrl ? (
                         <a
                           href={ad.targetUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="truncate text-primary underline-offset-4 hover:underline"
+                          title={ad.targetUrl}
+                          className="block max-w-full truncate text-primary underline-offset-4 hover:underline"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {ad.targetUrl}

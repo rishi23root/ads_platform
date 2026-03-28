@@ -3,6 +3,7 @@
 import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { CampaignHeader } from './CampaignHeader';
+import { CampaignConfigCard } from './CampaignConfigCard';
 import { KpiCard } from './KpiCard';
 import { LinkedContentCard } from './LinkedContentCard';
 import { CountryTable } from './CountryTable';
@@ -20,7 +21,7 @@ const ActivitySection = dynamic(
 const TopDomainsChart = dynamic(
   () => import('./TopDomainsChart').then((m) => m.TopDomainsChart),
   {
-    loading: () => <div className="min-h-[220px] w-full animate-pulse rounded-md bg-muted" />,
+    loading: () => <div className="min-h-[200px] w-full flex-1 animate-pulse rounded-md bg-muted" />,
   }
 );
 
@@ -94,16 +95,6 @@ export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps)
     };
   }, [campaign.id, range]);
 
-  if (error) {
-    return (
-      <div className="flex flex-col gap-4 p-4 md:p-6">
-        <div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
   const meta = data?.meta ?? {
     platformDomains: [],
     countryCodes: [],
@@ -112,82 +103,94 @@ export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps)
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      <CampaignHeader
+      <CampaignHeader campaign={campaign} isAdmin={isAdmin} />
+
+      <CampaignConfigCard
         campaign={campaign}
         platformDomains={meta.platformDomains}
         countryCodes={meta.countryCodes}
-        isAdmin={isAdmin}
       />
 
-      {!data && loading ? (
-        <div className="h-24 w-full max-w-2xl rounded-lg bg-muted animate-pulse" />
-      ) : data ? (
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="logs">Logs</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="overview" className="space-y-6 mt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <KpiCard
-                label="Impressions"
-                value={data.kpis.impressions}
-                change={data.kpis.impressionsChange}
-              />
-              <KpiCard
-                label="Unique Users"
-                value={data.kpis.uniqueUsers}
-                change={data.kpis.usersChange}
-              />
-              <LinkedContentCard linkedContent={meta.linkedContent} isAdmin={isAdmin} campaignType={campaign.campaignType} />
+        <TabsContent value="overview" className="space-y-6 mt-0">
+          {error ? (
+            <div
+              className="flex min-h-[160px] items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground"
+              role="alert"
+            >
+              {error}
             </div>
+          ) : !data && loading ? (
+            <div className="h-24 w-full max-w-2xl rounded-lg bg-muted animate-pulse" />
+          ) : data ? (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <KpiCard
+                  label="Impressions"
+                  value={data.kpis.impressions}
+                  change={data.kpis.impressionsChange}
+                />
+                <KpiCard
+                  label="Unique Users"
+                  value={data.kpis.uniqueUsers}
+                  change={data.kpis.usersChange}
+                />
+                <LinkedContentCard linkedContent={meta.linkedContent} isAdmin={isAdmin} campaignType={campaign.campaignType} />
+              </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <section className="lg:col-span-2 space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="text-sm font-medium text-muted-foreground">Activity</h2>
-                  <ActivitySection
-                    chartData={data.chartData}
-                    range={range}
-                    onRangeChange={setRange}
-                    loading={loading}
-                    showRangeOnly
-                  />
-                </div>
-                <div className="rounded-md border overflow-hidden bg-card/40">
-                  <div className="p-3 sm:p-4">
-                    <ActivitySection
-                      chartData={data.chartData}
-                      range={range}
-                      onRangeChange={setRange}
-                      loading={loading}
-                      showChartOnly
-                    />
+              <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+                <section className="flex min-h-0 min-w-0 flex-col lg:col-span-2">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card/40 overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+                      <ActivitySection
+                        chartData={data.chartData}
+                        range={range}
+                        onRangeChange={setRange}
+                        loading={loading}
+                        showTitle
+                      />
+                    </div>
                   </div>
-                </div>
-              </section>
-              <section className="space-y-2">
-                <h2 className="text-sm font-medium text-muted-foreground">Top domains</h2>
-                <div className="rounded-md border overflow-hidden bg-card/40">
-                  <div className="flex min-h-[220px] items-stretch justify-center p-3 sm:p-4">
-                    <TopDomainsChart data={data.topDomains} />
+                </section>
+                <section className="flex min-h-0 min-w-0 flex-col">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card/40 overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+                      <section className="flex min-h-0 flex-1 flex-col gap-3">
+                        <div className="shrink-0 space-y-1.5">
+                          <h2 className="text-sm font-medium text-muted-foreground">
+                            Top domains
+                          </h2>
+                          <p className="text-sm leading-relaxed text-muted-foreground">
+                            Share of impressions by site for the selected period (same range as
+                            Activity above).
+                          </p>
+                        </div>
+                        <div className="flex min-h-0 flex-1 flex-col">
+                          <TopDomainsChart data={data.topDomains} />
+                        </div>
+                      </section>
+                    </div>
                   </div>
-                </div>
+                </section>
+              </div>
+
+              <section className="space-y-3">
+                <h2 className="text-sm font-medium text-muted-foreground">By country</h2>
+                <CountryTable data={data.countryDistribution} embedded />
               </section>
-            </div>
+            </>
+          ) : null}
+        </TabsContent>
 
-            <section className="space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">By country</h2>
-              <CountryTable data={data.countryDistribution} />
-            </section>
-          </TabsContent>
-
-          <TabsContent value="logs" className="mt-0">
-            <CampaignLogsTable campaignId={campaign.id} />
-          </TabsContent>
-        </Tabs>
-      ) : null}
+        <TabsContent value="logs" className="mt-0">
+          <CampaignLogsTable campaignId={campaign.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

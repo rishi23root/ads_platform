@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { enduserEvents } from '@/db/schema';
-import { and, gte, lte, isNotNull, sql } from 'drizzle-orm';
+import { campaigns, enduserEvents } from '@/db/schema';
+import { and, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
-import { endEventsAccessWhere } from '@/lib/events-dashboard';
+import {
+  DASHBOARD_SERVED_EVENT_TYPES,
+  endEventsOwnedCampaignJoin,
+} from '@/lib/events-dashboard';
 import { getStartDate, fillMissingDays } from '@/lib/date-range';
 
 export const dynamic = 'force-dynamic';
@@ -39,29 +42,27 @@ export async function GET(request: NextRequest) {
 
     const utcDay = sql`( ${enduserEvents.createdAt} AT TIME ZONE 'UTC' )::date`;
 
-    const accessWhere = endEventsAccessWhere(sessionWithRole.role, sessionWithRole.user.id);
-    const scopeWhere = accessWhere
-      ? and(
-          isNotNull(enduserEvents.campaignId),
-          gte(enduserEvents.createdAt, start),
-          lte(enduserEvents.createdAt, end),
-          accessWhere
-        )
-      : and(
-          isNotNull(enduserEvents.campaignId),
-          gte(enduserEvents.createdAt, start),
-          lte(enduserEvents.createdAt, end)
-        );
+    const scopeWhere = and(
+      isNotNull(enduserEvents.campaignId),
+      inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES),
+      gte(enduserEvents.createdAt, start),
+      lte(enduserEvents.createdAt, end)
+    );
 
-    const rows = await db
+    const base = db
       .select({
         dateStr: sql<string>`${utcDay}::text`,
         ad: sql<number>`coalesce(sum(case when ${enduserEvents.type} in ('ad', 'popup') then 1 else 0 end), 0)::int`,
-        notification: sql<number>`coalesce(sum(case when ${enduserEvents.type} in ('ad', 'popup') then 0 else 1 end), 0)::int`,
+        notification: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'notification' then 1 else 0 end), 0)::int`,
       })
-      .from(enduserEvents)
-      .where(scopeWhere)
-      .groupBy(utcDay);
+      .from(enduserEvents);
+
+    const scoped =
+      sessionWithRole.role === 'admin'
+        ? base
+        : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(sessionWithRole.user.id));
+
+    const rows = await scoped.where(scopeWhere).groupBy(utcDay);
 
     const dataByDate = new Map<string, { ad: number; notification: number }>();
     for (const row of rows) {

@@ -22,6 +22,10 @@ interface AdEditDrawerProps {
   adId?: string;
   /** When 'edit', opens directly in edit mode (e.g. from campaign's edit button). Default: 'view' */
   initialMode?: 'view' | 'edit';
+  /** When false, view mode has no Edit control. Use only when `session.role === 'admin'`. Default true */
+  showEditAction?: boolean;
+  /** Hide Linked campaigns (e.g. opened from a campaign page where context is obvious). Default false */
+  hideLinkedCampaigns?: boolean;
 }
 
 const detailRow =
@@ -36,10 +40,14 @@ function AdEditDrawerContent({
   ad,
   adId,
   initialMode,
+  showEditAction = true,
+  hideLinkedCampaigns = false,
 }: {
   ad?: Ad | null;
   adId?: string;
   initialMode: 'view' | 'edit';
+  showEditAction?: boolean;
+  hideLinkedCampaigns?: boolean;
 }) {
   const router = useRouter();
   const [fetchedAd, setFetchedAd] = useState<Ad | null>(null);
@@ -111,7 +119,7 @@ function AdEditDrawerContent({
     mode === 'view' ? 'Creative details and campaigns using this ad' : 'Update creative and links';
 
   const headerActions =
-    mode === 'view' && resolvedAd ? (
+    mode === 'view' && resolvedAd && showEditAction ? (
       <Button type="button" size="sm" variant="outline" onClick={() => setMode('edit')}>
         <IconPencil className="mr-2 h-4 w-4" />
         Edit
@@ -235,17 +243,19 @@ function AdEditDrawerContent({
                   ) : null}
                 </div>
               </section>
-              <section className="min-w-0 space-y-3" aria-labelledby="ad-campaigns-heading">
-                <h3
-                  id="ad-campaigns-heading"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Linked campaigns
-                </h3>
-                <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
-                  <LinkedCampaigns type="ad" entityId={resolvedAd.id} embedded />
-                </div>
-              </section>
+              {!hideLinkedCampaigns ? (
+                <section className="min-w-0 space-y-3" aria-labelledby="ad-campaigns-heading">
+                  <h3
+                    id="ad-campaigns-heading"
+                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Linked campaigns
+                  </h3>
+                  <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
+                    <LinkedCampaigns type="ad" entityId={resolvedAd.id} embedded />
+                  </div>
+                </section>
+              ) : null}
             </div>
           ) : (
             <AdForm ad={resolvedAd} mode="edit" onSuccess={handleSuccess} onCancel={handleCancel} />
@@ -256,7 +266,15 @@ function AdEditDrawerContent({
   );
 }
 
-export function AdEditDrawer({ open, onOpenChange, ad, adId, initialMode = 'view' }: AdEditDrawerProps) {
+export function AdEditDrawer({
+  open,
+  onOpenChange,
+  ad,
+  adId,
+  initialMode = 'view',
+  showEditAction = true,
+  hideLinkedCampaigns = false,
+}: AdEditDrawerProps) {
   return (
     <CrudResourceDrawerRoot open={open} onOpenChange={onOpenChange} direction="right">
       {open ? (
@@ -265,6 +283,8 @@ export function AdEditDrawer({ open, onOpenChange, ad, adId, initialMode = 'view
           ad={ad}
           adId={adId}
           initialMode={initialMode}
+          showEditAction={showEditAction}
+          hideLinkedCampaigns={hideLinkedCampaigns}
         />
       ) : null}
     </CrudResourceDrawerRoot>

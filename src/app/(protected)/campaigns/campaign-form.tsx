@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { IconLoader2, IconX, IconInfoCircle, IconPlus } from '@tabler/icons-react';
+import { IconLoader2, IconX, IconInfoCircle, IconPlus, IconAd2, IconBell, IconRoute } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { COUNTRIES } from '@/lib/countries';
 import { PlatformAddDrawer } from '@/components/platform-add-drawer';
@@ -24,6 +24,11 @@ import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { TimeSelect } from '@/components/ui/time-select';
 import { isoOrDateToLocalDatetimeValue } from '@/lib/datetime-local-format';
 import type { CampaignFormInitial, CampaignFormOptionLists } from './campaign-form-types';
+import {
+  campaignAudienceLabel,
+  campaignFrequencyFromFormState,
+  campaignStatusBadgeVariant,
+} from '@/lib/campaign-display';
 
 type CampaignType = 'ads' | 'popup' | 'notification' | 'redirect';
 type FrequencyType = 'full_day' | 'time_based' | 'only_once' | 'always' | 'specific_count';
@@ -179,10 +184,43 @@ export function CampaignForm({
     router.refresh();
   };
 
+  const selectedAd = useMemo(
+    () => adsList.find((a) => a.id === adId) ?? null,
+    [adsList, adId]
+  );
+  const selectedNotification = useMemo(
+    () => notificationsList.find((n) => n.id === notificationId) ?? null,
+    [notificationsList, notificationId]
+  );
+  const selectedRedirect = useMemo(
+    () => redirectsList.find((r) => r.id === redirectId) ?? null,
+    [redirectsList, redirectId]
+  );
+
+  const summaryFrequency = useMemo(
+    () =>
+      campaignFrequencyFromFormState(frequencyType, frequencyCount, timeStart, timeEnd),
+    [frequencyType, frequencyCount, timeStart, timeEnd]
+  );
+
+  const scheduleSummary = useMemo(() => {
+    if (!startDate?.trim() && !endDate?.trim()) return 'No fixed window';
+    const fmt = (v: string) => {
+      if (!v.trim()) return '—';
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      }
+      return v;
+    };
+    return `${fmt(startDate)} → ${fmt(endDate)}`;
+  }, [startDate, endDate]);
+
   return (
     <>
-      <Card>
-        <CardContent>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <Card>
+          <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <FormSection id="campaign-form-basic-heading" title="Basic info">
               <div className="space-y-4">
@@ -481,7 +519,177 @@ export function CampaignForm({
             </div>
           </form>
         </CardContent>
-      </Card>
+        </Card>
+
+        <aside
+          className="flex flex-col gap-4 lg:sticky lg:top-6"
+          aria-label="Campaign preview and summary"
+        >
+          <Card className="border bg-card/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Content preview
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              {(campaignType === 'ads' || campaignType === 'popup') && (
+                <>
+                  {!selectedAd ? (
+                    <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-6 text-center leading-relaxed">
+                      Select an ad or pop up to see a preview.
+                    </p>
+                  ) : (
+                    <div className="space-y-3 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default" className="gap-1 text-xs">
+                          <IconAd2 className="h-3 w-3" aria-hidden />
+                          {campaignType === 'popup' ? 'Pop up' : 'Ad'}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-3 min-w-0">
+                        {selectedAd.imageUrl && (
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border bg-muted">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={selectedAd.imageUrl}
+                              alt=""
+                              className="size-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-sm font-medium leading-snug break-words">
+                            {selectedAd.name}
+                          </p>
+                          {selectedAd.description && (
+                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">
+                              {selectedAd.description}
+                            </p>
+                          )}
+                          {selectedAd.targetUrl && (
+                            <a
+                              href={selectedAd.targetUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={selectedAd.targetUrl}
+                              className="block max-w-full truncate text-xs text-primary underline-offset-4 hover:underline"
+                            >
+                              {selectedAd.targetUrl}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {campaignType === 'notification' &&
+                (!selectedNotification ? (
+                  <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-6 text-center leading-relaxed">
+                    Select a notification to see a preview.
+                  </p>
+                ) : (
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="gap-1 text-xs">
+                        <IconBell className="h-3 w-3" aria-hidden />
+                        Notification
+                      </Badge>
+                    </div>
+                    <p className="text-sm font-medium leading-snug break-words">
+                      {selectedNotification.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                      {selectedNotification.message}
+                    </p>
+                    {selectedNotification.ctaLink && (
+                      <a
+                        href={selectedNotification.ctaLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={selectedNotification.ctaLink}
+                        className="block max-w-full truncate text-xs text-primary underline-offset-4 hover:underline"
+                      >
+                        {selectedNotification.ctaLink}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              {campaignType === 'redirect' &&
+                (!selectedRedirect ? (
+                  <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-6 text-center leading-relaxed">
+                    Select a redirect to see a preview.
+                  </p>
+                ) : (
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="gap-1 text-xs">
+                        <IconRoute className="h-3 w-3" aria-hidden />
+                        Redirect
+                      </Badge>
+                    </div>
+                    <p className="text-sm font-medium break-words">{selectedRedirect.name}</p>
+                    <p
+                      className="max-w-full truncate font-mono text-xs text-muted-foreground"
+                      title={selectedRedirect.sourceDomain}
+                    >
+                      {selectedRedirect.sourceDomain}
+                    </p>
+                    <p className="text-xs text-muted-foreground">→</p>
+                    <p
+                      className="max-w-full truncate text-xs text-foreground"
+                      title={selectedRedirect.destinationUrl}
+                    >
+                      {selectedRedirect.destinationUrl}
+                    </p>
+                  </div>
+                ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border bg-card/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Status
+                </span>
+                <Badge variant={campaignStatusBadgeVariant(status)} className="capitalize">
+                  {status}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Audience
+                </p>
+                <p className="leading-relaxed">{campaignAudienceLabel(targetAudience)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Frequency
+                </p>
+                <p className="leading-relaxed">{summaryFrequency}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Schedule
+                </p>
+                <p className="leading-relaxed break-words">{scheduleSummary}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Type
+                </p>
+                <Badge variant="outline" className="capitalize">
+                  {campaignType}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
       <PlatformAddDrawer
         open={addPlatformDrawerOpen}
         onOpenChange={setAddPlatformDrawerOpen}

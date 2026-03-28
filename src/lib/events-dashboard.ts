@@ -13,6 +13,7 @@ export type EventsDashboardFilters = {
   domain?: string;
   country?: string;
   endUserId?: string;
+  email?: string;
   campaignId?: string;
 };
 
@@ -24,6 +25,9 @@ const EVENT_TYPES = new Set<string>([
   'redirect',
   'visit',
 ]);
+
+/** Types counted on the main dashboard chart and “served” KPI (campaign-linked only). */
+export const DASHBOARD_SERVED_EVENT_TYPES = ['ad', 'popup', 'notification'] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -43,21 +47,19 @@ export function parseEventsDashboardFilters(
     domain: getQueryParam(sp, 'domain'),
     country: country && country.length === 2 ? country : undefined,
     endUserId: getQueryParam(sp, 'endUserId'),
+    email: getQueryParam(sp, 'email'),
     campaignId: getQueryParam(sp, 'campaignId'),
   };
 }
 
-/** Non-admins only see events tied to campaigns they created. */
-export function endEventsAccessWhere(role: 'user' | 'admin', userId: string): SQL | undefined {
-  if (role === 'admin') return undefined;
-  return and(
-    isNotNull(enduserEvents.campaignId),
-    sql`exists (
-      select 1 from ${campaigns} c
-      where c.id = ${enduserEvents.campaignId}
-      and c.created_by = ${userId}
-    )`
-  );
+/** INNER JOIN condition: events whose campaign is owned by this dashboard user. */
+export function endEventsOwnedCampaignJoin(userId: string) {
+  return and(eq(campaigns.id, enduserEvents.campaignId), eq(campaigns.createdBy, userId));
+}
+
+/** Non-admins must join campaigns this way instead of filtering with EXISTS. */
+export function endEventsRequiresCampaignOwnerJoin(role: 'user' | 'admin'): boolean {
+  return role !== 'admin';
 }
 
 function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
@@ -86,6 +88,10 @@ function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
     const esc = escapeIlikePattern(filters.endUserId.trim());
     conditions.push(ilike(enduserEvents.endUserId, `%${esc}%`));
   }
+  if (filters.email?.trim()) {
+    const esc = escapeIlikePattern(filters.email.trim());
+    conditions.push(ilike(enduserEvents.email, `%${esc}%`));
+  }
   const cid = filters.campaignId?.trim();
   if (cid && UUID_RE.test(cid)) {
     conditions.push(eq(enduserEvents.campaignId, cid));
@@ -93,17 +99,9 @@ function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
   return conditions;
 }
 
-function combineWhere(access: SQL | undefined, filters: SQL[]): SQL | undefined {
-  const filterSql = filters.length ? and(...filters) : undefined;
-  if (access && filterSql) return and(access, filterSql);
-  return access ?? filterSql;
-}
-
-export function eventsFiltersWhere(
-  access: SQL | undefined,
-  filters: EventsDashboardFilters
-): SQL | undefined {
-  return combineWhere(access, buildFilterConditions(filters));
+function filterWhereClause(filters: EventsDashboardFilters): SQL | undefined {
+  const filtersList = buildFilterConditions(filters);
+  return filtersList.length ? and(...filtersList) : undefined;
 }
 
 export type EventStatsRow = {
@@ -118,11 +116,12 @@ export type EventStatsRow = {
 };
 
 export async function aggregateEventStats(
-  accessWhere: SQL | undefined,
+  role: 'user' | 'admin',
+  userId: string,
   filters: EventsDashboardFilters
 ): Promise<EventStatsRow | undefined> {
-  const where = eventsFiltersWhere(accessWhere, filters);
-  const q = db
+  const fw = filterWhereClause(filters);
+  const base = db
     .select({
       total: sql<number>`count(*)::int`,
       uniqueUsers: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
@@ -134,23 +133,30 @@ export async function aggregateEventStats(
       request: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'request' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
-  const rows = where ? await q.where(where) : await q;
+
+  const scoped =
+    role === 'admin' ? base : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(userId));
+  const rows = fw ? await scoped.where(fw) : await scoped;
   return rows[0] as EventStatsRow | undefined;
 }
 
 export async function countEvents(
-  accessWhere: SQL | undefined,
+  role: 'user' | 'admin',
+  userId: string,
   filters: EventsDashboardFilters
 ): Promise<number> {
-  const where = eventsFiltersWhere(accessWhere, filters);
-  const q = db.select({ count: sql<number>`count(*)::int` }).from(enduserEvents);
-  const rows = where ? await q.where(where) : await q;
+  const fw = filterWhereClause(filters);
+  const base = db.select({ count: sql<number>`count(*)::int` }).from(enduserEvents);
+  const scoped =
+    role === 'admin' ? base : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(userId));
+  const rows = fw ? await scoped.where(fw) : await scoped;
   return Number(rows[0]?.count ?? 0);
 }
 
 export type EventLogRow = {
   id: string;
   endUserId: string;
+  email: string | null;
   campaignId: string | null;
   domain: string | null;
   type: string;
@@ -161,15 +167,17 @@ export type EventLogRow = {
 };
 
 export async function listEventsPage(
-  accessWhere: SQL | undefined,
+  role: 'user' | 'admin',
+  userId: string,
   filters: EventsDashboardFilters,
   opts: { limit: number; offset: number }
 ): Promise<EventLogRow[]> {
-  const where = eventsFiltersWhere(accessWhere, filters);
+  const fw = filterWhereClause(filters);
   const base = db
     .select({
       id: enduserEvents.id,
       endUserId: enduserEvents.endUserId,
+      email: enduserEvents.email,
       campaignId: enduserEvents.campaignId,
       domain: enduserEvents.domain,
       type: enduserEvents.type,
@@ -179,7 +187,9 @@ export async function listEventsPage(
       createdAt: enduserEvents.createdAt,
     })
     .from(enduserEvents);
-  const filtered = where ? base.where(where) : base;
+  const scoped =
+    role === 'admin' ? base : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(userId));
+  const filtered = fw ? scoped.where(fw) : scoped;
   return (await filtered
     .orderBy(desc(enduserEvents.createdAt))
     .limit(opts.limit)
@@ -187,14 +197,16 @@ export async function listEventsPage(
 }
 
 export async function listEventsForExport(
-  accessWhere: SQL | undefined,
+  role: 'user' | 'admin',
+  userId: string,
   filters: EventsDashboardFilters
 ): Promise<EventLogRow[]> {
-  const where = eventsFiltersWhere(accessWhere, filters);
+  const fw = filterWhereClause(filters);
   const base = db
     .select({
       id: enduserEvents.id,
       endUserId: enduserEvents.endUserId,
+      email: enduserEvents.email,
       campaignId: enduserEvents.campaignId,
       domain: enduserEvents.domain,
       type: enduserEvents.type,
@@ -204,7 +216,9 @@ export async function listEventsForExport(
       createdAt: enduserEvents.createdAt,
     })
     .from(enduserEvents);
-  const filtered = where ? base.where(where) : base;
+  const scoped =
+    role === 'admin' ? base : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(userId));
+  const filtered = fw ? scoped.where(fw) : scoped;
   return (await filtered.orderBy(desc(enduserEvents.createdAt))) as EventLogRow[];
 }
 
@@ -217,6 +231,7 @@ export function eventsFilterParamsRecord(filters: EventsDashboardFilters): Recor
   if (filters.domain) o.domain = filters.domain;
   if (filters.country) o.country = filters.country;
   if (filters.endUserId) o.endUserId = filters.endUserId;
+  if (filters.email) o.email = filters.email;
   if (filters.campaignId) o.campaignId = filters.campaignId;
   return o;
 }
@@ -225,6 +240,7 @@ export function eventsToCsvLines(rows: EventLogRow[]): string[] {
   const header = [
     'id',
     'endUserId',
+    'email',
     'campaignId',
     'domain',
     'type',
@@ -239,6 +255,7 @@ export function eventsToCsvLines(rows: EventLogRow[]): string[] {
       [
         r.id,
         r.endUserId,
+        r.email ?? '',
         r.campaignId ?? '',
         r.domain ?? '',
         r.type,

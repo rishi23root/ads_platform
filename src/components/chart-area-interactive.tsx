@@ -39,11 +39,11 @@ interface ChartDataPoint {
 
 const chartConfig = {
   ad: {
-    label: "Ad requests",
+    label: "Ad",
     color: "var(--chart-1)",
   },
   notification: {
-    label: "Notification requests",
+    label: "Notification",
     color: "var(--chart-2)",
   },
 } satisfies ChartConfig
@@ -109,7 +109,6 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
   }, [timeRange])
 
   const descriptionText = rangeLabels[timeRange] ?? "Last 3 months"
-  const isAllZero = !loading && !error && chartData.length > 0 && isAllZeroChartData(chartData)
 
   return (
     <Card className={cn("@container/card relative z-0 py-4 overflow-hidden", className)}>
@@ -167,19 +166,23 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
       </CardHeader>
       <CardContent className="pt-0 px-2 sm:px-6">
         {loading ? (
-          <Skeleton className="h-[220px] w-full rounded-lg" />
+          <Skeleton className="h-[264px] w-full rounded-lg" />
         ) : error ? (
-          <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
             {error}
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+            No event data for this period
+          </div>
+        ) : isAllZeroChartData(chartData) ? (
+          <div className="flex h-[264px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
             No event data for this period
           </div>
         ) : (
           <ChartContainer
             config={chartConfig}
-            className="aspect-auto h-[220px] w-full"
+            className="aspect-auto h-[264px] w-full"
           >
             <AreaChart data={chartData}>
               <defs>
@@ -223,38 +226,34 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
                   })
                 }}
               />
-              {!isAllZero && (
-                <>
-                  <ChartTooltip
-                    cursor={false}
-                    content={
-                      <ChartTooltipContent
-                        labelFormatter={(value) => {
-                          return new Date(value).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })
-                        }}
-                        indicator="dot"
-                      />
-                    }
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => {
+                      return new Date(value).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    }}
+                    indicator="dot"
                   />
-                  <Area
-                    dataKey="notification"
-                    type="natural"
-                    fill="url(#fillNotification)"
-                    stroke="var(--color-notification)"
-                    stackId="a"
-                  />
-                  <Area
-                    dataKey="ad"
-                    type="natural"
-                    fill="url(#fillAd)"
-                    stroke="var(--color-ad)"
-                    stackId="a"
-                  />
-                </>
-              )}
+                }
+              />
+              <Area
+                dataKey="notification"
+                type="natural"
+                fill="url(#fillNotification)"
+                stroke="var(--color-notification)"
+                stackId="a"
+              />
+              <Area
+                dataKey="ad"
+                type="natural"
+                fill="url(#fillAd)"
+                stroke="var(--color-ad)"
+                stackId="a"
+              />
             </AreaChart>
           </ChartContainer>
         )}

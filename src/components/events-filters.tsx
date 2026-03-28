@@ -14,8 +14,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { IconFilter } from '@tabler/icons-react';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const ALL_TYPES = '__all_types__';
+
+/** Map URL / ISO values to `YYYY-MM-DD` for calendar date filters. */
+function toDateInputValue(value?: string): string {
+  if (!value?.trim()) return '';
+  const s = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const prefix = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefix) return prefix[1];
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export type EventsFiltersProps = {
   type?: string;
@@ -24,6 +40,7 @@ export type EventsFiltersProps = {
   domain?: string;
   country?: string;
   endUserId?: string;
+  email?: string;
   campaignId?: string;
 };
 
@@ -34,6 +51,7 @@ export function EventsFilters({
   domain,
   country,
   endUserId,
+  email,
   campaignId,
 }: EventsFiltersProps) {
   const router = useRouter();
@@ -44,6 +62,7 @@ export function EventsFilters({
   const [domainValue, setDomainValue] = useState(domain ?? '');
   const [countryValue, setCountryValue] = useState(country ?? '');
   const [endUserIdValue, setEndUserIdValue] = useState(endUserId ?? '');
+  const [emailValue, setEmailValue] = useState(email ?? '');
   const [campaignIdValue, setCampaignIdValue] = useState(campaignId ?? '');
 
   useEffect(() => {
@@ -52,14 +71,15 @@ export function EventsFilters({
 
   useEffect(() => {
     queueMicrotask(() => {
-      setFromValue(from ?? '');
-      setToValue(to ?? '');
+      setFromValue(toDateInputValue(from));
+      setToValue(toDateInputValue(to));
       setDomainValue(domain ?? '');
       setCountryValue(country ?? '');
       setEndUserIdValue(endUserId ?? '');
+      setEmailValue(email ?? '');
       setCampaignIdValue(campaignId ?? '');
     });
-  }, [from, to, domain, country, endUserId, campaignId]);
+  }, [from, to, domain, country, endUserId, email, campaignId]);
 
   const updateFilters = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -92,6 +112,7 @@ export function EventsFilters({
       domain: domainValue.trim() || undefined,
       country: countryValue.trim().toUpperCase().slice(0, 2) || undefined,
       endUserId: endUserIdValue.trim() || undefined,
+      email: emailValue.trim() || undefined,
       campaignId: campaignIdValue.trim() || undefined,
     });
   };
@@ -103,6 +124,7 @@ export function EventsFilters({
     setDomainValue('');
     setCountryValue('');
     setEndUserIdValue('');
+    setEmailValue('');
     setCampaignIdValue('');
     router.push('/events');
   };
@@ -115,8 +137,8 @@ export function EventsFilters({
           Filters
         </CardTitle>
         <CardDescription>
-          Narrow the event log and exported CSV. Stats (when loaded) use the same filters. Clearing
-          filters resets the URL.
+          Narrow the event log and exported CSV; Summary uses the same filters when you open it.
+          Clearing filters resets the URL.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -140,29 +162,25 @@ export function EventsFilters({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="events-from">Created from (ISO or datetime-local)</Label>
-              <Input
+              <Label htmlFor="events-from">Created from</Label>
+              <DatePicker
                 id="events-from"
-                name="from"
-                type="text"
-                placeholder="e.g. 2025-01-01 or 2025-01-01T00:00"
                 value={fromValue}
-                onChange={(e) => setFromValue(e.target.value)}
-                className="w-full text-sm"
-                autoComplete="off"
+                onChange={setFromValue}
+                allowClear
+                placeholder="Pick date"
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="events-to">Created to</Label>
-              <Input
+              <DatePicker
                 id="events-to"
-                name="to"
-                type="text"
-                placeholder="e.g. 2025-12-31"
                 value={toValue}
-                onChange={(e) => setToValue(e.target.value)}
-                className="w-full text-sm"
-                autoComplete="off"
+                onChange={setToValue}
+                allowClear
+                placeholder="Pick date"
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -202,6 +220,19 @@ export function EventsFilters({
                 value={endUserIdValue}
                 onChange={(e) => setEndUserIdValue(e.target.value)}
                 className="w-full text-sm font-mono"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="events-email">Email contains</Label>
+              <Input
+                id="events-email"
+                name="email"
+                type="text"
+                placeholder="user@example.com"
+                value={emailValue}
+                onChange={(e) => setEmailValue(e.target.value)}
+                className="w-full text-sm"
                 autoComplete="off"
               />
             </div>

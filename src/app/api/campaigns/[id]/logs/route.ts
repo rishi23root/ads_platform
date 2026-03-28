@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { enduserEvents } from '@/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { getAccessibleCampaignById } from '@/lib/campaign-access';
 import { getSessionWithRole } from '@/lib/dal';
 
@@ -9,6 +9,15 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+
+const EVENT_TYPES = [
+  'ad',
+  'notification',
+  'popup',
+  'request',
+  'redirect',
+  'visit',
+] as const;
 
 export async function GET(
   request: NextRequest,
@@ -34,27 +43,36 @@ export async function GET(
     );
     const offset = (page - 1) * pageSize;
 
-    const where = eq(enduserEvents.campaignId, id);
+    const typeParam = searchParams.get('type');
+    const typeOk =
+      typeParam && (EVENT_TYPES as readonly string[]).includes(typeParam) ? typeParam : null;
 
-    const [logs, countResult] = await Promise.all([
-      db
-        .select({
-          id: enduserEvents.id,
-          endUserId: enduserEvents.endUserId,
-          domain: enduserEvents.domain,
-          type: enduserEvents.type,
-          statusCode: enduserEvents.statusCode,
-          createdAt: enduserEvents.createdAt,
-        })
-        .from(enduserEvents)
-        .where(where)
-        .orderBy(desc(enduserEvents.createdAt))
-        .limit(pageSize)
-        .offset(offset),
-      db.select({ count: sql<number>`count(*)` }).from(enduserEvents).where(where),
-    ]);
+    const whereClause = typeOk
+      ? and(eq(enduserEvents.campaignId, id), eq(enduserEvents.type, typeOk as (typeof EVENT_TYPES)[number]))
+      : eq(enduserEvents.campaignId, id);
 
-    const totalCount = Number(countResult[0]?.count ?? 0);
+    const rows = await db
+      .select({
+        id: enduserEvents.id,
+        endUserId: enduserEvents.endUserId,
+        domain: enduserEvents.domain,
+        type: enduserEvents.type,
+        statusCode: enduserEvents.statusCode,
+        createdAt: enduserEvents.createdAt,
+        country: enduserEvents.country,
+        email: enduserEvents.email,
+        plan: enduserEvents.plan,
+        userAgent: enduserEvents.userAgent,
+        totalCount: sql<number>`count(*) over ()::int`,
+      })
+      .from(enduserEvents)
+      .where(whereClause)
+      .orderBy(desc(enduserEvents.createdAt))
+      .limit(pageSize)
+      .offset(offset);
+
+    const totalCount = rows.length > 0 ? Number(rows[0].totalCount) : 0;
+    const logs = rows.map(({ totalCount: _totalCount, ...log }) => log);
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return NextResponse.json({
