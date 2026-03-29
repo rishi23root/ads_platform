@@ -3,8 +3,16 @@
 # Simulate extension ad-block calls using a real extension user session.
 # Requires: EXTENSION_EMAIL, EXTENSION_PASSWORD (same account you'd use in the extension).
 # Uses public GET /api/extension/domains for a hostname (not admin /api/platforms).
+#
+# Target host: BASE_URL if set, else BETTER_AUTH_BASE_URL or BETTER_AUTH_URL (same as app auth).
 
-BASE_URL="${BASE_URL:-http://localhost:3000}"
+if [ -z "${BASE_URL:-}" ]; then
+  BASE_URL="${BETTER_AUTH_BASE_URL:-${BETTER_AUTH_URL:-}}"
+fi
+if [ -z "$BASE_URL" ]; then
+  echo "Error: Set BASE_URL or BETTER_AUTH_BASE_URL or BETTER_AUTH_URL (e.g. export from .env.local)"
+  exit 1
+fi
 
 echo "=========================================="
 echo "Extension Ad Block Test Script"

@@ -6,11 +6,38 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { EndUserRowActions } from '@/components/end-user-row-actions';
 import { HumanReadableDate } from '@/components/human-readable-date';
 import { UserIdentityCell } from '@/components/user-identity-cell';
 import type { EndUserListRow } from '@/lib/end-users-dashboard';
-import { computeExtensionDaysLeft, formatExtensionDaysLeftCell } from '@/lib/extension-user-subscription';
+import type { ExtensionPlanValue } from '@/lib/extension-user-subscription';
+import {
+  computeExtensionDaysLeft,
+  computeTrialEndDateFromStart,
+  formatExtensionDaysLeftCell,
+} from '@/lib/extension-user-subscription';
+import { cn } from '@/lib/utils';
+
+function rowPlan(plan: string): ExtensionPlanValue {
+  return plan === 'paid' ? 'paid' : 'trial';
+}
+
+/** One rhythm for every header and cell — browsers size columns from content. */
+const cell = 'px-2 py-2 align-middle';
+
+/**
+ * On `w-full` auto tables, very short values (—, 0) otherwise pull apart neighbors.
+ * `w-[1%]` is a well-supported “stay content-sized” hint, not a fixed pixel gutter.
+ */
+const tightCol = 'w-[1%] whitespace-nowrap';
+
+function daysLeftLabel(formatted: string): string {
+  if (formatted === '—') return '—';
+  const n = parseInt(formatted, 10);
+  if (!Number.isFinite(n)) return formatted;
+  return `${n}\u00a0${n === 1 ? 'day' : 'days'}`;
+}
 
 interface UsersTableProps {
   rows: EndUserListRow[];
@@ -21,19 +48,21 @@ export function UsersTable({ rows }: UsersTableProps) {
 
   return (
     <div className="w-full overflow-x-auto">
-      <Table>
+      <Table className="w-full">
         <TableHeader>
           <TableRow>
-            <TableHead className="min-w-[180px]">User</TableHead>
-            <TableHead className="min-w-[72px]">Plan</TableHead>
-            <TableHead className="min-w-[72px]">Banned</TableHead>
-            <TableHead className="w-[88px]">Country</TableHead>
-            <TableHead className="text-right w-[96px] tabular-nums pr-8">Impressions</TableHead>
-            <TableHead className="min-w-[140px]">Start date</TableHead>
-            <TableHead className="min-w-[140px]">End date</TableHead>
-            <TableHead className="min-w-[140px]">Last session</TableHead>
-            <TableHead className="text-center w-[96px]">Days left</TableHead>
-            <TableHead className="min-w-[100px] text-right">Actions</TableHead>
+            <TableHead className={cn(cell, 'text-left font-medium')}>User</TableHead>
+            <TableHead className={cn(cell, 'font-medium')}>Plan</TableHead>
+            <TableHead className={cn(cell, 'font-medium')}>Banned</TableHead>
+            <TableHead className={cn(cell, tightCol, 'font-medium')}>Country</TableHead>
+            <TableHead className={cn(cell, tightCol, 'text-right font-medium tabular-nums')}>
+              Impressions
+            </TableHead>
+            <TableHead className={cn(cell, 'text-left font-medium')}>Start date</TableHead>
+            <TableHead className={cn(cell, 'text-left font-medium')}>End date</TableHead>
+            <TableHead className={cn(cell, 'text-left font-medium')}>Last session</TableHead>
+            <TableHead className={cn(cell, 'text-right font-medium tabular-nums')}>Days left</TableHead>
+            <TableHead className={cn(cell, 'text-right font-medium')}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -45,12 +74,22 @@ export function UsersTable({ rows }: UsersTableProps) {
             </TableRow>
           ) : (
             rows.map((v) => {
+              const plan = rowPlan(v.plan);
+              const inferredEnd =
+                v.endDate == null && plan === 'trial'
+                  ? computeTrialEndDateFromStart(v.startDate)
+                  : null;
+              const effectiveEndDate = v.endDate ?? inferredEnd;
               const daysLeft = formatExtensionDaysLeftCell(
-                computeExtensionDaysLeft({ endDate: v.endDate })
+                computeExtensionDaysLeft({
+                  endDate: v.endDate,
+                  plan,
+                  startDate: v.startDate,
+                })
               );
               return (
-                <TableRow key={v.id}>
-                  <TableCell>
+                <TableRow key={v.id} className={cn(v.banned && 'bg-destructive/5')}>
+                  <TableCell className={cn(cell, 'min-w-0')}>
                     <UserIdentityCell
                       endUserId={v.id}
                       identifier={v.identifier}
@@ -58,35 +97,47 @@ export function UsersTable({ rows }: UsersTableProps) {
                       displayName={v.name}
                     />
                   </TableCell>
-                  <TableCell className="capitalize text-sm">{v.plan}</TableCell>
-                  <TableCell className="text-sm tabular-nums">{v.banned ? 'Yes' : 'No'}</TableCell>
-                  <TableCell>
+                  <TableCell className={cn(cell, 'whitespace-nowrap capitalize text-sm')}>
+                    {v.plan}
+                  </TableCell>
+                  <TableCell className={cell}>
+                    <Badge variant={v.banned ? 'destructive' : 'secondary'} className="font-normal">
+                      {v.banned ? 'Yes' : 'No'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className={cn(cell, tightCol)}>
                     {v.country ? (
                       <span className="uppercase">{v.country}</span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm pr-8">{v.impressionCount}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className={cn(cell, tightCol, 'text-right tabular-nums text-sm')}>
+                    {v.impressionCount}
+                  </TableCell>
+                  <TableCell className={cn(cell, 'text-sm text-muted-foreground whitespace-normal')}>
                     <HumanReadableDate date={new Date(v.startDate)} />
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {v.endDate ? (
-                      <HumanReadableDate date={new Date(v.endDate)} />
+                  <TableCell className={cn(cell, 'text-sm text-muted-foreground whitespace-normal')}>
+                    {effectiveEndDate ? (
+                      <HumanReadableDate date={new Date(effectiveEndDate)} />
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span>—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className={cn(cell, 'text-sm text-muted-foreground whitespace-normal')}>
                     {v.lastSessionAt ? (
                       <HumanReadableDate date={new Date(v.lastSessionAt)} />
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span>—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-center tabular-nums text-sm">{daysLeft}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className={cn(cell, 'text-right tabular-nums text-sm text-muted-foreground')}
+                  >
+                    {daysLeftLabel(daysLeft)}
+                  </TableCell>
+                  <TableCell className={cn(cell, 'text-right whitespace-nowrap')}>
                     <EndUserRowActions userId={v.id} email={v.email} identifier={v.identifier} />
                   </TableCell>
                 </TableRow>

@@ -1,10 +1,11 @@
 /**
- * Hits a running Next app + database. Skip unless EXTENSION_INTEGRATION_BASE_URL is set
- * (e.g. http://localhost:3000) while `pnpm dev` is running.
+ * Hits a running Next app + database. Resolves the API host from env (see extension-test-base-url.ts).
+ * Ensure `BETTER_AUTH_BASE_URL` / `BETTER_AUTH_URL` in `.env.local` points at the stack under test.
  */
 import { describe, it, expect } from 'vitest';
+import { extensionIntegrationBaseUrl } from './extension-test-base-url';
 
-const BASE = process.env.EXTENSION_INTEGRATION_BASE_URL?.trim();
+const BASE = extensionIntegrationBaseUrl();
 
 const integration = BASE ? describe : describe.skip;
 

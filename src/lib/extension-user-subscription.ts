@@ -12,6 +12,14 @@ export function defaultTrialDays(): number {
   return parsePositiveInt(process.env.DEFAULT_TRIAL_DAYS, 7);
 }
 
+/**
+ * Calendar days for admin-created **paid** users when no explicit `end_date` is given
+ * (`DEFAULT_PAID_SUBSCRIPTION_DAYS`, default 365).
+ */
+export function defaultPaidSubscriptionDays(): number {
+  return parsePositiveInt(process.env.DEFAULT_PAID_SUBSCRIPTION_DAYS, 365);
+}
+
 function toValidDate(value: Date | string | number): Date | null {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   const d = new Date(value);
@@ -31,6 +39,22 @@ export function computeTrialEndDateFromStart(startDate: Date | string | number):
   if (start == null) return null;
   const end = new Date(start);
   end.setDate(end.getDate() + defaultTrialDays());
+  return end;
+}
+
+/** Access end for a new paid subscription from `startDate` (same calendar-day arithmetic as trial). */
+export function computePaidSubscriptionEndFromStart(startDate: Date | string | number): Date | null {
+  const start = toValidDate(startDate);
+  if (start == null) return null;
+  const end = new Date(start);
+  end.setDate(end.getDate() + defaultPaidSubscriptionDays());
+  return end;
+}
+
+/** Access end for a new paid subscription from now (e.g. admin create when DB `start_date` defaults to now). */
+export function computePaidSubscriptionEndFromNow(now: Date = new Date()): Date {
+  const end = new Date(now);
+  end.setDate(end.getDate() + defaultPaidSubscriptionDays());
   return end;
 }
 

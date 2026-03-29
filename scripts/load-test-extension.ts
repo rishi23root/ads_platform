@@ -1,4 +1,10 @@
 #!/usr/bin/env npx tsx
+import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+
 /**
  * Load test: extension ad-block requests with Bearer auth (multi-domain).
  *
@@ -6,10 +12,20 @@
  *   EXTENSION_EMAIL, EXTENSION_PASSWORD
  *
  * Usage:
- *   EXTENSION_EMAIL=a@b.com EXTENSION_PASSWORD=secret BASE_URL=https://... pnpm load-test:extension
+ *   EXTENSION_EMAIL=a@b.com EXTENSION_PASSWORD=secret pnpm load-test:extension
+ * Host: BASE_URL, or else BETTER_AUTH_BASE_URL / BETTER_AUTH_URL from .env.local (same as app auth).
  */
 
-const BASE_URL = process.env.BASE_URL || 'https://test.buildyourresume.in';
+function resolveBaseUrl(): string {
+  return (
+    process.env.BASE_URL?.trim() ||
+    process.env.BETTER_AUTH_BASE_URL?.trim() ||
+    process.env.BETTER_AUTH_URL?.trim() ||
+    ''
+  );
+}
+
+const BASE_URL = resolveBaseUrl();
 const REQUESTS_PER_DOMAIN = 10;
 const EXTENSION_EMAIL = process.env.EXTENSION_EMAIL?.trim();
 const EXTENSION_PASSWORD = process.env.EXTENSION_PASSWORD;
@@ -136,6 +152,13 @@ function logDomainResult(result: DomainResult) {
 }
 
 async function main() {
+  if (!BASE_URL) {
+    console.error(
+      'Set BASE_URL or BETTER_AUTH_BASE_URL or BETTER_AUTH_URL (e.g. in .env.local) to your dashboard origin.'
+    );
+    process.exit(1);
+  }
+
   console.log('Extension Load Test (Multi-Domain, Bearer auth)');
   console.log('==================================================');
   console.log(`Base URL: ${BASE_URL}`);

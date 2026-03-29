@@ -61,7 +61,10 @@ export function UserIdentityCell({
               {truncated}
             </Link>
           </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[320px] break-all space-y-1">
+          <TooltipContent
+            side="top"
+            className="max-w-[min(90vw,480px)] space-y-1 overflow-x-auto text-left [&_p]:whitespace-nowrap"
+          >
             <p className="font-mono text-xs">
               <span className="text-muted-foreground">UUID: </span>
               {endUserId}

@@ -4,7 +4,11 @@ import { database as db } from '@/db';
 import { endUsers, enduserEvents, enduserSessions } from '@/db/schema';
 import { and, desc, eq, gte, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
 import { getCountryName } from '@/lib/countries';
-import { computeExtensionDaysLeft, formatExtensionDaysLeftCell } from '@/lib/extension-user-subscription';
+import {
+  computeExtensionDaysLeft,
+  computeTrialEndDateFromStart,
+  formatExtensionDaysLeftCell,
+} from '@/lib/extension-user-subscription';
 import { getQueryParam } from '@/lib/url-search-params';
 import { escapeCsvCell, escapeIlikePattern } from '@/lib/utils';
 
@@ -344,7 +348,20 @@ export function endUsersToCsvLines(rows: EndUserListRow[]): string[] {
   ];
   const lines = [header.map(escapeCsvCell).join(',')];
   for (const row of rows) {
-    const daysLeft = formatExtensionDaysLeftCell(computeExtensionDaysLeft({ endDate: row.endDate }));
+    const plan = row.plan === 'paid' ? 'paid' : 'trial';
+    const daysLeft = formatExtensionDaysLeftCell(
+      computeExtensionDaysLeft({
+        endDate: row.endDate,
+        plan,
+        startDate: row.startDate,
+      })
+    );
+    const effectiveEnd =
+      row.endDate != null
+        ? new Date(row.endDate)
+        : plan === 'trial'
+          ? computeTrialEndDateFromStart(row.startDate)
+          : null;
     const cells: string[] = [
       row.id,
       row.identifier ?? '',
@@ -356,7 +373,7 @@ export function endUsersToCsvLines(rows: EndUserListRow[]): string[] {
       row.country ?? '',
       daysLeft === '—' ? '' : daysLeft,
       new Date(row.startDate).toISOString(),
-      row.endDate ? new Date(row.endDate).toISOString() : '',
+      effectiveEnd ? effectiveEnd.toISOString() : '',
       row.lastSessionAt ? new Date(row.lastSessionAt).toISOString() : '',
       new Date(row.createdAt).toISOString(),
     ];
