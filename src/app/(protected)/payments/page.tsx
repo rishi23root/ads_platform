@@ -181,7 +181,10 @@ export default async function PaymentsPage({
               />
             )}
             <ExportPaymentsCsvButton filterParams={filterParams} />
-            <RefreshDataButton ariaLabel="Refresh payments" />
+            <RefreshDataButton
+              ariaLabel="Refresh payments"
+              tooltip="Reload payments with current filters"
+            />
           </div>
         </div>
         <div className="rounded-md border min-w-0">

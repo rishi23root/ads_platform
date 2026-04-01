@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSessionWithRole } from '@/lib/dal';
 import { ensureRedirectsSchemaOnce } from '@/lib/db/run-migrate';
 import { AppSidebar } from '@/components/app-sidebar';
+import { DateDisplayPreferenceProvider } from '@/components/date-display-preference';
 import { SiteHeader } from '@/components/site-header';
 import { KBarProviderWrapper } from '@/components/kbar-provider';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -44,7 +45,7 @@ export default async function ProtectedLayout({
           <SiteHeader />
           <div className="flex flex-1 flex-col min-h-0">
             <div className="@container/main scrollbar-thin flex flex-1 flex-col gap-2 min-h-0 overflow-y-auto">
-              {children}
+              <DateDisplayPreferenceProvider>{children}</DateDisplayPreferenceProvider>
             </div>
           </div>
         </SidebarInset>

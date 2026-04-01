@@ -1,8 +1,23 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+
+function PaginationIconTooltip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 type LinkModeFilterParams = Record<string, string>;
 
@@ -64,74 +79,122 @@ export function TablePagination(props: TablePaginationProps) {
           {props.mode === 'link' ? (
             <>
               {page <= 1 ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled
-                  aria-label="Previous page"
-                  className="h-7 w-7"
-                >
-                  <IconChevronLeft className="h-4 w-4" />
-                </Button>
+                <PaginationIconTooltip label="Previous page">
+                  <span className="inline-flex">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled
+                      aria-label="Previous page"
+                      className="h-7 w-7"
+                    >
+                      <IconChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </PaginationIconTooltip>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  asChild
-                  aria-label="Previous page"
-                  className="h-7 w-7"
-                >
-                  <Link href={prevHref!}>
-                    <IconChevronLeft className="h-4 w-4" />
-                  </Link>
-                </Button>
+                <PaginationIconTooltip label="Previous page">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    asChild
+                    aria-label="Previous page"
+                    className="h-7 w-7"
+                  >
+                    <Link href={prevHref!}>
+                      <IconChevronLeft className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </PaginationIconTooltip>
               )}
               {page >= totalPages ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled
-                  aria-label="Next page"
-                  className="h-7 w-7"
-                >
-                  <IconChevronRight className="h-4 w-4" />
-                </Button>
+                <PaginationIconTooltip label="Next page">
+                  <span className="inline-flex">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled
+                      aria-label="Next page"
+                      className="h-7 w-7"
+                    >
+                      <IconChevronRight className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </PaginationIconTooltip>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  asChild
-                  aria-label="Next page"
-                  className="h-7 w-7"
-                >
-                  <Link href={nextHref!}>
-                    <IconChevronRight className="h-4 w-4" />
-                  </Link>
-                </Button>
+                <PaginationIconTooltip label="Next page">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    asChild
+                    aria-label="Next page"
+                    className="h-7 w-7"
+                  >
+                    <Link href={nextHref!}>
+                      <IconChevronRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </PaginationIconTooltip>
               )}
             </>
           ) : (
             <>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => props.onPageChange(page - 1)}
-                disabled={page <= 1}
-                aria-label="Previous page"
-                className="h-7 w-7"
-              >
-                <IconChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => props.onPageChange(page + 1)}
-                disabled={page >= totalPages}
-                aria-label="Next page"
-                className="h-7 w-7"
-              >
-                <IconChevronRight className="h-4 w-4" />
-              </Button>
+              {page <= 1 ? (
+                <PaginationIconTooltip label="Previous page">
+                  <span className="inline-flex">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => props.onPageChange(page - 1)}
+                      disabled
+                      aria-label="Previous page"
+                      className="h-7 w-7"
+                    >
+                      <IconChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </PaginationIconTooltip>
+              ) : (
+                <PaginationIconTooltip label="Previous page">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => props.onPageChange(page - 1)}
+                    aria-label="Previous page"
+                    className="h-7 w-7"
+                  >
+                    <IconChevronLeft className="h-4 w-4" />
+                  </Button>
+                </PaginationIconTooltip>
+              )}
+              {page >= totalPages ? (
+                <PaginationIconTooltip label="Next page">
+                  <span className="inline-flex">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => props.onPageChange(page + 1)}
+                      disabled
+                      aria-label="Next page"
+                      className="h-7 w-7"
+                    >
+                      <IconChevronRight className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </PaginationIconTooltip>
+              ) : (
+                <PaginationIconTooltip label="Next page">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => props.onPageChange(page + 1)}
+                    aria-label="Next page"
+                    className="h-7 w-7"
+                  >
+                    <IconChevronRight className="h-4 w-4" />
+                  </Button>
+                </PaginationIconTooltip>
+              )}
             </>
           )}
         </div>

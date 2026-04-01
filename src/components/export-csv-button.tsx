@@ -2,6 +2,11 @@
 
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { IconDownload, IconLoader2 } from '@tabler/icons-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -48,7 +53,7 @@ export function ExportCsvButton({ filterParams, className }: ExportCsvButtonProp
     }
   }, [filterParams]);
 
-  return (
+  const trigger = (
     <Button
       type="button"
       variant="outline"
@@ -68,5 +73,16 @@ export function ExportCsvButton({ filterParams, className }: ExportCsvButtonProp
         <IconDownload className="h-4 w-4" aria-hidden />
       )}
     </Button>
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {loading ? <span className="inline-flex">{trigger}</span> : trigger}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {loading ? 'Exporting…' : 'Download users as CSV (current filters)'}
+      </TooltipContent>
+    </Tooltip>
   );
 }

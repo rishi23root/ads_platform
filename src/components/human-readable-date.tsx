@@ -2,6 +2,7 @@
 
 import { format, formatRelative, isToday, isTomorrow, isYesterday } from 'date-fns';
 
+import { useDateDisplayPreference } from '@/components/date-display-preference';
 import { cn } from '@/lib/utils';
 
 type HumanReadableDateProps = {
@@ -63,9 +64,13 @@ function denseLines(
 export function HumanReadableDate({
   date,
   className,
-  mode = 'relative',
+  mode: modeProp,
   dense = false,
 }: HumanReadableDateProps) {
+  const { preference } = useDateDisplayPreference();
+  const mode: 'relative' | 'medium' =
+    modeProp ?? (preference === 'absolute' ? 'medium' : 'relative');
+
   if (Number.isNaN(date.getTime())) {
     return (
       <span className={className} suppressHydrationWarning>

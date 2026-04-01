@@ -2,7 +2,9 @@ import { CopyableIdCell } from '@/components/copyable-id-cell';
 import { EventsFilters } from '@/components/events-filters';
 import { EventsActiveFilterChips } from '@/components/events-visual-filters';
 import { EventsPageLayout } from '@/components/events-page-layout';
+import { DateDisplayToggleButton } from '@/components/date-display-toggle-button';
 import { ExportEventsCsvButton } from '@/components/export-events-csv-button';
+import { HumanReadableDate } from '@/components/human-readable-date';
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -106,7 +108,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
           <div className="shrink-0 flex flex-wrap items-center gap-2">
             {paginationEl}
             <ExportEventsCsvButton filterParams={filterRecord} />
-            <RefreshDataButton ariaLabel="Refresh events" />
+            <DateDisplayToggleButton />
+            <RefreshDataButton
+              ariaLabel="Refresh events"
+              tooltip="Reload events with current filters"
+            />
           </div>
         </div>
         <EventsActiveFilterChips chips={filterChips} />
@@ -221,7 +227,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                         {log.statusCode ?? '—'}
                       </TableCell>
                       <TableCell className="py-2 text-sm text-muted-foreground min-w-0">
-                        {new Date(log.createdAt).toLocaleString()}
+                        <HumanReadableDate date={new Date(log.createdAt)} />
                       </TableCell>
                     </TableRow>
                   ))

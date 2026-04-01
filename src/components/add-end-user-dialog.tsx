@@ -12,6 +12,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -155,12 +160,17 @@ export function AddEndUserDialog() {
         if (!v) reset();
       }}
     >
-      <DialogTrigger asChild>
-        <Button type="button" size="sm" className="gap-2">
-          <IconUserPlus className="h-4 w-4" aria-hidden />
-          Add user
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button type="button" size="sm" className="gap-2">
+              <IconUserPlus className="h-4 w-4" aria-hidden />
+              Add user
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Add a new extension user</TooltipContent>
+      </Tooltip>
       <DialogContent className="gap-6 sm:max-w-md">
         <DialogHeader className="space-y-1 text-left">
           <DialogTitle>Add extension user</DialogTitle>

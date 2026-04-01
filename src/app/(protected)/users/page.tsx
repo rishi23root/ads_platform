@@ -9,6 +9,7 @@ import { UsersEmailSearch } from '@/components/users-email-search';
 import { UsersActiveFilterChips } from '@/components/users-visual-filters';
 import { UsersPageLayout } from '@/components/users-page-layout';
 import { UsersTable } from '@/components/users-table';
+import { DateDisplayToggleButton } from '@/components/date-display-toggle-button';
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { ExportCsvButton } from '@/components/export-csv-button';
 import { AddEndUserDialog } from '@/components/add-end-user-dialog';
@@ -134,7 +135,11 @@ export default async function UsersPage({
               />
             )}
             <ExportCsvButton filterParams={filterParams} />
-            <RefreshDataButton ariaLabel="Refresh users" />
+            <DateDisplayToggleButton />
+            <RefreshDataButton
+              ariaLabel="Refresh users"
+              tooltip="Reload users with current filters"
+            />
             <AddEndUserDialog />
           </div>
         </div>
