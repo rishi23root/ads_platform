@@ -3,6 +3,11 @@
  * Host resolution: `tests/support/extension-test-base-url.ts` (`BETTER_AUTH_BASE_URL` / `BETTER_AUTH_URL`, optional override).
  */
 import { describe, it, expect } from 'vitest';
+import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
+import {
+  EXTENSION_INTEGRATION_PASSWORD,
+  EXTENSION_SHARED_USER_EMAILS,
+} from '../../support/extension-test-constants';
 import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-url';
 
 const BASE = extensionIntegrationBaseUrl();
@@ -10,20 +15,13 @@ const BASE = extensionIntegrationBaseUrl();
 const integration = BASE ? describe : describe.skip;
 
 integration('extension user HTTP flow (register → login → domains → ad-block)', () => {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  const email = `vitest.ext.${suffix}@example.test`;
-  const password = 'VitestExtensionFlow!99';
+  const email = EXTENSION_SHARED_USER_EMAILS[0];
+  const password = EXTENSION_INTEGRATION_PASSWORD;
 
-  it('register returns token + user', async () => {
-    const res = await fetch(`${BASE}/api/extension/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    expect(res.status).toBe(201);
-    const data = (await res.json()) as { token?: string; user?: { id?: string; email?: string | null } };
-    expect(data.token && data.token.length > 16).toBe(true);
-    expect(data.user?.email).toBe(email.toLowerCase());
+  it('register or existing login returns token + user', async () => {
+    const { token, endUserId } = await registerOrLoginExtensionEndUser(BASE!, email, password);
+    expect(token.length > 16).toBe(true);
+    expect(endUserId.length > 0).toBe(true);
   });
 
   it('login returns token', async () => {

@@ -12,6 +12,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: 60_000,
+    // Extension integration tests share fixed end-user emails and Bearer sessions; parallel files
+    // invalidate each other's tokens (single-session-per-user) and interleave DB-side frequency.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

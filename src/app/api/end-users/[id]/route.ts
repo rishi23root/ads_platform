@@ -42,10 +42,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!sessionWithRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const { id } = await context.params;
     const [user] = await db.select().from(endUsers).where(eq(endUsers.id, id)).limit(1);
     if (!user) {

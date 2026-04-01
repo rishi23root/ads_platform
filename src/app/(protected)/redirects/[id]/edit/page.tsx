@@ -13,7 +13,7 @@ type PageProps = {
 export default async function EditRedirectPage({ params }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  if (sessionWithRole.role !== 'admin') redirect('/redirects');
 
   const { id } = await params;
   redirect(`/redirects?edit=${id}`);

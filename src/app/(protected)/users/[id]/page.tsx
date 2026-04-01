@@ -21,7 +21,7 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const session = await getSessionWithRole();
-  if (!session || session.role !== 'admin') {
+  if (!session) {
     return { title: 'User' };
   }
 
@@ -43,7 +43,7 @@ export default async function EndUserDetailPage({
 }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const { id } = await params;
 
@@ -101,6 +101,7 @@ export default async function EndUserDetailPage({
           initialUser={initialUser}
           initialPayments={initialPayments}
           initialDashboard={initialDashboard}
+          isAdmin={isAdmin}
         />
       </Suspense>
     </div>

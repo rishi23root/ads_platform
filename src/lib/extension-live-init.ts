@@ -46,7 +46,10 @@ export type ExtensionLiveCampaignPayload = {
 
 export type ExtensionLiveInitPayload = {
   user: ReturnType<typeof endUserPublicPayload> | null;
+  /** Canonical display hostnames (deduped). */
   domains: string[];
+  /** Platform id + raw domain for matching `campaign.platformIds`. */
+  platforms: { id: string; domain: string }[];
   campaigns: ExtensionLiveCampaignPayload[];
   frequencyCounts: Record<string, number>;
 };
@@ -248,18 +251,42 @@ export async function fetchActiveCampaignRowsForExtension(
   return campaignRows as CampaignSelectRow[];
 }
 
+/** Active ads + popup campaigns only (for `/api/extension/serve/ads`). */
+export async function fetchActiveAdPopupCampaignRowsForExtension(
+  now: Date = new Date()
+): Promise<CampaignSelectRow[]> {
+  const campaignRows = await db
+    .select(extensionCampaignSelectShape)
+    .from(campaigns)
+    .where(
+      and(
+        eq(campaigns.status, 'active'),
+        or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
+        or(isNull(campaigns.endDate), gte(campaigns.endDate, now)),
+        or(eq(campaigns.campaignType, 'ads'), eq(campaigns.campaignType, 'popup'))
+      )
+    );
+  return campaignRows as CampaignSelectRow[];
+}
+
+export async function fetchExtensionPlatformsList(): Promise<{ id: string; domain: string }[]> {
+  const platformRows = await db.select({ id: platforms.id, domain: platforms.domain }).from(platforms);
+  return platformRows
+    .map((r) => ({ id: r.id, domain: (r.domain ?? '').trim() }))
+    .filter((p) => p.domain);
+}
+
 export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promise<ExtensionLiveInitPayload> {
-  const platformRows = await db.select({ domain: platforms.domain }).from(platforms);
-  const domains = platformRows
-    .map((r) => (r.domain ?? '').trim())
-    .filter(Boolean)
-    .map((d) => getCanonicalDisplayDomain(d))
+  const platformsPublic = await fetchExtensionPlatformsList();
+  const domains = platformsPublic
+    .map((p) => getCanonicalDisplayDomain(p.domain))
     .filter((d, i, arr) => arr.indexOf(d) === i);
 
   if (!endUser) {
     return {
       user: null,
       domains,
+      platforms: platformsPublic,
       campaigns: [],
       frequencyCounts: {},
     };
@@ -276,6 +303,7 @@ export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promis
   return {
     user: endUserPublicPayload(endUser),
     domains,
+    platforms: platformsPublic,
     campaigns: out,
     frequencyCounts,
   };

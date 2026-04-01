@@ -3,6 +3,7 @@ import { database as db } from '@/db';
 import { redirects } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
+import { publishRedirectsUpdated } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Redirect not found' }, { status: 404 });
     }
 
+    await publishRedirectsUpdated();
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error updating redirect:', error);
@@ -94,6 +96,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Redirect not found' }, { status: 404 });
     }
 
+    await publishRedirectsUpdated();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting redirect:', error);

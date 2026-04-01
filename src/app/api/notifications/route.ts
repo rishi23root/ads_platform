@@ -4,6 +4,7 @@ import { notifications } from '@/db/schema';
 import { desc, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { getLinkedCampaignCountByNotificationIdForIds } from '@/lib/campaign-linked-counts';
+import { publishNotificationsUpdated } from '@/lib/redis';
 
 // GET notifications (paginated: ?page=1&pageSize=50)
 export async function GET(request: NextRequest) {
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    await publishNotificationsUpdated();
     return NextResponse.json(newNotification, { status: 201 });
   } catch (error) {
     console.error('Error creating notification:', error);

@@ -53,10 +53,7 @@ export default async function CampaignsPage() {
 
   const isAdmin = sessionWithRole.role === 'admin';
   // Admins load soft-deleted rows too so the list status filter (e.g. "Deleted") can show them.
-  const campaigns = await getCampaignsWithDetails(
-    isAdmin ? undefined : sessionWithRole.user.id,
-    isAdmin
-  );
+  const campaigns = await getCampaignsWithDetails(undefined, isAdmin);
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">

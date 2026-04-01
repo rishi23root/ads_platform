@@ -19,7 +19,7 @@ type PageProps = {
 export default async function NotificationsPage({ searchParams }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const [allNotifications, linkedByNotificationId] = await Promise.all([
     db.select().from(notifications).orderBy(notifications.createdAt),
@@ -37,6 +37,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
     <NotificationsTableWithDrawer
       notifications={notificationsWithCounts}
       initialEditId={edit ?? null}
+      isAdmin={isAdmin}
     />
   );
 }

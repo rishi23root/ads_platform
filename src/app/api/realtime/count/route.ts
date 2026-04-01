@@ -5,15 +5,12 @@ import { getConnectionCount } from '@/lib/redis';
 /**
  * GET /api/realtime/count
  * Returns the current number of extension users connected to the live SSE channel.
- * Admin-only (requires valid session).
+ * Requires a valid session (any dashboard role).
  */
 export async function GET() {
   const session = await getSessionWithRole();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  if (session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const count = await getConnectionCount();

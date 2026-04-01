@@ -19,7 +19,7 @@ type PageProps = {
 export default async function RedirectsPage({ searchParams }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const [allRedirects, linkedByRedirectId] = await Promise.all([
     db.select().from(redirects).orderBy(redirects.createdAt),
@@ -33,5 +33,11 @@ export default async function RedirectsPage({ searchParams }: PageProps) {
 
   const { edit } = await searchParams;
 
-  return <RedirectsTableWithDrawer redirects={redirectsWithCounts} initialEditId={edit ?? null} />;
+  return (
+    <RedirectsTableWithDrawer
+      redirects={redirectsWithCounts}
+      initialEditId={edit ?? null}
+      isAdmin={isAdmin}
+    />
+  );
 }

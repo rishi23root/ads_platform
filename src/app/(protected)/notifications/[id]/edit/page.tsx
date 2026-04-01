@@ -13,7 +13,7 @@ type PageProps = {
 export default async function EditNotificationPage({ params }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  if (sessionWithRole.role !== 'admin') redirect('/notifications');
 
   const { id } = await params;
   redirect(`/notifications?edit=${id}`);

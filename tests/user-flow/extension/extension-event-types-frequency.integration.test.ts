@@ -8,12 +8,17 @@
  */
 import { describe, it, expect } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
+import { postExtensionAdBlock } from '../../support/extension-ad-block-request';
+import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
+import {
+  EXTENSION_INTEGRATION_PASSWORD,
+  EXTENSION_SHARED_USER_EMAILS,
+} from '../../support/extension-test-constants';
 import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-url';
 import { database as db } from '@/db';
 import {
   ads,
   campaigns,
-  endUsers,
   enduserEvents,
   notifications,
   platforms,
@@ -52,8 +57,7 @@ const E2E_REDIRECT = {
 integration('extension ad-block event typing + frequency cap', () => {
   it('caps campaign delivery at 10 and persists typed event rows', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const email = `vitest.events.${suffix}@example.test`;
-    const password = 'VitestEventsCap!99';
+    const email = EXTENSION_SHARED_USER_EMAILS[0];
 
     const campaignIdsToDeactivate: string[] = [];
     const createdPlatformIds: string[] = [];
@@ -228,25 +232,13 @@ integration('extension ad-block event typing + frequency cap', () => {
         campaignIdsToDeactivate.push(insertedCamp.id);
       }
 
-      const registerRes = await fetch(`${BASE}/api/extension/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(registerRes.status).toBe(201);
-      const registerJson = (await registerRes.json()) as { user?: { id?: string | null } };
-      endUserId = registerJson.user?.id ?? null;
-      expect(endUserId).toBeTruthy();
-
-      const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(loginRes.status).toBe(200);
-      const loginJson = (await loginRes.json()) as { token?: string };
-      const token = loginJson.token ?? '';
-      expect(token.length > 16).toBe(true);
+      const initial = await registerOrLoginExtensionEndUser(
+        BASE!,
+        email,
+        EXTENSION_INTEGRATION_PASSWORD
+      );
+      endUserId = initial.endUserId;
+      const session = { token: initial.token };
 
       let servedAdCount = 0;
       let servedNotificationCount = 0;
@@ -256,16 +248,17 @@ integration('extension ad-block event typing + frequency cap', () => {
           ? { domain: platformDomain, requestType: 'ad' as const }
           : { requestType: 'notification' as const };
 
-        const blockRes = await fetch(`${BASE}/api/extension/ad-block`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        const blockRes = await postExtensionAdBlock(
+          BASE!,
+          email,
+          EXTENSION_INTEGRATION_PASSWORD,
+          session,
+          payload,
+          {
             'user-agent': 'vitest-extension-events-frequency',
             'x-forwarded-for': testForwardedIp,
-          },
-          body: JSON.stringify(payload),
-        });
+          }
+        );
         expect(blockRes.status).toBe(200);
         const blockJson = (await blockRes.json()) as {
           ads?: Array<{ title?: string }>;
@@ -306,8 +299,9 @@ integration('extension ad-block event typing + frequency cap', () => {
       expect(notificationEventTypes).toHaveLength(10);
       expect(adEventTypes.every((t) => t === 'ad')).toBe(true);
       expect(notificationEventTypes.every((t) => t === 'notification')).toBe(true);
+      // Handler only records ad / notification / popup / redirect — never request or visit.
       expect(
-        trackedEvents.some((ev) => ev.type === 'request' || ev.type === 'redirect' || ev.type === 'visit')
+        trackedEvents.some((ev) => ev.type === 'request' || ev.type === 'visit')
       ).toBe(false);
 
       const softDeletedAt = new Date();
@@ -341,9 +335,6 @@ integration('extension ad-block event typing + frequency cap', () => {
           .set({ status: 'deleted', updatedAt: new Date() })
           .where(inArray(campaigns.id, campaignIdsToDeactivate));
       }
-      if (endUserId) {
-        await db.delete(endUsers).where(eq(endUsers.id, endUserId));
-      }
       if (createdPlatformIds.length > 0) {
         await db.delete(platforms).where(inArray(platforms.id, createdPlatformIds));
       }
@@ -355,8 +346,7 @@ integration('extension ad-block event typing + frequency cap', () => {
 
   it('popup campaign caps at 10 and logs popup events', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const email = `vitest.popup.${suffix}@example.test`;
-    const password = 'VitestEventsCap!99';
+    const email = EXTENSION_SHARED_USER_EMAILS[1];
 
     const campaignIdsToDeactivate: string[] = [];
     const createdPlatformIds: string[] = [];
@@ -466,38 +456,27 @@ integration('extension ad-block event typing + frequency cap', () => {
         campaignIdsToDeactivate.push(insertedCamp.id);
       }
 
-      const registerRes = await fetch(`${BASE}/api/extension/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(registerRes.status).toBe(201);
-      const registerJson = (await registerRes.json()) as { user?: { id?: string | null } };
-      endUserId = registerJson.user?.id ?? null;
-      expect(endUserId).toBeTruthy();
-
-      const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(loginRes.status).toBe(200);
-      const loginJson = (await loginRes.json()) as { token?: string };
-      const token = loginJson.token ?? '';
-      expect(token.length > 16).toBe(true);
+      const initialPopup = await registerOrLoginExtensionEndUser(
+        BASE!,
+        email,
+        EXTENSION_INTEGRATION_PASSWORD
+      );
+      endUserId = initialPopup.endUserId;
+      const sessionPopup = { token: initialPopup.token };
 
       let servedPopupCount = 0;
       for (let i = 0; i < 20; i++) {
-        const blockRes = await fetch(`${BASE}/api/extension/ad-block`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        const blockRes = await postExtensionAdBlock(
+          BASE!,
+          email,
+          EXTENSION_INTEGRATION_PASSWORD,
+          sessionPopup,
+          { domain: platformDomain, requestType: 'ad' as const },
+          {
             'user-agent': 'vitest-extension-popup-frequency',
             'x-forwarded-for': testForwardedIp,
-          },
-          body: JSON.stringify({ domain: platformDomain, requestType: 'ad' as const }),
-        });
+          }
+        );
         expect(blockRes.status).toBe(200);
         const blockJson = (await blockRes.json()) as {
           ads?: Array<{ title?: string; displayAs?: string }>;
@@ -534,9 +513,6 @@ integration('extension ad-block event typing + frequency cap', () => {
           .set({ status: 'deleted', updatedAt: new Date() })
           .where(inArray(campaigns.id, campaignIdsToDeactivate));
       }
-      if (endUserId) {
-        await db.delete(endUsers).where(eq(endUsers.id, endUserId));
-      }
       if (createdPlatformIds.length > 0) {
         await db.delete(platforms).where(inArray(platforms.id, createdPlatformIds));
       }
@@ -548,9 +524,9 @@ integration('extension ad-block event typing + frequency cap', () => {
 
   it('redirect campaign caps at 10 and logs redirect events', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const email = `vitest.redirect.${suffix}@example.test`;
-    const password = 'VitestEventsCap!99';
-    const destinationUrl = E2E_REDIRECT.destinationUrl;
+    const email = EXTENSION_SHARED_USER_EMAILS[2];
+    /** Unique per run so stray active redirects (uncapped types) cannot match this URL and inflate `servedRedirectCount`. */
+    const destinationUrl = `${E2E_REDIRECT.destinationUrl}?e2e=${encodeURIComponent(suffix)}`;
 
     const campaignIdsToDeactivate: string[] = [];
     const createdPlatformIds: string[] = [];
@@ -664,38 +640,27 @@ integration('extension ad-block event typing + frequency cap', () => {
         campaignIdsToDeactivate.push(insertedCamp.id);
       }
 
-      const registerRes = await fetch(`${BASE}/api/extension/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(registerRes.status).toBe(201);
-      const registerJson = (await registerRes.json()) as { user?: { id?: string | null } };
-      endUserId = registerJson.user?.id ?? null;
-      expect(endUserId).toBeTruthy();
-
-      const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      expect(loginRes.status).toBe(200);
-      const loginJson = (await loginRes.json()) as { token?: string };
-      const token = loginJson.token ?? '';
-      expect(token.length > 16).toBe(true);
+      const initialRedir = await registerOrLoginExtensionEndUser(
+        BASE!,
+        email,
+        EXTENSION_INTEGRATION_PASSWORD
+      );
+      endUserId = initialRedir.endUserId;
+      const sessionRedir = { token: initialRedir.token };
 
       let servedRedirectCount = 0;
       for (let i = 0; i < 20; i++) {
-        const blockRes = await fetch(`${BASE}/api/extension/ad-block`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        const blockRes = await postExtensionAdBlock(
+          BASE!,
+          email,
+          EXTENSION_INTEGRATION_PASSWORD,
+          sessionRedir,
+          { domain: platformDomain, requestType: 'ad' as const },
+          {
             'user-agent': 'vitest-extension-redirect-frequency',
             'x-forwarded-for': testForwardedIp,
-          },
-          body: JSON.stringify({ domain: platformDomain, requestType: 'ad' as const }),
-        });
+          }
+        );
         expect(blockRes.status).toBe(200);
         const blockJson = (await blockRes.json()) as {
           redirects?: Array<{ destinationUrl?: string }>;
@@ -729,9 +694,6 @@ integration('extension ad-block event typing + frequency cap', () => {
           .update(campaigns)
           .set({ status: 'deleted', updatedAt: new Date() })
           .where(inArray(campaigns.id, campaignIdsToDeactivate));
-      }
-      if (endUserId) {
-        await db.delete(endUsers).where(eq(endUsers.id, endUserId));
       }
       if (createdPlatformIds.length > 0) {
         await db.delete(platforms).where(inArray(platforms.id, createdPlatformIds));

@@ -23,23 +23,27 @@ interface PlatformEditDrawerProps {
   platformId?: string;
   /** Deep-link / explicit edit entry */
   initialMode?: 'view' | 'edit';
+  /** When false, view mode has no Edit control (non-admin). Default true */
+  showEditAction?: boolean;
 }
 
 function PlatformEditDrawerContent({
   platform,
   platformId,
   initialMode,
+  showEditAction = true,
 }: {
   platform?: PlatformDrawerRow | null;
   platformId?: string;
   initialMode: 'view' | 'edit';
+  showEditAction?: boolean;
 }) {
   const router = useRouter();
   const [fetchedPlatform, setFetchedPlatform] = useState<Platform | null>(null);
   const [patchedPlatform, setPatchedPlatform] = useState<Platform | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
+  const [mode, setMode] = useState<'view' | 'edit'>(showEditAction ? initialMode : 'view');
 
   const resolvedPlatform = patchedPlatform ?? platform ?? fetchedPlatform;
   const displayError = !platform && !platformId ? 'No platform selected' : fetchError;
@@ -83,6 +87,12 @@ function PlatformEditDrawerContent({
     };
   }, [platformId, platform]);
 
+  useEffect(() => {
+    if (!showEditAction && mode === 'edit') {
+      setMode('view');
+    }
+  }, [showEditAction, mode]);
+
   const handleSuccess = async (updated?: Platform) => {
     if (updated) setPatchedPlatform(updated);
     setMode('view');
@@ -103,7 +113,7 @@ function PlatformEditDrawerContent({
     mode === 'view' ? 'Details and campaigns that target this platform' : 'Update name and domain';
 
   const headerActions =
-    mode === 'view' && resolvedPlatform ? (
+    mode === 'view' && resolvedPlatform && showEditAction ? (
       <Button type="button" size="sm" variant="outline" onClick={() => setMode('edit')}>
         <IconPencil className="mr-2 h-4 w-4" />
         Edit
@@ -200,6 +210,7 @@ export function PlatformEditDrawer({
   platform,
   platformId,
   initialMode = 'view',
+  showEditAction = true,
 }: PlatformEditDrawerProps) {
   const key = `${platformId ?? platform?.id ?? 'none'}:${initialMode}`;
   return (
@@ -210,6 +221,7 @@ export function PlatformEditDrawer({
           platform={platform}
           platformId={platformId}
           initialMode={initialMode}
+          showEditAction={showEditAction}
         />
       ) : null}
     </CrudResourceDrawerRoot>

@@ -1,12 +1,29 @@
 # Extension API Documentation
 
-This document contains the API endpoint for browser extensions to fetch ads and notifications with automatic visit logging.
+## v2 (recommended)
+
+Use **[EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** for the current architecture:
+
+- **`GET /api/extension/live`** — SSE: `init` payload (`platforms`, `campaigns`, `frequencyCounts`, …) + realtime updates (requires **Bearer** or **`?token=`**).
+- **`POST /api/extension/serve/ads`** — per-visit **inline + popup** ads (Bearer).
+- **`POST /api/extension/events`** — client-reported **notification** and **redirect** events (Bearer).
+- Legacy **`POST /api/extension/ad-block`** — unchanged; still supported.
+
+**Authentication:** Extension end users use **`POST /api/extension/auth/register`** and **`POST /api/extension/auth/login`**, then **`Authorization: Bearer <token>`** on REST routes. **`GET /api/extension/domains`** remains public (optional; v2 `init` includes domain data).
+
+Do **not** use `/api/notifications` (admin UI / Better Auth) for the extension.
+
+---
+
+## Legacy: single ad-block endpoint
+
+This document below focuses on **`POST /api/extension/ad-block`** — fetch ads and/or notifications with automatic visit logging.
 
 **Base URL:** `https://your-admin-dashboard-domain.com` (paths are relative, e.g. `/api/extension/ad-block`)
 
-> **Note**: For the full reference including `/api/extension/ad-block` (with `requestType: "notification"` for notifications), `/api/extension/live` (SSE), and recommended flow, see [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md). For a compact cheat sheet, see [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md).
+> **Note**: Older references to [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md) / [EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md) may be stale; prefer **EXTENSION_V2_API.md** for new work.
 
-**Authentication:** **`POST /api/extension/ad-block` requires a session token.** End users register (e.g. `/register` or `POST /api/extension/auth/register`) and sign in with `POST /api/extension/auth/login`, then send `Authorization: Bearer <token>` on every ad-block request. Other extension routes (`/api/extension/domains`, `/api/extension/live`) remain public. Do **not** use `/api/notifications` for the extension — that is for the admin UI (Better Auth session). See [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md).
+**Authentication:** **`POST /api/extension/ad-block` requires a session token.** End users register and sign in as above, then send `Authorization: Bearer <token>` on ad-block requests.
 
 ---
 

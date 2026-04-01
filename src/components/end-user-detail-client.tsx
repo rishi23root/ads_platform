@@ -108,17 +108,19 @@ interface EndUserDetailClientProps {
   initialUser: EndUserDetailInitialUser
   initialPayments: EndUserPaymentListItem[]
   initialDashboard: EndUserDashboardSnapshot
+  isAdmin: boolean
 }
 
 export function EndUserDetailClient({
   initialUser,
   initialPayments,
   initialDashboard,
+  isAdmin,
 }: EndUserDetailClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const isEditing = searchParams.get("edit") === "1"
+  const isEditing = isAdmin && searchParams.get("edit") === "1"
 
   const setEditMode = useCallback(
     (on: boolean) => {
@@ -318,17 +320,19 @@ export function EndUserDetailClient({
         <Button variant="outline" size="sm" asChild>
           <Link href="/users">← Back to users</Link>
         </Button>
-        <div className="flex flex-wrap items-center gap-2">
-          {isEditing ? (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setEditMode(false)}>
-              Done
-            </Button>
-          ) : (
-            <Button type="button" size="sm" onClick={() => setEditMode(true)}>
-              Edit user
-            </Button>
-          )}
-        </div>
+        {isAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {isEditing ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setEditMode(false)}>
+                Done
+              </Button>
+            ) : (
+              <Button type="button" size="sm" onClick={() => setEditMode(true)}>
+                Edit user
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <header className="space-y-2">
@@ -344,7 +348,12 @@ export function EndUserDetailClient({
               <span className="font-mono text-foreground">{user.identifier}</span>
             </>
           ) : null}
-          .{isEditing ? " Change fields below and save; charts and timeline are hidden while editing." : " Overview shows access and telemetry; edit to change profile, plan, or password."}
+          .
+          {isEditing
+            ? " Change fields below and save; charts and timeline are hidden while editing."
+            : isAdmin
+              ? " Overview shows access and telemetry; edit to change profile, plan, or password."
+              : " Overview shows access and telemetry."}
         </p>
       </header>
 
@@ -453,7 +462,9 @@ export function EndUserDetailClient({
 
       {!isEditing ? <EndUserEventsTimeline endUserId={user.id} /> : null}
 
-      {!isEditing ? <AdminEndUserSessionsCard userId={user.id} /> : null}
+      {!isEditing ? (
+        <AdminEndUserSessionsCard userId={user.id} allowRevoke={isAdmin} />
+      ) : null}
 
       {!isEditing ? (
         <Card>
@@ -462,10 +473,14 @@ export function EndUserDetailClient({
               <CardTitle>Payments</CardTitle>
               <CardDescription>Manual payment records for this user.</CardDescription>
             </div>
-            <AddPaymentDialog userId={user.id} onCreated={refreshPayments} />
+            {isAdmin ? <AddPaymentDialog userId={user.id} onCreated={refreshPayments} /> : null}
           </CardHeader>
           <CardContent>
-            <PaymentsTable payments={paymentsForTable} onChanged={refreshPayments} />
+            <PaymentsTable
+              payments={paymentsForTable}
+              onChanged={refreshPayments}
+              allowDelete={isAdmin}
+            />
           </CardContent>
         </Card>
       ) : null}

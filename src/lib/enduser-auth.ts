@@ -80,6 +80,23 @@ export async function resolveEndUserFromRequest(
   return resolveEndUserFromToken(getBearerFromRequest(request));
 }
 
+/**
+ * Bearer from `Authorization` header, or `token` query param (SSE / EventSource cannot set headers).
+ */
+export function getBearerFromExtensionRequest(request: NextRequest): string | null {
+  const fromHeader = getBearerFromRequest(request);
+  if (fromHeader) return fromHeader;
+  const q = request.nextUrl.searchParams.get('token')?.trim();
+  if (q && q.length >= 16) return q;
+  return null;
+}
+
+export async function resolveEndUserFromExtensionRequest(
+  request: NextRequest
+): Promise<ResolvedEndUserSession | null> {
+  return resolveEndUserFromToken(getBearerFromExtensionRequest(request));
+}
+
 function clientIp(request: NextRequest): string | null {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {

@@ -19,7 +19,7 @@ type PageProps = {
 export default async function AdsPage({ searchParams }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const [allAds, linkedByAdId] = await Promise.all([
     db.select().from(ads).orderBy(ads.createdAt),
@@ -33,5 +33,5 @@ export default async function AdsPage({ searchParams }: PageProps) {
 
   const { edit } = await searchParams;
 
-  return <AdsTableWithDrawer ads={adsWithCounts} initialEditId={edit ?? null} />;
+  return <AdsTableWithDrawer ads={adsWithCounts} initialEditId={edit ?? null} isAdmin={isAdmin} />;
 }

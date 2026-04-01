@@ -58,9 +58,11 @@ function formatWhen(value: string) {
 
 interface AdminEndUserSessionsCardProps {
   userId: string;
+  /** When false, hide revoke (non-admin). Default true */
+  allowRevoke?: boolean;
 }
 
-export function AdminEndUserSessionsCard({ userId }: AdminEndUserSessionsCardProps) {
+export function AdminEndUserSessionsCard({ userId, allowRevoke = true }: AdminEndUserSessionsCardProps) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -176,9 +178,11 @@ export function AdminEndUserSessionsCard({ userId }: AdminEndUserSessionsCardPro
                     <TableHead className="hidden h-10 whitespace-nowrap px-4 py-2 font-medium md:table-cell">
                       Expires
                     </TableHead>
-                    <TableHead className="h-10 w-14 px-6 py-2 text-right font-medium">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
+                    {allowRevoke ? (
+                      <TableHead className="h-10 w-14 px-6 py-2 text-right font-medium">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -220,26 +224,28 @@ export function AdminEndUserSessionsCard({ userId }: AdminEndUserSessionsCardPro
                         <TableCell className="hidden align-top px-4 py-3 text-sm tabular-nums text-muted-foreground whitespace-nowrap md:table-cell">
                           {formatWhen(row.expiresAt)}
                         </TableCell>
-                        <TableCell className="align-top px-6 py-3 text-right">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-9 text-muted-foreground hover:text-destructive"
-                                disabled={actionLoading || !row.active}
-                                onClick={() => setRevokeId(row.id)}
-                              >
-                                <IconTrash className="size-4" />
-                                <span className="sr-only">Revoke session</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left">
-                              {row.active ? 'Revoke session' : 'Session already expired'}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
+                        {allowRevoke ? (
+                          <TableCell className="align-top px-6 py-3 text-right">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-9 text-muted-foreground hover:text-destructive"
+                                  disabled={actionLoading || !row.active}
+                                  onClick={() => setRevokeId(row.id)}
+                                >
+                                  <IconTrash className="size-4" />
+                                  <span className="sr-only">Revoke session</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                {row.active ? 'Revoke session' : 'Session already expired'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     );
                   })}
@@ -250,7 +256,10 @@ export function AdminEndUserSessionsCard({ userId }: AdminEndUserSessionsCardPro
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
+      <AlertDialog
+        open={allowRevoke && !!revokeId}
+        onOpenChange={(open) => !open && setRevokeId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke this session?</AlertDialogTitle>

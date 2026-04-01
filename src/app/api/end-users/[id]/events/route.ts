@@ -16,9 +16,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!sessionWithRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     const { id } = await context.params;
     if (!isValidEndUserUuid(id)) {
@@ -43,8 +40,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const offset = (page - 1) * pageSize;
     const [total, rows] = await Promise.all([
-      countEvents('admin', sessionWithRole.user.id, filters),
-      listEventsPage('admin', sessionWithRole.user.id, filters, { limit: pageSize, offset }),
+      countEvents(sessionWithRole.role, sessionWithRole.user.id, filters),
+      listEventsPage(sessionWithRole.role, sessionWithRole.user.id, filters, {
+        limit: pageSize,
+        offset,
+      }),
     ]);
 
     return NextResponse.json({

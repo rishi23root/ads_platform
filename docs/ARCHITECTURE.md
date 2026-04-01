@@ -43,11 +43,13 @@ flowchart TB
 - **Components**: Reusable UI components built with shadcn/ui
 
 #### 2. API Layer
-- **Extension API** (`/api/extension/ad-block`, `/api/extension/auth/*`, `/api/extension/domains`, `/api/extension/live`)
-  - **Ad-block** requires **`Authorization: Bearer`** (extension user session from `/api/extension/auth/login` or register)
-  - **Ads**: domain-based filtering with normalization against platforms/campaigns
-  - **Notifications**: campaign-driven; telemetry in `enduser_events`
-  - **Domains / live SSE**: public (no Bearer)
+- **Extension API** (`/api/extension/ad-block`, `/api/extension/serve/ads`, `/api/extension/events`, `/api/extension/live`, `/api/extension/auth/*`, `/api/extension/domains`)
+  - **v2:** **`GET /api/extension/live`** (SSE) sends full `init` (platforms, campaigns, frequency) — auth via **`Authorization: Bearer`** or **`?token=`**
+  - **`POST /api/extension/serve/ads`** — Bearer; per-visit **ads + popup** only; logs `enduser_events`
+  - **`POST /api/extension/events`** — Bearer; client-reported **notification** / **redirect** events
+  - **Legacy `POST /api/extension/ad-block`** — Bearer; combined ads / notifications / redirects
+  - **Notifications / redirects (v2):** matched client-side from SSE payload; telemetry via **`events`** or legacy ad-block
+  - **`GET /api/extension/domains`** — public list of platform domains (optional if using v2 `init`)
   
 - **Admin API** (`/api/platforms`, `/api/ads`, `/api/notifications`, `/api/redirects`)
   - Protected endpoints (require authentication)
@@ -163,11 +165,13 @@ sequenceDiagram
 ### Extension API
 
 - `POST /api/extension/auth/register` | `login` | `logout` | `me` — extension **end user** accounts (separate from Better Auth).
-- `POST /api/extension/ad-block` — **Requires `Authorization: Bearer <token>`**
+- `POST /api/extension/ad-block` — **Requires `Authorization: Bearer`**
   - Body: `{ domain?: string, requestType?: "ad" | "notification", userAgent?: string }`
-  - Response: `{ ads: [...], notifications: [...] }`
+  - Response: `{ ads: [...], notifications: [...], redirects: [...] }`
+- `GET /api/extension/live` — **SSE**, **requires Bearer or `?token=`**; `event: init` + Redis-driven updates
+- `POST /api/extension/serve/ads` — **Bearer**; body `{ domain, userAgent? }`; response `{ ads: [...] }`
+- `POST /api/extension/events` — **Bearer**; body `{ events: [{ campaignId, domain, type: "redirect"|"notification" }] }`
 - `GET /api/extension/domains` — active platform domains (public).
-- `GET /api/extension/live` — SSE (public).
 
 ### Authentication API
 

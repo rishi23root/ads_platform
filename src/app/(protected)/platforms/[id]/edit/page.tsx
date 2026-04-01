@@ -13,7 +13,7 @@ type PageProps = {
 export default async function EditPlatformPage({ params }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  if (sessionWithRole.role !== 'admin') redirect('/platforms');
 
   const { id } = await params;
   redirect(`/platforms?edit=${id}`);

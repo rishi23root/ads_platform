@@ -21,9 +21,16 @@ interface EndUserRowActionsProps {
   userId: string;
   email: string | null;
   identifier: string | null;
+  /** When false, hide delete (non-admin). Default true */
+  canDelete?: boolean;
 }
 
-export function EndUserRowActions({ userId, email, identifier }: EndUserRowActionsProps) {
+export function EndUserRowActions({
+  userId,
+  email,
+  identifier,
+  canDelete = true,
+}: EndUserRowActionsProps) {
   const deleteLabel = email ?? identifier ?? userId.slice(0, 8);
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -51,16 +58,18 @@ export function EndUserRowActions({ userId, email, identifier }: EndUserRowActio
         <Button variant="ghost" size="sm" asChild>
           <Link href={`/users/${userId}`}>View</Link>
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setConfirmOpen(true)}
-          aria-label={`Delete ${deleteLabel}`}
-        >
-          <IconTrash className="h-4 w-4" />
-        </Button>
+        {canDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setConfirmOpen(true)}
+            aria-label={`Delete ${deleteLabel}`}
+          >
+            <IconTrash className="h-4 w-4" />
+          </Button>
+        ) : null}
       </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

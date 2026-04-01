@@ -17,7 +17,7 @@ function sseEvent(name: string, data: string): Uint8Array {
 /**
  * GET /api/realtime/stream
  * SSE stream for live connection count. Subscribes to Redis; sends connection_count events.
- * Admin-only (requires valid session). Dashboard uses this instead of polling GET /api/realtime/count.
+ * Requires a valid session (any dashboard role). Dashboard uses this instead of polling GET /api/realtime/count.
  *
  * CRITICAL: This endpoint must NEVER call incrConnectionCount/decrConnectionCount. Dashboard
  * connections to this stream must not be counted — only extension users on /api/extension/live
@@ -29,12 +29,6 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-  if (session.role !== 'admin') {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
       headers: { 'Content-Type': 'application/json' },
     });
   }

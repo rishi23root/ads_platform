@@ -23,9 +23,14 @@ export type PlatformListRow = Platform & { linkedCampaignCount: number };
 interface PlatformsTableWithDrawerProps {
   platforms: PlatformListRow[];
   initialEditId?: string | null;
+  isAdmin: boolean;
 }
 
-export function PlatformsTableWithDrawer({ platforms, initialEditId }: PlatformsTableWithDrawerProps) {
+export function PlatformsTableWithDrawer({
+  platforms,
+  initialEditId,
+  isAdmin,
+}: PlatformsTableWithDrawerProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'view' | 'edit'>('view');
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformListRow | null>(null);
@@ -42,11 +47,11 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
           setSelectedPlatform(null);
           setSelectedPlatformId(initialEditId);
         }
-        setDrawerMode('edit');
+        setDrawerMode(isAdmin ? 'edit' : 'view');
         setDrawerOpen(true);
       });
     }
-  }, [initialEditId, platforms]);
+  }, [initialEditId, platforms, isAdmin]);
 
   const openDrawer = (platform: PlatformListRow, mode: 'view' | 'edit') => {
     setSelectedPlatform(platform);
@@ -59,6 +64,8 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
     openDrawer(platform, 'view');
   };
 
+  const colCount = isAdmin ? 5 : 4;
+
   return (
     <>
       <div className="flex flex-col gap-6 p-4 md:p-6">
@@ -67,12 +74,14 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
             <h1 className="text-2xl font-semibold tracking-tight">Platforms</h1>
             <p className="text-sm text-muted-foreground">Manage your advertising platforms</p>
           </div>
-          <Button asChild className="shrink-0 self-start sm:self-auto">
-            <Link href="/platforms/new">
-              <IconPlus className="mr-2 h-4 w-4" />
-              Add Platform
-            </Link>
-          </Button>
+          {isAdmin ? (
+            <Button asChild className="shrink-0 self-start sm:self-auto">
+              <Link href="/platforms/new">
+                <IconPlus className="mr-2 h-4 w-4" />
+                Add Platform
+              </Link>
+            </Button>
+          ) : null}
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border/80 bg-card/30 shadow-sm">
@@ -91,16 +100,23 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
                 <TableHead className="w-1/5 min-w-0 px-4 py-3 text-left align-middle font-medium">
                   Created
                 </TableHead>
-                <TableHead className="w-1/5 min-w-0 px-4 py-3 text-right align-middle font-medium">
-                  Actions
-                </TableHead>
+                {isAdmin ? (
+                  <TableHead className="w-1/5 min-w-0 px-4 py-3 text-right align-middle font-medium">
+                    Actions
+                  </TableHead>
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {platforms.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    No platforms found. Create your first platform.
+                  <TableCell
+                    colSpan={colCount}
+                    className="px-4 py-12 text-center text-sm text-muted-foreground"
+                  >
+                    {isAdmin
+                      ? 'No platforms found. Create your first platform.'
+                      : 'No platforms found.'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -144,25 +160,30 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
                     >
                       {formatDateTimeUtcEnGb(platform.createdAt)}
                     </TableCell>
-                    <TableCell className="min-w-0 px-4 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9"
-                          aria-label={`Edit ${platform.name}`}
-                          onClick={() => openDrawer(platform, 'edit')}
-                        >
-                          <IconPencil className="h-4 w-4" />
-                        </Button>
-                        <DeleteButton
-                          name={platform.name}
-                          entityType="platform"
-                          apiPath={`/api/platforms/${platform.id}`}
-                        />
-                      </div>
-                    </TableCell>
+                    {isAdmin ? (
+                      <TableCell
+                        className="min-w-0 px-4 py-3 text-right align-middle"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9"
+                            aria-label={`Edit ${platform.name}`}
+                            onClick={() => openDrawer(platform, 'edit')}
+                          >
+                            <IconPencil className="h-4 w-4" />
+                          </Button>
+                          <DeleteButton
+                            name={platform.name}
+                            entityType="platform"
+                            apiPath={`/api/platforms/${platform.id}`}
+                          />
+                        </div>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))
               )}
@@ -177,6 +198,7 @@ export function PlatformsTableWithDrawer({ platforms, initialEditId }: Platforms
         platform={selectedPlatform}
         platformId={selectedPlatformId ?? undefined}
         initialMode={drawerMode}
+        showEditAction={isAdmin}
       />
     </>
   );

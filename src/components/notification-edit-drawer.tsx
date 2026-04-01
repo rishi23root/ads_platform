@@ -52,7 +52,7 @@ function NotificationEditDrawerContent({
   const [patchedNotification, setPatchedNotification] = useState<Notification | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
+  const [mode, setMode] = useState<'view' | 'edit'>(showEditAction ? initialMode : 'view');
 
   const resolvedNotification = patchedNotification ?? notification ?? fetchedNotification;
   const displayError = !notification && !notificationId ? 'No notification selected' : fetchError;
@@ -89,6 +89,12 @@ function NotificationEditDrawerContent({
       cancelled = true;
     };
   }, [notificationId, notification]);
+
+  useEffect(() => {
+    if (!showEditAction && mode === 'edit') {
+      setMode('view');
+    }
+  }, [showEditAction, mode]);
 
   const handleSuccess = async (updated?: Notification) => {
     if (updated) setPatchedNotification(updated);

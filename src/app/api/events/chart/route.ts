@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaigns, enduserEvents } from '@/db/schema';
+import { enduserEvents } from '@/db/schema';
 import { and, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
-import {
-  DASHBOARD_CHART_EVENT_TYPES,
-  endEventsOwnedCampaignJoin,
-} from '@/lib/events-dashboard';
+import { DASHBOARD_CHART_EVENT_TYPES } from '@/lib/events-dashboard';
 import { getStartDate, fillMissingDays } from '@/lib/date-range';
 
 export const dynamic = 'force-dynamic';
@@ -61,12 +58,7 @@ export async function GET(request: NextRequest) {
       })
       .from(enduserEvents);
 
-    const scoped =
-      sessionWithRole.role === 'admin'
-        ? base
-        : base.innerJoin(campaigns, endEventsOwnedCampaignJoin(sessionWithRole.user.id));
-
-    const rows = await scoped.where(scopeWhere).groupBy(utcDay);
+    const rows = await base.where(scopeWhere).groupBy(utcDay);
 
     const dataByDate = new Map<
       string,

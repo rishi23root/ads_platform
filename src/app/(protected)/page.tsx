@@ -24,78 +24,32 @@ export default async function DashboardPage() {
   const session = await getSessionWithRole();
   if (!session) redirect('/login');
 
-  const campaignScope =
-    session.role === 'admin' ? undefined : eq(campaigns.createdBy, session.user.id);
-  const campaignActiveWhere = campaignScope
-    ? and(eq(campaigns.status, 'active'), campaignScope)
-    : eq(campaigns.status, 'active');
-
-  const totalCampaignsWhere = campaignScope
-    ? and(campaignScope, campaignRowNotSoftDeleted)
-    : campaignRowNotSoftDeleted;
+  const campaignActiveWhere = eq(campaigns.status, 'active');
+  const totalCampaignsWhere = campaignRowNotSoftDeleted;
 
   const totalCampaignsPromise = db
     .select({ count: sql<number>`count(*)` })
     .from(campaigns)
     .where(totalCampaignsWhere);
 
-  const impressionsCountPromise = campaignScope
-    ? db
-      .select({ count: sql<number>`count(*)` })
-      .from(enduserEvents)
-      .where(
-        and(
-          isNotNull(enduserEvents.campaignId),
-          inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES),
-          sql`exists (
-              select 1 from ${campaigns} c
-              where c.id = ${enduserEvents.campaignId}
-              and c.created_by = ${session.user.id}
-            )`
-        )
+  const impressionsCountPromise = db
+    .select({ count: sql<number>`count(*)` })
+    .from(enduserEvents)
+    .where(
+      and(
+        isNotNull(enduserEvents.campaignId),
+        inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES)
       )
-    : db
-      .select({ count: sql<number>`count(*)` })
-      .from(enduserEvents)
-      .where(
-        and(
-          isNotNull(enduserEvents.campaignId),
-          inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES)
-        )
-      );
+    );
 
-  const recentCampaignsPromise = campaignScope
-    ? db
-      .select()
-      .from(campaigns)
-      .where(and(campaignScope, campaignRowNotSoftDeleted))
-      .orderBy(desc(campaigns.createdAt))
-      .limit(10)
-    : db
-      .select()
-      .from(campaigns)
-      .where(campaignRowNotSoftDeleted)
-      .orderBy(desc(campaigns.createdAt))
-      .limit(10);
+  const recentCampaignsPromise = db
+    .select()
+    .from(campaigns)
+    .where(campaignRowNotSoftDeleted)
+    .orderBy(desc(campaigns.createdAt))
+    .limit(10);
 
-  const extensionUsersPromise =
-    session.role === 'admin'
-      ? db.select({ count: sql<number>`count(*)` }).from(endUsers)
-      : db
-          .select({
-            count: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
-          })
-          .from(enduserEvents)
-          .where(
-            and(
-              isNotNull(enduserEvents.campaignId),
-              sql`exists (
-              select 1 from ${campaigns} c
-              where c.id = ${enduserEvents.campaignId}
-              and c.created_by = ${session.user.id}
-            )`
-            )
-          );
+  const extensionUsersPromise = db.select({ count: sql<number>`count(*)` }).from(endUsers);
 
   const [activeCampaignsCount, totalCampaignsCount, impressionsCount, extensionUsersCount, recentCampaigns] =
     await Promise.all([
@@ -129,10 +83,7 @@ export default async function DashboardPage() {
         totalCampaigns={totalCampaigns}
         campaignImpressions={campaignImpressions}
         activeUsers={activeUsers}
-        extensionUsersCaption={
-          isAdmin ? undefined : 'Distinct extension users with activity on your campaigns'
-        }
-        extraCard={isAdmin ? <LiveConnectionsCard /> : undefined}
+        extraCard={<LiveConnectionsCard />}
       />
 
       <ChartAreaInteractiveDynamic />

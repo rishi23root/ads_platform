@@ -3,6 +3,7 @@ import { database as db } from '@/db';
 import { ads } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
+import { publishAdsUpdated } from '@/lib/redis';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -71,6 +72,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
     }
 
+    await publishAdsUpdated();
     return NextResponse.json(updatedAd);
   } catch (error) {
     console.error('Error updating ad:', error);
@@ -100,6 +102,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
     }
 
+    await publishAdsUpdated();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting ad:', error);

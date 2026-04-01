@@ -12,18 +12,15 @@ function getClientIp(request: NextRequest): string {
 const AD_BLOCK_LIMIT = 120; // per minute per IP
 const AD_BLOCK_WINDOW_SEC = 60;
 
-/**
- * Check rate limit for extension ad-block. Returns null if allowed, or Response with 429 if exceeded.
- * If Redis is unavailable, returns null (allow) — enable REDIS_URL in production for abuse protection.
- */
-export async function checkAdBlockRateLimit(
-  request: NextRequest
+async function checkExtensionRatelimit(
+  request: NextRequest,
+  bucket: string
 ): Promise<Response | null> {
   const client = await getRedisClient();
-  if (!client) return null; // no Redis = no rate limit (graceful degradation)
+  if (!client) return null;
 
   const ip = getClientIp(request);
-  const key = `ratelimit:ad-block:${ip}`;
+  const key = `ratelimit:ext:${bucket}:${ip}`;
 
   try {
     const count = await client.incr(key);
@@ -38,6 +35,24 @@ export async function checkAdBlockRateLimit(
     }
     return null;
   } catch {
-    return null; // on Redis error, allow request
+    return null;
   }
+}
+
+/**
+ * Check rate limit for extension ad-block. Returns null if allowed, or Response with 429 if exceeded.
+ * If Redis is unavailable, returns null (allow) — enable REDIS_URL in production for abuse protection.
+ */
+export async function checkAdBlockRateLimit(
+  request: NextRequest
+): Promise<Response | null> {
+  return checkExtensionRatelimit(request, 'ad-block');
+}
+
+export async function checkServeAdsRateLimit(request: NextRequest): Promise<Response | null> {
+  return checkExtensionRatelimit(request, 'serve-ads');
+}
+
+export async function checkExtensionEventsRateLimit(request: NextRequest): Promise<Response | null> {
+  return checkExtensionRatelimit(request, 'events');
 }

@@ -54,7 +54,7 @@ function AdEditDrawerContent({
   const [patchedAd, setPatchedAd] = useState<Ad | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
+  const [mode, setMode] = useState<'view' | 'edit'>(showEditAction ? initialMode : 'view');
   const [imageError, setImageError] = useState(false);
 
   const resolvedAd = patchedAd ?? ad ?? fetchedAd;
@@ -98,6 +98,12 @@ function AdEditDrawerContent({
       cancelled = true;
     };
   }, [adId, ad]);
+
+  useEffect(() => {
+    if (!showEditAction && mode === 'edit') {
+      setMode('view');
+    }
+  }, [showEditAction, mode]);
 
   const handleSuccess = async (updated?: Ad) => {
     if (updated) setPatchedAd(updated);

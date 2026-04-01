@@ -48,7 +48,7 @@ function RedirectEditDrawerContent({
   const [patched, setPatched] = useState<Redirect | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
+  const [mode, setMode] = useState<'view' | 'edit'>(showEditAction ? initialMode : 'view');
 
   const resolved = patched ?? redirect ?? fetched;
   const displayError = !redirect && !redirectId ? 'No redirect selected' : fetchError;
@@ -85,6 +85,12 @@ function RedirectEditDrawerContent({
       cancelled = true;
     };
   }, [redirectId, redirect]);
+
+  useEffect(() => {
+    if (!showEditAction && mode === 'edit') {
+      setMode('view');
+    }
+  }, [showEditAction, mode]);
 
   const handleSuccess = async (updated?: Redirect) => {
     if (updated) setPatched(updated);

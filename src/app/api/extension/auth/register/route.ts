@@ -11,6 +11,37 @@ import { computeTrialEndDateFromNow } from '@/lib/extension-user-subscription';
 
 export const dynamic = 'force-dynamic';
 
+/** Drizzle/postgres-js wraps DB errors: outer message is "Failed query…"; 23505 lives on `cause`. */
+function isUniqueConstraintViolation(err: unknown): boolean {
+  let e: unknown = err;
+  for (let i = 0; i < 12 && e; i++) {
+    if (typeof e === 'object' && e !== null && 'code' in e) {
+      const code = (e as { code: unknown }).code;
+      if (code === '23505' || code === 23505) return true;
+    }
+    const msg =
+      e instanceof Error
+        ? e.message
+        : typeof e === 'object' &&
+            e !== null &&
+            'message' in e &&
+            typeof (e as { message: unknown }).message === 'string'
+          ? (e as { message: string }).message
+          : '';
+    const lower = msg.toLowerCase();
+    if (lower.includes('unique') || lower.includes('duplicate')) {
+      return true;
+    }
+    e =
+      e instanceof Error
+        ? e.cause
+        : typeof e === 'object' && e !== null && 'cause' in e
+          ? (e as { cause: unknown }).cause
+          : undefined;
+  }
+  return false;
+}
+
 const identifierSchema = z
   .string()
   .trim()
@@ -128,8 +159,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes('unique') || msg.includes('duplicate')) {
+    if (isUniqueConstraintViolation(error)) {
       return NextResponse.json(
         { error: 'Email or identifier already in use' },
         { status: 409 }

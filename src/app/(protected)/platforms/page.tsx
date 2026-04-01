@@ -19,7 +19,7 @@ type PageProps = {
 export default async function PlatformsPage({ searchParams }: PageProps) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') redirect('/');
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const allPlatforms = await db.select().from(platforms).orderBy(platforms.createdAt);
   const campaignPlatformRows = await db
@@ -41,5 +41,11 @@ export default async function PlatformsPage({ searchParams }: PageProps) {
 
   const { edit } = await searchParams;
 
-  return <PlatformsTableWithDrawer platforms={platformsWithCounts} initialEditId={edit ?? null} />;
+  return (
+    <PlatformsTableWithDrawer
+      platforms={platformsWithCounts}
+      initialEditId={edit ?? null}
+      isAdmin={isAdmin}
+    />
+  );
 }

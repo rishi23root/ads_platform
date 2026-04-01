@@ -1,5 +1,5 @@
 /**
- * Multi-user frequency cap load test: 10 end users × 15 requests each vs `specific_count` 10.
+ * Multi-user frequency cap load test: 3 shared end users × 15 requests each vs `specific_count` 10.
  * Per campaign type: ads, popup, notification, redirect.
  *
  * Each user's requests are sequential (avoids parallel race past the cap). Users in a batch run in parallel.
@@ -8,12 +8,17 @@
  */
 import { describe, it, expect } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
+import { postExtensionAdBlock } from '../../support/extension-ad-block-request';
+import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
+import {
+  EXTENSION_INTEGRATION_PASSWORD,
+  EXTENSION_SHARED_USER_EMAILS,
+} from '../../support/extension-test-constants';
 import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-url';
 import { database as db } from '@/db';
 import {
   ads,
   campaigns,
-  endUsers,
   enduserEvents,
   notifications,
   platforms,
@@ -24,11 +29,10 @@ import {
 const BASE = extensionIntegrationBaseUrl();
 const integration = BASE ? describe : describe.skip;
 
-const TOTAL_USERS = 10;
-const BATCH_SIZE = 25;
+const TOTAL_USERS = 3;
+const BATCH_SIZE = 3;
 const REQUESTS_PER_USER = 15;
 const FREQUENCY_COUNT = 10;
-const LOAD_TEST_PASSWORD = 'VitestFreqLoad!99';
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 type CampaignKind = 'ads' | 'popup' | 'notification' | 'redirect';
@@ -289,38 +293,19 @@ function countServedInResponse(
 }
 
 async function registerAndLogin(email: string): Promise<{ token: string; endUserId: string }> {
-  const registerRes = await fetch(`${BASE}/api/extension/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: LOAD_TEST_PASSWORD }),
-  });
-  expect(registerRes.status).toBe(201);
-  const reg = (await registerRes.json()) as { user?: { id?: string | null } };
-  const endUserId = reg.user?.id ?? '';
-  expect(endUserId.length).toBeGreaterThan(0);
-
-  const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: LOAD_TEST_PASSWORD }),
-  });
-  expect(loginRes.status).toBe(200);
-  const login = (await loginRes.json()) as { token?: string };
-  const token = login.token ?? '';
-  expect(token.length).toBeGreaterThan(16);
-  return { token, endUserId };
+  return registerOrLoginExtensionEndUser(BASE!, email, EXTENSION_INTEGRATION_PASSWORD);
 }
 
 async function runOneUser(
   kind: CampaignKind,
-  suffix: string,
   userIndex: number,
   batchIndex: number,
   indexInBatch: number,
   setup: SetupRow
 ): Promise<UserResult> {
-  const email = `vitest.freqload.${kind}.${suffix}.${userIndex}@example.test`;
-  const { token, endUserId } = await registerAndLogin(email);
+  const email = EXTENSION_SHARED_USER_EMAILS[userIndex];
+  const { token: initialToken, endUserId } = await registerAndLogin(email);
+  const session = { token: initialToken };
   const fwd = syntheticIp(batchIndex, indexInBatch);
 
   let servedCount = 0;
@@ -330,16 +315,17 @@ async function runOneUser(
         ? { requestType: 'notification' as const }
         : { domain: setup.platformDomain!, requestType: 'ad' as const };
 
-    const blockRes = await fetch(`${BASE}/api/extension/ad-block`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    const blockRes = await postExtensionAdBlock(
+      BASE!,
+      email,
+      EXTENSION_INTEGRATION_PASSWORD,
+      session,
+      payload,
+      {
         'user-agent': 'vitest-frequency-load',
         'x-forwarded-for': fwd,
-      },
-      body: JSON.stringify(payload),
-    });
+      }
+    );
     expect(blockRes.status).toBe(200);
     const blockJson = (await blockRes.json()) as Parameters<typeof countServedInResponse>[1];
     if (countServedInResponse(kind, blockJson, setup.matchValue)) {
@@ -400,7 +386,7 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
       const batchResults = await Promise.all(
         Array.from({ length: count }, (_, i) => {
           const globalIdx = start + i;
-          return runOneUser(kind, suffix, globalIdx, b, i, setup);
+          return runOneUser(kind, globalIdx, b, i, setup);
         })
       );
 
@@ -440,9 +426,6 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
       .set({ status: 'deleted', updatedAt: new Date() })
       .where(eq(campaigns.id, setup.campaignId));
 
-    if (endUserIds.length > 0) {
-      await db.delete(endUsers).where(inArray(endUsers.id, endUserIds));
-    }
     if (platformIds.length > 0) {
       await db.delete(platforms).where(inArray(platforms.id, platformIds));
     }
@@ -454,7 +437,7 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
   }
 }
 
-integration('extension multi-user frequency load (10 users × 15 req, cap 10)', () => {
+integration('extension multi-user frequency load (3 users × 15 req, cap 10)', () => {
   // Run one campaign type at a time: parallel test execution would overload the API and distort results.
   describe.sequential('per campaign type', () => {
     it('ads: each user capped at 10 deliveries', { timeout: DEFAULT_TIMEOUT_MS }, async () => {

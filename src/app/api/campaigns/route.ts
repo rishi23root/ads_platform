@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaigns, notifications } from '@/db/schema';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { getSessionWithRole } from '@/lib/dal';
 import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
-// GET list campaigns (non-admin: own only; admin: all). Paginated: ?page=1&pageSize=50
+// GET list campaigns (workspace-wide; soft-deleted excluded unless admin ?includeDeleted=1). Paginated: ?page=1&pageSize=50
 export async function GET(request: NextRequest) {
   try {
     const sessionWithRole = await getSessionWithRole();
@@ -24,16 +24,7 @@ export async function GET(request: NextRequest) {
     const includeDeleted =
       searchParams.get('includeDeleted') === '1' && sessionWithRole.role === 'admin';
 
-    const scope =
-      sessionWithRole.role === 'admin'
-        ? undefined
-        : eq(campaigns.createdBy, sessionWithRole.user.id);
-
-    const hideDeletedFilter = includeDeleted ? undefined : campaignRowNotSoftDeleted;
-    const listWhere =
-      hideDeletedFilter && scope
-        ? and(hideDeletedFilter, scope)
-        : hideDeletedFilter ?? scope;
+    const listWhere = includeDeleted ? undefined : campaignRowNotSoftDeleted;
 
     const listQuery = db
       .select({

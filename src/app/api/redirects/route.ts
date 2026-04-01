@@ -3,6 +3,7 @@ import { database as db } from '@/db';
 import { redirects } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
 import { getLinkedCampaignCountByRedirectId } from '@/lib/campaign-linked-counts';
+import { publishRedirectsUpdated } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    await publishRedirectsUpdated();
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error('Error creating redirect:', error);

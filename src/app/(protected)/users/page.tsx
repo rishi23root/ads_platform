@@ -52,9 +52,7 @@ export default async function UsersPage({
 }) {
   const sessionWithRole = await getSessionWithRole();
   if (!sessionWithRole) redirect('/login');
-  if (sessionWithRole.role !== 'admin') {
-    redirect('/');
-  }
+  const isAdmin = sessionWithRole.role === 'admin';
 
   const params = await searchParams;
   const filters = parseEndUsersDashboardFilters(params);
@@ -134,18 +132,18 @@ export default async function UsersPage({
                 filterParams={filterParams}
               />
             )}
-            <ExportCsvButton filterParams={filterParams} />
+            {isAdmin && <ExportCsvButton filterParams={filterParams} />}
             <DateDisplayToggleButton />
             <RefreshDataButton
               ariaLabel="Refresh users"
               tooltip="Reload users with current filters"
             />
-            <AddEndUserDialog />
+            {isAdmin && <AddEndUserDialog />}
           </div>
         </div>
         <UsersActiveFilterChips chips={filterChips} />
         <div className="rounded-md border">
-          <UsersTable rows={usersList} />
+          <UsersTable rows={usersList} isAdmin={isAdmin} />
         </div>
       </section>
     </UsersPageLayout>

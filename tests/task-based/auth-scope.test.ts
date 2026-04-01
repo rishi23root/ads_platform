@@ -25,8 +25,8 @@ describe('end events campaign owner access', () => {
     expect(endEventsRequiresCampaignOwnerJoin('admin')).toBe(false);
   });
 
-  it('requires campaign join for non-admin', () => {
-    expect(endEventsRequiresCampaignOwnerJoin('user')).toBe(true);
+  it('does not require campaign join for user (workspace-wide event reads)', () => {
+    expect(endEventsRequiresCampaignOwnerJoin('user')).toBe(false);
   });
 
   it('exposes INNER JOIN condition for non-admin queries', () => {
@@ -56,7 +56,7 @@ describe('getAccessibleCampaignById', () => {
     expect(result).toEqual(row);
   });
 
-  it('returns null when the DB returns no row (non-admin / wrong owner)', async () => {
+  it('returns null when the DB returns no row (missing campaign)', async () => {
     dbMocks.limit.mockResolvedValue([]);
 
     const session = {
@@ -69,6 +69,23 @@ describe('getAccessibleCampaignById', () => {
       '550e8400-e29b-41d4-a716-446655440000'
     );
     expect(result).toBeNull();
+  });
+
+  it('returns the row for non-admin when campaign exists but createdBy is someone else', async () => {
+    const row = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      createdBy: 'other-user',
+    } as Awaited<ReturnType<typeof getAccessibleCampaignById>> & object;
+
+    dbMocks.limit.mockResolvedValue([row]);
+
+    const session = {
+      user: { id: 'user-a' },
+      role: 'user' as const,
+    } as NonNullable<SessionWithRole>;
+
+    const result = await getAccessibleCampaignById(session, row.id);
+    expect(result).toEqual(row);
   });
 
   it('returns the row for admin when the DB returns a match', async () => {

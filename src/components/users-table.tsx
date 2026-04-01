@@ -41,9 +41,10 @@ function daysLeftLabel(formatted: string): string {
 
 interface UsersTableProps {
   rows: EndUserListRow[];
+  isAdmin?: boolean;
 }
 
-export function UsersTable({ rows }: UsersTableProps) {
+export function UsersTable({ rows, isAdmin = false }: UsersTableProps) {
   const colCount = 10;
 
   return (
@@ -138,7 +139,12 @@ export function UsersTable({ rows }: UsersTableProps) {
                     {daysLeftLabel(daysLeft)}
                   </TableCell>
                   <TableCell className={cn(cell, 'text-right whitespace-nowrap')}>
-                    <EndUserRowActions userId={v.id} email={v.email} identifier={v.identifier} />
+                    <EndUserRowActions
+                      userId={v.id}
+                      email={v.email}
+                      identifier={v.identifier}
+                      canDelete={isAdmin}
+                    />
                   </TableCell>
                 </TableRow>
               );

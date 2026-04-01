@@ -9,12 +9,15 @@ Integration tests for the **extension** surface: register/login, domains, ad-blo
 | `extension-user-flow.integration.test.ts` | HTTP: `POST` register/login, `GET` domains, `POST` ad-block with bearer token; asserts status codes, token shape, JSON arrays. |
 | `extension-event-types-frequency.integration.test.ts` | Creates campaigns, fires many ad-block requests, asserts per-campaign caps and `enduser_events` row types/counts via Drizzle + live DB. |
 | `extension-multi-user-frequency-load.integration.test.ts` | 10 users × 15 requests per campaign type (`ads`, `popup`, `notification`, `redirect`), asserts per-user `specific_count` cap and DB event rows; runs types sequentially. |
+| `extension-v2-http.integration.test.ts` | v2: `GET /live` (first SSE `init`), `POST /serve/ads`, `POST /events` validation and auth. |
 
 ## Prerequisites
 
 - `EXTENSION_INTEGRATION=1` or `EXTENSION_INTEGRATION_RUN=1`
 - Base URL set (see [`../../support/extension-test-base-url.ts`](../../support/extension-test-base-url.ts))
 - **Next app + DB running** and matching `DATABASE_URL` in env for the DB-heavy test
+
+**Vitest runs test files sequentially** (`fileParallelism: false` in [`vitest.config.ts`](../../vitest.config.ts)). Extension suites reuse the same shared login emails and single-session tokens; running multiple integration files in parallel causes **401** and bogus frequency counts.
 
 ## How to run
 
@@ -34,6 +37,12 @@ Multi-user frequency load only (long-running):
 
 ```bash
 pnpm test:frequency-load
+```
+
+v2 endpoints only:
+
+```bash
+pnpm test:extension-v2
 ```
 
 Verbose:

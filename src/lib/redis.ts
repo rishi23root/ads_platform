@@ -142,6 +142,40 @@ export async function publishCampaignUpdated(campaignId: string): Promise<void> 
   );
 }
 
+/** Admin changed redirect rows — extension SSE should refresh cached redirect rules. */
+export async function publishRedirectsUpdated(): Promise<void> {
+  await publishRealtimeNotification(JSON.stringify({ type: 'redirects_updated' }));
+}
+
+/** Admin changed ad creative rows — informational for extension cache. */
+export async function publishAdsUpdated(): Promise<void> {
+  await publishRealtimeNotification(JSON.stringify({ type: 'ads_updated' }));
+}
+
+/** Admin changed notification creative rows — informational for extension cache. */
+export async function publishNotificationsUpdated(): Promise<void> {
+  await publishRealtimeNotification(JSON.stringify({ type: 'notifications_updated' }));
+}
+
+/**
+ * After client-reported events, notify this user's SSE connections of new frequency count.
+ * Handlers must filter by `endUserId` so other users do not receive foreign updates.
+ */
+export async function publishFrequencyUpdated(params: {
+  endUserId: string;
+  campaignId: string;
+  count: number;
+}): Promise<void> {
+  await publishRealtimeNotification(
+    JSON.stringify({
+      type: 'frequency_updated',
+      endUserId: params.endUserId,
+      campaignId: params.campaignId,
+      count: params.count,
+    })
+  );
+}
+
 /**
  * Publish the current connection count to REALTIME_COUNT_CHANNEL so dashboard SSE subscribers get updates.
  * No-op if Redis is not configured.

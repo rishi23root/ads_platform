@@ -25,9 +25,10 @@ function formatAmount(cents: number, currency: string): string {
 interface PaymentsTableProps {
   payments: PaymentRow[];
   onChanged?: () => void;
+  allowDelete?: boolean;
 }
 
-export function PaymentsTable({ payments, onChanged }: PaymentsTableProps) {
+export function PaymentsTable({ payments, onChanged, allowDelete = true }: PaymentsTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const onDelete = useCallback(
@@ -66,7 +67,7 @@ export function PaymentsTable({ payments, onChanged }: PaymentsTableProps) {
             <TableHead>Amount</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Description</TableHead>
-            <TableHead className="w-[72px]" />
+            {allowDelete ? <TableHead className="w-[72px]" /> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -80,19 +81,21 @@ export function PaymentsTable({ payments, onChanged }: PaymentsTableProps) {
               <TableCell className="text-sm text-muted-foreground max-w-[280px] truncate">
                 {p.description ?? '—'}
               </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive hover:text-destructive"
-                  disabled={deletingId === p.id}
-                  onClick={() => onDelete(p.id)}
-                  aria-label="Delete payment"
-                >
-                  <IconTrash className="h-4 w-4" />
-                </Button>
-              </TableCell>
+              {allowDelete ? (
+                <TableCell className="text-right">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={deletingId === p.id}
+                    onClick={() => onDelete(p.id)}
+                    aria-label="Delete payment"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>
