@@ -5,8 +5,8 @@ import { database as db } from '@/db';
 import { enduserEvents, platforms } from '@/db/schema';
 import type { EndUserRow } from '@/db/schema';
 import {
-  domainsMatch,
   normalizeDomainForMatch,
+  platformIdSetForNormalizedDomain,
   redirectSourceMatchesVisit,
 } from '@/lib/domain-utils';
 import {
@@ -15,12 +15,12 @@ import {
   fetchFrequencyCountsForEndUser,
   hydrateCampaignPayloads,
 } from '@/lib/extension-live-init';
+import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import {
   currentLocalMinutesSinceMidnight,
   filterQualifyingExtensionCampaigns,
   isExtensionUserNewForAdBlock,
   type ExtensionCampaignQualifyContext,
-  type ExtensionCampaignRuleFields,
 } from '@/lib/extension-ad-block-qualify';
 import { computeExtensionDaysLeft } from '@/lib/extension-user-subscription';
 
@@ -56,24 +56,15 @@ export class ExtensionAdBlockError extends Error {
   }
 }
 
-function formatTime(t: unknown): string | null {
-  if (t == null) return null;
-  return String(t);
-}
-
-function toRuleFields(c: CampaignSelectRow): ExtensionCampaignRuleFields {
-  return {
-    id: c.id,
-    targetAudience: c.targetAudience,
-    frequencyType: c.frequencyType,
-    frequencyCount: c.frequencyCount,
-    timeStart: formatTime(c.timeStart),
-    timeEnd: formatTime(c.timeEnd),
-    status: c.status,
-    startDate: c.startDate,
-    endDate: c.endDate,
-    countryCodes: c.countryCodes,
-  };
+export function assertExtensionEndUserAccess(endUser: EndUserRow): void {
+  const daysLeft = computeExtensionDaysLeft({
+    endDate: endUser.endDate,
+    plan: endUser.plan,
+    startDate: endUser.startDate,
+  });
+  if (daysLeft !== null && daysLeft <= 0) {
+    throw new ExtensionAdBlockError('Access ended', 403, { error: 'trial_expired' });
+  }
 }
 
 function campaignMatchesVisitDomain(
@@ -127,14 +118,7 @@ export async function runExtensionAdBlock(params: {
 }> {
   const { endUser, request, domain: rawDomain, requestType } = params;
 
-  const daysLeft = computeExtensionDaysLeft({
-    endDate: endUser.endDate,
-    plan: endUser.plan,
-    startDate: endUser.startDate,
-  });
-  if (daysLeft !== null && daysLeft <= 0) {
-    throw new ExtensionAdBlockError('Access ended', 403, { error: 'trial_expired' });
-  }
+  assertExtensionEndUserAccess(endUser);
 
   const wantsAds = requestType !== 'notification';
   const wantsNotifications = requestType !== 'ad';
@@ -147,15 +131,7 @@ export async function runExtensionAdBlock(params: {
     .select({ id: platforms.id, domain: platforms.domain })
     .from(platforms);
 
-  const platformIdSetForVisit = new Set<string>();
-  if (normalizedDomain) {
-    for (const p of platformRows) {
-      const d = (p.domain ?? '').trim();
-      if (d && domainsMatch(normalizedDomain, d)) {
-        platformIdSetForVisit.add(p.id);
-      }
-    }
-  }
+  const platformIdSetForVisit = platformIdSetForNormalizedDomain(normalizedDomain, platformRows);
 
   const now = new Date();
   const activeRows = await fetchActiveCampaignRowsForExtension(now);
@@ -187,7 +163,7 @@ export async function runExtensionAdBlock(params: {
     viewCountByCampaignId: new Map(Object.entries(frequencyCounts).map(([k, v]) => [k, v])),
   };
 
-  const rules = requestScoped.map(toRuleFields);
+  const rules = requestScoped.map(campaignSelectRowToRuleFields);
   const qualifiedRules = filterQualifyingExtensionCampaigns(rules, ctx);
   const qualifiedIds = new Set(qualifiedRules.map((r) => r.id));
   const qualifiedRows = requestScoped.filter((c) => qualifiedIds.has(c.id));

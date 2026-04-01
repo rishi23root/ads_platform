@@ -1,7 +1,9 @@
-import { registerOrLoginExtensionEndUser } from './extension-register-or-login';
+import {
+  postExtensionWithBearerRetry,
+  type ExtensionBearerSession,
+} from './extension-authed-post';
 
-/** Mutable bearer; updated if another login invalidates the previous session (single-session policy in createEnduserSession). */
-export type ExtensionBearerSession = { token: string };
+export type { ExtensionBearerSession };
 
 /**
  * POST /api/extension/ad-block. On 401, logs in again and retries once so shared test users stay valid when
@@ -15,22 +17,13 @@ export async function postExtensionAdBlock(
   body: unknown,
   extraHeaders: Record<string, string>
 ): Promise<Response> {
-  const url = `${baseUrl}/api/extension/ad-block`;
-  const buildInit = (token: string): RequestInit => ({
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...extraHeaders,
-    },
-    body: JSON.stringify(body),
-  });
-
-  let res = await fetch(url, buildInit(session.token));
-  if (res.status === 401) {
-    const fresh = await registerOrLoginExtensionEndUser(baseUrl, email, password);
-    session.token = fresh.token;
-    res = await fetch(url, buildInit(session.token));
-  }
-  return res;
+  return postExtensionWithBearerRetry(
+    baseUrl,
+    '/api/extension/ad-block',
+    email,
+    password,
+    session,
+    body,
+    extraHeaders
+  );
 }

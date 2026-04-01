@@ -2,6 +2,10 @@
  * Multi-user frequency cap load test: 3 shared end users × 15 requests each vs `specific_count` 10.
  * Per campaign type: ads, popup, notification, redirect.
  *
+ * Campaigns and platforms use **stable names/domains** (`FREQLOAD_*`); each run **reactivates** the row
+ * if it was soft-deleted by the previous run (no new campaign row every time). Platforms are not deleted
+ * in teardown so rows stay reusable.
+ *
  * Each user's requests are sequential (avoids parallel race past the cap). Users in a batch run in parallel.
  *
  * Opt-in: EXTENSION_INTEGRATION=1 + live base URL (see tests/support/extension-test-base-url.ts).
@@ -78,7 +82,10 @@ function printSummary(
   console.log(`Expected event type: ${eventTypeExpected}`);
 }
 
-async function ensureCreatorUser(suffix: string): Promise<{
+/** Stable id/email when this test file must insert the only Better Auth user (no admin exists yet). */
+const FREQLOAD_CREATOR_KEY = 'freqload';
+
+async function ensureCreatorUser(): Promise<{
   creatorUserId: string;
   createdCreatorUserId: string | null;
 }> {
@@ -86,10 +93,10 @@ async function ensureCreatorUser(suffix: string): Promise<{
   let creatorUserId = existingCreator[0]?.id ?? null;
   let createdCreatorUserId: string | null = null;
   if (!creatorUserId) {
-    creatorUserId = `vitest-creator-freqload-${suffix}`;
+    creatorUserId = `vitest-creator-freqload-${FREQLOAD_CREATOR_KEY}`;
     await db.insert(user).values({
       id: creatorUserId,
-      email: `vitest.creator.freqload.${suffix}@example.test`,
+      email: `vitest.creator.freqload.${FREQLOAD_CREATOR_KEY}@example.test`,
       name: 'Vitest Creator',
       emailVerified: true,
       role: 'admin',
@@ -106,9 +113,46 @@ type SetupRow = {
   matchValue: string;
 };
 
-async function insertCampaignFixture(
+/** Stable fixtures reused across runs (reactivate after soft-delete); matches extension-event-types-frequency pattern. */
+const FREQLOAD_FIXTURE = {
+  ads: {
+    campaignName: 'Vitest FreqLoad ads',
+    platformName: 'Vitest freq load ads',
+    platformDomain: 'vitest-freqload-ads.invalid',
+    adName: 'Vitest FreqLoad Ad',
+  },
+  popup: {
+    campaignName: 'Vitest FreqLoad popup',
+    platformName: 'Vitest freq load popup',
+    platformDomain: 'vitest-freqload-popup.invalid',
+    adName: 'Vitest FreqLoad Popup',
+  },
+  notification: {
+    campaignName: 'Vitest FreqLoad notification',
+    notifTitle: 'Vitest FreqLoad Notif',
+  },
+  redirect: {
+    campaignName: 'Vitest FreqLoad redirect',
+    platformName: 'Vitest freq load redirect',
+    platformDomain: 'vitest-freqload-redirect.invalid',
+    redirectRuleName: 'Vitest FreqLoad Redirect',
+    destinationUrl: 'https://example.test/freqload-redir',
+  },
+} as const;
+
+async function getOrCreatePlatform(domain: string, name: string): Promise<string> {
+  const [byDomain] = await db
+    .select({ id: platforms.id })
+    .from(platforms)
+    .where(eq(platforms.domain, domain))
+    .limit(1);
+  if (byDomain?.id) return byDomain.id;
+  const [inserted] = await db.insert(platforms).values({ name, domain }).returning({ id: platforms.id });
+  return inserted!.id;
+}
+
+async function ensureCampaignFixture(
   kind: CampaignKind,
-  suffix: string,
   creatorUserId: string
 ): Promise<{
   setup: SetupRow;
@@ -117,21 +161,48 @@ async function insertCampaignFixture(
   notificationId?: string;
   redirectId?: string;
 }> {
-  const platformDomain = `${kind}-load-${suffix}.invalid`;
-
   if (kind === 'ads') {
-    const [plat] = await db
-      .insert(platforms)
-      .values({
-        name: `Vitest freq load ads ${suffix}`,
-        domain: platformDomain,
-      })
-      .returning({ id: platforms.id });
-    const platformId = plat!.id;
+    const f = FREQLOAD_FIXTURE.ads;
+    const platformId = await getOrCreatePlatform(f.platformDomain, f.platformName);
+    const [existing] = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.name, f.campaignName), eq(campaigns.campaignType, 'ads')))
+      .limit(1);
+
+    if (existing?.id) {
+      expect(existing.adId).toBeTruthy();
+      await db
+        .update(ads)
+        .set({
+          name: f.adName,
+          description: 'load test',
+          targetUrl: 'https://example.test/freqload-ad',
+          updatedAt: new Date(),
+        })
+        .where(eq(ads.id, existing.adId!));
+      await db
+        .update(campaigns)
+        .set({
+          status: 'active',
+          frequencyType: 'specific_count',
+          frequencyCount: FREQUENCY_COUNT,
+          platformIds: [platformId],
+          countryCodes: [],
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, existing.id));
+      return {
+        setup: { campaignId: existing.id, platformDomain: f.platformDomain, matchValue: f.adName },
+        platformIds: [platformId],
+        adId: existing.adId!,
+      };
+    }
+
     const [adRow] = await db
       .insert(ads)
       .values({
-        name: `Vitest FreqLoad Ad ${suffix}`,
+        name: f.adName,
         description: 'load test',
         targetUrl: 'https://example.test/freqload-ad',
       })
@@ -139,7 +210,7 @@ async function insertCampaignFixture(
     const [camp] = await db
       .insert(campaigns)
       .values({
-        name: `Vitest FreqLoad ads ${suffix}`,
+        name: f.campaignName,
         targetAudience: 'all_users',
         campaignType: 'ads',
         frequencyType: 'specific_count',
@@ -152,25 +223,54 @@ async function insertCampaignFixture(
       })
       .returning({ id: campaigns.id });
     return {
-      setup: { campaignId: camp!.id, platformDomain, matchValue: adRow!.name },
+      setup: { campaignId: camp!.id, platformDomain: f.platformDomain, matchValue: adRow!.name },
       platformIds: [platformId],
       adId: adRow!.id,
     };
   }
 
   if (kind === 'popup') {
-    const [plat] = await db
-      .insert(platforms)
-      .values({
-        name: `Vitest freq load popup ${suffix}`,
-        domain: platformDomain,
-      })
-      .returning({ id: platforms.id });
-    const platformId = plat!.id;
+    const f = FREQLOAD_FIXTURE.popup;
+    const platformId = await getOrCreatePlatform(f.platformDomain, f.platformName);
+    const [existing] = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.name, f.campaignName), eq(campaigns.campaignType, 'popup')))
+      .limit(1);
+
+    if (existing?.id) {
+      expect(existing.adId).toBeTruthy();
+      await db
+        .update(ads)
+        .set({
+          name: f.adName,
+          description: 'load test popup',
+          targetUrl: 'https://example.test/freqload-popup',
+          updatedAt: new Date(),
+        })
+        .where(eq(ads.id, existing.adId!));
+      await db
+        .update(campaigns)
+        .set({
+          status: 'active',
+          frequencyType: 'specific_count',
+          frequencyCount: FREQUENCY_COUNT,
+          platformIds: [platformId],
+          countryCodes: [],
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, existing.id));
+      return {
+        setup: { campaignId: existing.id, platformDomain: f.platformDomain, matchValue: f.adName },
+        platformIds: [platformId],
+        adId: existing.adId!,
+      };
+    }
+
     const [adRow] = await db
       .insert(ads)
       .values({
-        name: `Vitest FreqLoad Popup ${suffix}`,
+        name: f.adName,
         description: 'load test popup',
         targetUrl: 'https://example.test/freqload-popup',
       })
@@ -178,7 +278,7 @@ async function insertCampaignFixture(
     const [camp] = await db
       .insert(campaigns)
       .values({
-        name: `Vitest FreqLoad popup ${suffix}`,
+        name: f.campaignName,
         targetAudience: 'all_users',
         campaignType: 'popup',
         frequencyType: 'specific_count',
@@ -191,17 +291,55 @@ async function insertCampaignFixture(
       })
       .returning({ id: campaigns.id });
     return {
-      setup: { campaignId: camp!.id, platformDomain, matchValue: adRow!.name },
+      setup: { campaignId: camp!.id, platformDomain: f.platformDomain, matchValue: adRow!.name },
       platformIds: [platformId],
       adId: adRow!.id,
     };
   }
 
   if (kind === 'notification') {
+    const f = FREQLOAD_FIXTURE.notification;
+    const [existing] = await db
+      .select()
+      .from(campaigns)
+      .where(
+        and(eq(campaigns.name, f.campaignName), eq(campaigns.campaignType, 'notification'))
+      )
+      .limit(1);
+
+    if (existing?.id) {
+      expect(existing.notificationId).toBeTruthy();
+      await db
+        .update(notifications)
+        .set({
+          title: f.notifTitle,
+          message: 'load test notification',
+          ctaLink: 'https://example.test/freqload-notif',
+          updatedAt: new Date(),
+        })
+        .where(eq(notifications.id, existing.notificationId!));
+      await db
+        .update(campaigns)
+        .set({
+          status: 'active',
+          frequencyType: 'specific_count',
+          frequencyCount: FREQUENCY_COUNT,
+          platformIds: [],
+          countryCodes: [],
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, existing.id));
+      return {
+        setup: { campaignId: existing.id, platformDomain: null, matchValue: f.notifTitle },
+        platformIds: [],
+        notificationId: existing.notificationId!,
+      };
+    }
+
     const [notif] = await db
       .insert(notifications)
       .values({
-        title: `Vitest FreqLoad Notif ${suffix}`,
+        title: f.notifTitle,
         message: 'load test notification',
         ctaLink: 'https://example.test/freqload-notif',
       })
@@ -209,7 +347,7 @@ async function insertCampaignFixture(
     const [camp] = await db
       .insert(campaigns)
       .values({
-        name: `Vitest FreqLoad notification ${suffix}`,
+        name: f.campaignName,
         targetAudience: 'all_users',
         campaignType: 'notification',
         frequencyType: 'specific_count',
@@ -228,29 +366,61 @@ async function insertCampaignFixture(
     };
   }
 
-  const [platR] = await db
-    .insert(platforms)
-    .values({
-      name: `Vitest freq load redirect ${suffix}`,
-      domain: platformDomain,
-    })
-    .returning({ id: platforms.id });
-  const platformId = platR!.id;
+  const f = FREQLOAD_FIXTURE.redirect;
+  const platformId = await getOrCreatePlatform(f.platformDomain, f.platformName);
+  const [existing] = await db
+    .select()
+    .from(campaigns)
+    .where(and(eq(campaigns.name, f.campaignName), eq(campaigns.campaignType, 'redirect')))
+    .limit(1);
 
-  const destinationUrl = `https://example.test/freqload-redir-${suffix}`;
+  if (existing?.id) {
+    expect(existing.redirectId).toBeTruthy();
+    await db
+      .update(redirects)
+      .set({
+        name: f.redirectRuleName,
+        sourceDomain: f.platformDomain,
+        includeSubdomains: false,
+        destinationUrl: f.destinationUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(redirects.id, existing.redirectId!));
+    await db
+      .update(campaigns)
+      .set({
+        status: 'active',
+        frequencyType: 'specific_count',
+        frequencyCount: FREQUENCY_COUNT,
+        platformIds: [platformId],
+        countryCodes: [],
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, existing.id));
+    return {
+      setup: {
+        campaignId: existing.id,
+        platformDomain: f.platformDomain,
+        matchValue: f.destinationUrl,
+      },
+      platformIds: [platformId],
+      redirectId: existing.redirectId!,
+    };
+  }
+
   const [redir] = await db
     .insert(redirects)
     .values({
-      name: `Vitest FreqLoad Redirect ${suffix}`,
-      sourceDomain: platformDomain,
+      name: f.redirectRuleName,
+      sourceDomain: f.platformDomain,
       includeSubdomains: false,
-      destinationUrl,
+      destinationUrl: f.destinationUrl,
     })
     .returning({ id: redirects.id });
   const [camp] = await db
     .insert(campaigns)
     .values({
-      name: `Vitest FreqLoad redirect ${suffix}`,
+      name: f.campaignName,
       targetAudience: 'all_users',
       campaignType: 'redirect',
       frequencyType: 'specific_count',
@@ -263,7 +433,7 @@ async function insertCampaignFixture(
     })
     .returning({ id: campaigns.id });
   return {
-    setup: { campaignId: camp!.id, platformDomain, matchValue: destinationUrl },
+    setup: { campaignId: camp!.id, platformDomain: f.platformDomain, matchValue: f.destinationUrl },
     platformIds: [platformId],
     redirectId: redir!.id,
   };
@@ -359,14 +529,9 @@ async function verifyDbEventTypes(
 }
 
 async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const endUserIds: string[] = [];
-  const { creatorUserId, createdCreatorUserId } = await ensureCreatorUser(suffix);
-  const { setup, platformIds } = await insertCampaignFixture(
-    kind,
-    suffix,
-    creatorUserId
-  );
+  const { creatorUserId, createdCreatorUserId } = await ensureCreatorUser();
+  const { setup } = await ensureCampaignFixture(kind, creatorUserId);
 
   const eventTypeExpected =
     kind === 'ads' ? 'ad' : kind === 'popup' ? 'popup' : kind === 'notification' ? 'notification' : 'redirect';
@@ -426,10 +591,7 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
       .set({ status: 'deleted', updatedAt: new Date() })
       .where(eq(campaigns.id, setup.campaignId));
 
-    if (platformIds.length > 0) {
-      await db.delete(platforms).where(inArray(platforms.id, platformIds));
-    }
-    // Keep ads / notifications / redirects rows (campaign still references them after soft-delete).
+    // Keep platforms / ads / notifications / redirects so the next run reuses the same rows (reactivate campaign only).
 
     if (createdCreatorUserId) {
       await db.delete(user).where(eq(user.id, createdCreatorUserId));

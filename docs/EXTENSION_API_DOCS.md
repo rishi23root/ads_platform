@@ -5,8 +5,8 @@
 Use **[EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** for the current architecture:
 
 - **`GET /api/extension/live`** — SSE: `init` payload (`platforms`, `campaigns`, `frequencyCounts`, …) + realtime updates (requires **Bearer** or **`?token=`**).
-- **`POST /api/extension/serve/ads`** — per-visit **inline + popup** ads (Bearer).
-- **`POST /api/extension/events`** — client-reported **notification** and **redirect** events (Bearer).
+- **`POST /api/extension/serve/ads`** — per-visit **ads, popups**, and **server-matched redirects** (Bearer); logs `ad` / `popup` / `redirect` (or `request` if nothing served). Does **not** log **`visit`**.
+- **`POST /api/extension/events`** — client-reported **`visit`** (batched 5–10 per flush, optional `visitedAt`), **notification**, and **redirect** (client-only deliveries) (Bearer).
 - Legacy **`POST /api/extension/ad-block`** — unchanged; still supported.
 
 **Authentication:** Extension end users use **`POST /api/extension/auth/register`** and **`POST /api/extension/auth/login`**, then **`Authorization: Bearer <token>`** on REST routes. **`GET /api/extension/domains`** remains public (optional; v2 `init` includes domain data).

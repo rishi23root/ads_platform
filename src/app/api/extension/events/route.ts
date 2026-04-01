@@ -3,22 +3,55 @@ import { z } from 'zod';
 import { database as db } from '@/db';
 import { enduserEvents } from '@/db/schema';
 import { resolveEndUserFromRequest } from '@/lib/enduser-auth';
-import { ExtensionAdBlockError, geoCountryFromRequest } from '@/lib/extension-ad-block-handler';
+import {
+  assertExtensionEndUserAccess,
+  ExtensionAdBlockError,
+  geoCountryFromRequest,
+} from '@/lib/extension-ad-block-handler';
 import { fetchFrequencyCountsForEndUser } from '@/lib/extension-live-init';
 import { publishFrequencyUpdated } from '@/lib/redis';
 import { checkExtensionEventsRateLimit } from '@/lib/rate-limit';
-import { computeExtensionDaysLeft } from '@/lib/extension-user-subscription';
 
 export const dynamic = 'force-dynamic';
 
-const eventItemSchema = z.object({
-  campaignId: z.string().uuid(),
-  domain: z.string().trim().min(1).max(255),
-  type: z.enum(['redirect', 'notification']),
-});
+/** Single-object shape avoids discriminatedUnion edge cases across Zod minors; rules enforced in superRefine. */
+const extensionEventItemSchema = z
+  .object({
+    type: z.enum(['visit', 'redirect', 'notification']),
+    domain: z.string().trim().min(1).max(255),
+    campaignId: z.string().uuid().optional(),
+    /** Optional client navigation time (ISO 8601). Safe to omit; not persisted to a dedicated column yet. */
+    visitedAt: z.string().datetime().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === 'visit') {
+      if (data.campaignId != null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['campaignId'],
+          message: 'omit campaignId for type visit',
+        });
+      }
+      return;
+    }
+    if (data.campaignId == null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['campaignId'],
+        message: 'campaignId is required for redirect and notification',
+      });
+    }
+    if (data.visitedAt != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['visitedAt'],
+        message: 'visitedAt is only valid for type visit',
+      });
+    }
+  });
 
 const bodySchema = z.object({
-  events: z.array(eventItemSchema).min(1).max(50),
+  events: z.array(extensionEventItemSchema).min(1).max(50),
 });
 
 export async function POST(request: NextRequest) {
@@ -32,14 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { endUser } = resolved;
-    const daysLeft = computeExtensionDaysLeft({
-      endDate: endUser.endDate,
-      plan: endUser.plan,
-      startDate: endUser.startDate,
-    });
-    if (daysLeft !== null && daysLeft <= 0) {
-      throw new ExtensionAdBlockError('Access ended', 403, { error: 'trial_expired' });
-    }
+    assertExtensionEndUserAccess(endUser);
 
     let raw: unknown;
     try {
@@ -66,7 +92,7 @@ export async function POST(request: NextRequest) {
         endUserId: endUserIdStr,
         email: emailVal,
         plan: endUser.plan,
-        campaignId: ev.campaignId,
+        campaignId: ev.type === 'visit' ? null : (ev.campaignId ?? null),
         domain: ev.domain.slice(0, 255),
         type: ev.type,
         country: geo,
@@ -74,7 +100,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const distinctCampaignIds = [...new Set(parsed.data.events.map((e) => e.campaignId))];
+    const distinctCampaignIds = [
+      ...new Set(
+        parsed.data.events
+          .filter((e) => e.type === 'redirect' || e.type === 'notification')
+          .map((e) => e.campaignId)
+          .filter((id): id is string => id != null && id.length > 0)
+      ),
+    ];
     const counts = await fetchFrequencyCountsForEndUser(endUserIdStr, distinctCampaignIds);
     for (const campaignId of distinctCampaignIds) {
       await publishFrequencyUpdated({

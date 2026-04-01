@@ -13,6 +13,7 @@ import {
 import type { EndUserRow } from '@/db/schema';
 import { endUserPublicPayload } from '@/lib/enduser-auth';
 import { getCanonicalDisplayDomain } from '@/lib/domain-utils';
+import { formatExtensionCampaignScalar } from '@/lib/extension-campaign-scalars';
 
 export type ExtensionLiveCampaignPayload = {
   id: string;
@@ -78,11 +79,6 @@ export type CampaignSelectRow = {
   countryCodes: string[] | null;
 };
 
-function formatTime(t: unknown): string | null {
-  if (t == null) return null;
-  return String(t);
-}
-
 function serializeCampaignBase(c: CampaignSelectRow): Omit<
   ExtensionLiveCampaignPayload,
   'ad' | 'notification' | 'redirect'
@@ -94,8 +90,8 @@ function serializeCampaignBase(c: CampaignSelectRow): Omit<
     campaignType: c.campaignType,
     frequencyType: c.frequencyType,
     frequencyCount: c.frequencyCount,
-    timeStart: formatTime(c.timeStart),
-    timeEnd: formatTime(c.timeEnd),
+    timeStart: formatExtensionCampaignScalar(c.timeStart),
+    timeEnd: formatExtensionCampaignScalar(c.timeEnd),
     status: c.status,
     startDate: c.startDate ? c.startDate.toISOString() : null,
     endDate: c.endDate ? c.endDate.toISOString() : null,
@@ -251,8 +247,8 @@ export async function fetchActiveCampaignRowsForExtension(
   return campaignRows as CampaignSelectRow[];
 }
 
-/** Active ads + popup campaigns only (for `/api/extension/serve/ads`). */
-export async function fetchActiveAdPopupCampaignRowsForExtension(
+/** Active ads, popup, and redirect campaigns (for `/api/extension/serve/ads`). */
+export async function fetchActiveServeAdsCampaignRowsForExtension(
   now: Date = new Date()
 ): Promise<CampaignSelectRow[]> {
   const campaignRows = await db
@@ -263,7 +259,11 @@ export async function fetchActiveAdPopupCampaignRowsForExtension(
         eq(campaigns.status, 'active'),
         or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
         or(isNull(campaigns.endDate), gte(campaigns.endDate, now)),
-        or(eq(campaigns.campaignType, 'ads'), eq(campaigns.campaignType, 'popup'))
+        or(
+          eq(campaigns.campaignType, 'ads'),
+          eq(campaigns.campaignType, 'popup'),
+          eq(campaigns.campaignType, 'redirect')
+        )
       )
     );
   return campaignRows as CampaignSelectRow[];
@@ -329,26 +329,6 @@ export async function fetchFrequencyCountsForEndUser(
     if (row.campaignId) frequencyCounts[row.campaignId] = Number(row.viewCount);
   }
   return frequencyCounts;
-}
-
-async function activeCampaignIdsInWindow(now: Date): Promise<string[]> {
-  const rows = await db
-    .select({ id: campaigns.id })
-    .from(campaigns)
-    .where(
-      and(
-        eq(campaigns.status, 'active'),
-        or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
-        or(isNull(campaigns.endDate), gte(campaigns.endDate, now))
-      )
-    );
-  return rows.map((r) => r.id);
-}
-
-/** Frequency map for all currently active campaigns (for sync reconciliation). */
-export async function fetchAllActiveFrequencyCountsForEndUser(endUserId: string): Promise<Record<string, number>> {
-  const ids = await activeCampaignIdsInWindow(new Date());
-  return fetchFrequencyCountsForEndUser(endUserId, ids);
 }
 
 /** Used when a campaign is created/updated/deleted — may be inactive or missing (deleted). */

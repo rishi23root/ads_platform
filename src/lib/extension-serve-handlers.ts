@@ -4,52 +4,42 @@ import type { NextRequest } from 'next/server';
 import { database as db } from '@/db';
 import { enduserEvents, platforms } from '@/db/schema';
 import type { EndUserRow } from '@/db/schema';
-import { domainsMatch, normalizeDomainForMatch } from '@/lib/domain-utils';
+import {
+  normalizeDomainForMatch,
+  platformIdSetForNormalizedDomain,
+  redirectSourceMatchesVisit,
+} from '@/lib/domain-utils';
 import {
   type CampaignSelectRow,
-  fetchActiveAdPopupCampaignRowsForExtension,
+  fetchActiveServeAdsCampaignRowsForExtension,
   fetchFrequencyCountsForEndUser,
   hydrateCampaignPayloads,
 } from '@/lib/extension-live-init';
+import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import {
   currentLocalMinutesSinceMidnight,
   filterQualifyingExtensionCampaigns,
   isExtensionUserNewForAdBlock,
   type ExtensionCampaignQualifyContext,
-  type ExtensionCampaignRuleFields,
 } from '@/lib/extension-ad-block-qualify';
 import {
+  assertExtensionEndUserAccess,
   ExtensionAdBlockError,
   ExtensionAdBlockPublicAd,
+  ExtensionAdBlockPublicRedirect,
   geoCountryFromRequest,
 } from '@/lib/extension-ad-block-handler';
-import { computeExtensionDaysLeft } from '@/lib/extension-user-subscription';
 
-function formatTime(t: unknown): string | null {
-  if (t == null) return null;
-  return String(t);
-}
-
-function toRuleFields(c: CampaignSelectRow): ExtensionCampaignRuleFields {
-  return {
-    id: c.id,
-    targetAudience: c.targetAudience,
-    frequencyType: c.frequencyType,
-    frequencyCount: c.frequencyCount,
-    timeStart: formatTime(c.timeStart),
-    timeEnd: formatTime(c.timeEnd),
-    status: c.status,
-    startDate: c.startDate,
-    endDate: c.endDate,
-    countryCodes: c.countryCodes,
-  };
-}
-
-function campaignMatchesVisitDomainAdsOnly(
+/** Same platform scoping as ad-block for ads/popup vs redirect (redirect may use empty platformIds). */
+function campaignMatchesVisitDomainServeAds(
   c: CampaignSelectRow,
   platformIdSetForVisit: Set<string>
 ): boolean {
   const pids = c.platformIds ?? [];
+  if (c.campaignType === 'redirect') {
+    if (pids.length === 0) return true;
+    return pids.some((id) => platformIdSetForVisit.has(id));
+  }
   if (pids.length === 0) return false;
   return pids.some((id) => platformIdSetForVisit.has(id));
 }
@@ -59,17 +49,10 @@ export async function runServeAds(params: {
   request: NextRequest;
   domain: string | undefined;
   userAgent?: string | null;
-}): Promise<{ ads: ExtensionAdBlockPublicAd[] }> {
+}): Promise<{ ads: ExtensionAdBlockPublicAd[]; redirects: ExtensionAdBlockPublicRedirect[] }> {
   const { endUser, request, domain: rawDomain } = params;
 
-  const daysLeft = computeExtensionDaysLeft({
-    endDate: endUser.endDate,
-    plan: endUser.plan,
-    startDate: endUser.startDate,
-  });
-  if (daysLeft !== null && daysLeft <= 0) {
-    throw new ExtensionAdBlockError('Access ended', 403, { error: 'trial_expired' });
-  }
+  assertExtensionEndUserAccess(endUser);
 
   const normalizedDomain = rawDomain?.trim() ? normalizeDomainForMatch(rawDomain) : '';
   if (!normalizedDomain) {
@@ -83,18 +66,12 @@ export async function runServeAds(params: {
     .select({ id: platforms.id, domain: platforms.domain })
     .from(platforms);
 
-  const platformIdSetForVisit = new Set<string>();
-  for (const p of platformRows) {
-    const d = (p.domain ?? '').trim();
-    if (d && domainsMatch(normalizedDomain, d)) {
-      platformIdSetForVisit.add(p.id);
-    }
-  }
+  const platformIdSetForVisit = platformIdSetForNormalizedDomain(normalizedDomain, platformRows);
 
   const now = new Date();
-  const adPopupRows = await fetchActiveAdPopupCampaignRowsForExtension(now);
-  const domainScoped = adPopupRows.filter((c) =>
-    campaignMatchesVisitDomainAdsOnly(c, platformIdSetForVisit)
+  const campaignRows = await fetchActiveServeAdsCampaignRowsForExtension(now);
+  const domainScoped = campaignRows.filter((c) =>
+    campaignMatchesVisitDomainServeAds(c, platformIdSetForVisit)
   );
 
   const endUserIdStr = String(endUser.id);
@@ -118,7 +95,7 @@ export async function runServeAds(params: {
     viewCountByCampaignId: new Map(Object.entries(frequencyCounts).map(([k, v]) => [k, v])),
   };
 
-  const rules = domainScoped.map(toRuleFields);
+  const rules = domainScoped.map(campaignSelectRowToRuleFields);
   const qualifiedRules = filterQualifyingExtensionCampaigns(rules, ctx);
   const qualifiedIds = new Set(qualifiedRules.map((r) => r.id));
   const qualifiedRows = domainScoped.filter((c) => qualifiedIds.has(c.id));
@@ -126,9 +103,11 @@ export async function runServeAds(params: {
   const hydrated = await hydrateCampaignPayloads(qualifiedRows);
 
   const ads: ExtensionAdBlockPublicAd[] = [];
+  const redirects: ExtensionAdBlockPublicRedirect[] = [];
   const logDomain = normalizedDomain.slice(0, 255);
   const emailVal = endUser.email?.trim() ? endUser.email.trim().slice(0, 255) : null;
 
+  let servedInventory = false;
   for (const h of hydrated) {
     if (h.ad && (h.campaignType === 'ads' || h.campaignType === 'popup')) {
       ads.push({
@@ -150,8 +129,48 @@ export async function runServeAds(params: {
         country: geo,
         userAgent: ua,
       });
+      servedInventory = true;
+    }
+    if (
+      h.redirect &&
+      h.campaignType === 'redirect' &&
+      redirectSourceMatchesVisit(
+        normalizedDomain,
+        h.redirect.sourceDomain,
+        h.redirect.includeSubdomains
+      )
+    ) {
+      redirects.push({
+        sourceDomain: h.redirect.sourceDomain,
+        includeSubdomains: h.redirect.includeSubdomains,
+        destinationUrl: h.redirect.destinationUrl,
+      });
+      await db.insert(enduserEvents).values({
+        endUserId: endUserIdStr,
+        email: emailVal,
+        plan: endUser.plan,
+        campaignId: h.id,
+        domain: logDomain,
+        type: 'redirect',
+        country: geo,
+        userAgent: ua,
+      });
+      servedInventory = true;
     }
   }
 
-  return { ads };
+  if (!servedInventory) {
+    await db.insert(enduserEvents).values({
+      endUserId: endUserIdStr,
+      email: emailVal,
+      plan: endUser.plan,
+      campaignId: null,
+      domain: logDomain,
+      type: 'request',
+      country: geo,
+      userAgent: ua,
+    });
+  }
+
+  return { ads, redirects };
 }

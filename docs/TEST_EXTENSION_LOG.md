@@ -159,6 +159,7 @@ After running the script, check your dashboard:
 
 ## Notes
 
+- **`pnpm db:truncate:enduser-events`** truncates only `enduser_events`; **`pnpm redis:reset-live-count`** clears the dashboard live connection counter in Redis when it gets stuck.
 - The script uses the same hostname shape as `/api/extension/domains` (or a fallback), which matches what a real extension sends on ad-block
 - The authenticated user is always the **`end_users`** row tied to your extension login; telemetry rows use that client’s id in **`enduser_events`**
 - Logs appear in Analytics shortly after each successful ad-block call

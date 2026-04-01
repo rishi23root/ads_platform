@@ -74,3 +74,19 @@ export function redirectSourceMatchesVisit(
   if (!includeSubdomains) return false;
   return host.endsWith(`.${source}`);
 }
+
+/** Platform ids whose stored domain matches `normalizedVisitDomain` (from {@link normalizeDomainForMatch}). */
+export function platformIdSetForNormalizedDomain(
+  normalizedVisitDomain: string,
+  platformRows: { id: string; domain: string | null }[]
+): Set<string> {
+  const out = new Set<string>();
+  if (!normalizedVisitDomain) return out;
+  for (const p of platformRows) {
+    const d = (p.domain ?? '').trim();
+    if (d && domainsMatch(normalizedVisitDomain, d)) {
+      out.add(p.id);
+    }
+  }
+  return out;
+}

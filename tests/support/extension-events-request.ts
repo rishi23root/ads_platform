@@ -1,11 +1,14 @@
-import { registerOrLoginExtensionEndUser } from './extension-register-or-login';
-import type { ExtensionBearerSession } from './extension-ad-block-request';
+import {
+  postExtensionWithBearerRetry,
+  type ExtensionBearerSession,
+} from './extension-authed-post';
 
-export type ExtensionReportedEvent = {
-  campaignId: string;
-  domain: string;
-  type: 'redirect' | 'notification';
-};
+export type { ExtensionBearerSession };
+
+export type ExtensionReportedEvent =
+  | { type: 'visit'; domain: string; visitedAt?: string }
+  | { type: 'redirect'; campaignId: string; domain: string }
+  | { type: 'notification'; campaignId: string; domain: string };
 
 /**
  * POST /api/extension/events. On 401, refreshes session and retries once.
@@ -18,22 +21,13 @@ export async function postExtensionEvents(
   body: { events: ExtensionReportedEvent[] },
   extraHeaders: Record<string, string> = {}
 ): Promise<Response> {
-  const url = `${baseUrl}/api/extension/events`;
-  const buildInit = (token: string): RequestInit => ({
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...extraHeaders,
-    },
-    body: JSON.stringify(body),
-  });
-
-  let res = await fetch(url, buildInit(session.token));
-  if (res.status === 401) {
-    const fresh = await registerOrLoginExtensionEndUser(baseUrl, email, password);
-    session.token = fresh.token;
-    res = await fetch(url, buildInit(session.token));
-  }
-  return res;
+  return postExtensionWithBearerRetry(
+    baseUrl,
+    '/api/extension/events',
+    email,
+    password,
+    session,
+    body,
+    extraHeaders
+  );
 }

@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
       userAgent: ua,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ads: result.ads,
+      redirects: result.redirects ?? [],
+    });
   } catch (error) {
     if (error instanceof ExtensionAdBlockError) {
       return NextResponse.json(error.body, { status: error.status });
