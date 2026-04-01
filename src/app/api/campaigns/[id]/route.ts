@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { formatCampaignResponse, getAccessibleCampaignById } from '@/lib/campaign-access';
 import { getSessionWithRole } from '@/lib/dal';
 import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
+import { ensureCampaignStatusDeletedEnumReady } from '@/lib/db/run-migrate';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,13 +65,6 @@ export async function PUT(
     if (!existing) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
-    if (existing.status === 'deleted') {
-      return NextResponse.json(
-        { error: 'Campaign was deleted and cannot be edited' },
-        { status: 410 }
-      );
-    }
-
     const body = await request.json();
     const {
       name,
@@ -95,6 +89,19 @@ export async function PUT(
         { error: 'Use DELETE to remove a campaign; status cannot be set to deleted via update' },
         { status: 400 }
       );
+    }
+
+    if (existing.status === 'deleted') {
+      const nextStatus = status ?? existing.status;
+      if (nextStatus !== 'active' && nextStatus !== 'inactive') {
+        return NextResponse.json(
+          {
+            error:
+              'This campaign was deleted. Set status to active or inactive to restore it (and send the rest of the campaign fields as needed).',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const effectiveCampaignType = campaignType ?? existing.campaignType;
@@ -212,6 +219,7 @@ export async function DELETE(
     }
 
     const now = new Date();
+    await ensureCampaignStatusDeletedEnumReady();
     await publishCampaignUpdated(id);
     await db
       .update(campaigns)

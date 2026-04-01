@@ -34,11 +34,23 @@ type CampaignType = 'ads' | 'popup' | 'notification' | 'redirect';
 type FrequencyType = 'full_day' | 'time_based' | 'only_once' | 'always' | 'specific_count';
 type TargetAudience = 'new_users' | 'all_users';
 
-type CampaignStatus = 'active' | 'inactive' | 'scheduled' | 'expired';
+/** Deliverable status only; scheduled/expired in DB are normalized in the form UI. */
+type EditableCampaignStatus = 'active' | 'inactive';
+
+function normalizeEditableStatus(
+  dbStatus: string | undefined,
+  opts: { mode: 'create' | 'edit'; wasDeleted: boolean }
+): EditableCampaignStatus {
+  if (opts.wasDeleted) return 'inactive';
+  if (dbStatus === 'active') return 'active';
+  return 'inactive';
+}
 
 interface CampaignFormProps extends CampaignFormOptionLists {
   campaign?: CampaignFormInitial;
   mode: 'create' | 'edit';
+  /** Only admins use the campaign form in this app; kept for clarity and future reuse. */
+  isAdmin?: boolean;
 }
 
 /** Groups fields under a labelled region (matches drawer “Details” / resource panels). */
@@ -88,6 +100,7 @@ export function CampaignForm({
   notificationsList,
   redirectsList,
   mode,
+  isAdmin = false,
 }: CampaignFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -107,7 +120,17 @@ export function CampaignForm({
   const [adId, setAdId] = useState<string>(campaign?.adId ?? '');
   const [notificationId, setNotificationId] = useState<string>(campaign?.notificationId ?? '');
   const [redirectId, setRedirectId] = useState<string>(campaign?.redirectId ?? '');
-  const [status, setStatus] = useState<CampaignStatus>((campaign?.status as CampaignStatus) ?? 'inactive');
+  const wasDeleted = mode === 'edit' && campaign?.status === 'deleted';
+  const legacyScheduleStatus =
+    mode === 'edit' &&
+    campaign?.status != null &&
+    (campaign.status === 'scheduled' || campaign.status === 'expired');
+  const [status, setStatus] = useState<EditableCampaignStatus>(() =>
+    normalizeEditableStatus(campaign?.status, {
+      mode,
+      wasDeleted: Boolean(wasDeleted),
+    })
+  );
   const [startDate, setStartDate] = useState(
     campaign?.startDate ? isoOrDateToLocalDatetimeValue(campaign.startDate) : ''
   );
@@ -253,15 +276,26 @@ export function CampaignForm({
                   </div>
                   <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select value={status} onValueChange={(v) => setStatus(v as CampaignStatus)}>
+                    <Select value={status} onValueChange={(v) => setStatus(v as EditableCampaignStatus)}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="inactive">Inactive</SelectItem>
-                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
                       </SelectContent>
                     </Select>
+                    {wasDeleted && isAdmin && (
+                      <InfoHint>
+                        This campaign is <strong className="text-foreground">deleted</strong> and does not
+                        serve in the extension. Saving with Active or Inactive restores it (soft-delete is
+                        cleared).
+                      </InfoHint>
+                    )}
+                    {legacyScheduleStatus && (
+                      <InfoHint>
+                        This campaign had status &quot;{campaign?.status}&quot; in the database. On save it
+                        will be stored as {status === 'active' ? 'active' : 'inactive'}.
+                      </InfoHint>
+                    )}
                   </div>
                 </div>
               </div>
@@ -656,8 +690,13 @@ export function CampaignForm({
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Status
                 </span>
-                <Badge variant={campaignStatusBadgeVariant(status)} className="capitalize">
-                  {status}
+                <Badge
+                  variant={campaignStatusBadgeVariant(
+                    wasDeleted ? 'deleted' : legacyScheduleStatus ? (campaign?.status ?? status) : status
+                  )}
+                  className="capitalize"
+                >
+                  {wasDeleted ? 'deleted' : legacyScheduleStatus ? campaign?.status : status}
                 </Badge>
               </div>
               <div className="space-y-1">

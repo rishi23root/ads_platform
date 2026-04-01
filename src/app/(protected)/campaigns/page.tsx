@@ -3,7 +3,8 @@ import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns as campaignsTable } from '@/db/schema';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
+import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { CampaignsListTable } from '@/components/campaigns-list-table';
@@ -15,12 +16,18 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-async function getCampaignsWithDetails(createdByUserId?: string) {
-  const hideDeleted = ne(campaignsTable.status, 'deleted');
+async function getCampaignsWithDetails(createdByUserId?: string, includeSoftDeleted = false) {
   const filtered =
     createdByUserId !== undefined
-      ? db.select().from(campaignsTable).where(and(eq(campaignsTable.createdBy, createdByUserId), hideDeleted))
-      : db.select().from(campaignsTable).where(hideDeleted);
+      ? includeSoftDeleted
+        ? db.select().from(campaignsTable).where(eq(campaignsTable.createdBy, createdByUserId))
+        : db
+            .select()
+            .from(campaignsTable)
+            .where(and(eq(campaignsTable.createdBy, createdByUserId), campaignRowNotSoftDeleted))
+      : includeSoftDeleted
+        ? db.select().from(campaignsTable)
+        : db.select().from(campaignsTable).where(campaignRowNotSoftDeleted);
   const list = await filtered.orderBy(desc(campaignsTable.createdAt));
   return list.map((c) => ({
     id: c.id,
@@ -45,8 +52,10 @@ export default async function CampaignsPage() {
   if (!sessionWithRole) redirect('/login');
 
   const isAdmin = sessionWithRole.role === 'admin';
+  // Admins load soft-deleted rows too so the list status filter (e.g. "Deleted") can show them.
   const campaigns = await getCampaignsWithDetails(
-    isAdmin ? undefined : sessionWithRole.user.id
+    isAdmin ? undefined : sessionWithRole.user.id,
+    isAdmin
   );
 
   return (

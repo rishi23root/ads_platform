@@ -37,9 +37,6 @@ export default async function EditCampaignPage({
 
   const [c, lists] = await Promise.all([getCampaignByIdOrUndefined(id), getCampaignFormOptionLists()]);
   if (!c) notFound();
-  if (c.status === 'deleted') {
-    redirect(`/campaigns/${id}`);
-  }
 
   const campaign = campaignRowToFormInitial(c);
 
@@ -48,7 +45,7 @@ export default async function EditCampaignPage({
       title="Edit campaign"
       description="Update targeting, schedule, and delivery rules for this campaign."
     >
-      <CampaignForm campaign={campaign} {...lists} mode="edit" />
+      <CampaignForm campaign={campaign} {...lists} mode="edit" isAdmin />
     </CampaignFormShell>
   );
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaigns } from '@/db/schema';
-import { and, arrayContains, ne } from 'drizzle-orm';
+import { and, arrayContains } from 'drizzle-orm';
+import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { getSessionWithRole } from '@/lib/dal';
 
 type RouteContext = {
@@ -26,7 +27,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         status: campaigns.status,
       })
       .from(campaigns)
-      .where(and(arrayContains(campaigns.platformIds, [platformId]), ne(campaigns.status, 'deleted')))
+      .where(and(arrayContains(campaigns.platformIds, [platformId]), campaignRowNotSoftDeleted))
       .orderBy(campaigns.name);
 
     return NextResponse.json(linkedCampaigns);

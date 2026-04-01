@@ -6,7 +6,8 @@ import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns, enduserEvents, endUsers } from '@/db/schema';
 import { DASHBOARD_SERVED_EVENT_TYPES } from '@/lib/events-dashboard';
-import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
@@ -23,14 +24,15 @@ export default async function DashboardPage() {
   const session = await getSessionWithRole();
   if (!session) redirect('/login');
 
-  const hideDeleted = ne(campaigns.status, 'deleted');
   const campaignScope =
     session.role === 'admin' ? undefined : eq(campaigns.createdBy, session.user.id);
   const campaignActiveWhere = campaignScope
     ? and(eq(campaigns.status, 'active'), campaignScope)
     : eq(campaigns.status, 'active');
 
-  const totalCampaignsWhere = campaignScope ? and(campaignScope, hideDeleted) : hideDeleted;
+  const totalCampaignsWhere = campaignScope
+    ? and(campaignScope, campaignRowNotSoftDeleted)
+    : campaignRowNotSoftDeleted;
 
   const totalCampaignsPromise = db
     .select({ count: sql<number>`count(*)` })
@@ -66,13 +68,13 @@ export default async function DashboardPage() {
     ? db
       .select()
       .from(campaigns)
-      .where(and(campaignScope, hideDeleted))
+      .where(and(campaignScope, campaignRowNotSoftDeleted))
       .orderBy(desc(campaigns.createdAt))
       .limit(10)
     : db
       .select()
       .from(campaigns)
-      .where(hideDeleted)
+      .where(campaignRowNotSoftDeleted)
       .orderBy(desc(campaigns.createdAt))
       .limit(10);
 

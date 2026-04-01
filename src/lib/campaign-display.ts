@@ -1,9 +1,19 @@
 import type { Campaign } from '@/db/schema';
 
+/** Stable across SSR and client (avoids hydration mismatch from differing locales). */
+const STABLE_LOCALE = 'en-US';
+
 const SHORT_DATE_OPTS: Intl.DateTimeFormatOptions = {
+  timeZone: 'UTC',
   day: 'numeric',
   month: 'short',
   year: 'numeric',
+};
+
+const BRIEF_DAY_MONTH_OPTS: Intl.DateTimeFormatOptions = {
+  timeZone: 'UTC',
+  day: 'numeric',
+  month: 'short',
 };
 
 export function campaignAudienceLabel(audience: string): string {
@@ -68,8 +78,8 @@ export function campaignScheduleWindowLabel(
   const s = parseTs(startDate);
   const e = parseTs(endDate);
   if (!s && !e) return 'No fixed window';
-  const left = s ? s.toLocaleString(undefined, SHORT_DATE_OPTS) : '—';
-  const right = e ? e.toLocaleString(undefined, SHORT_DATE_OPTS) : 'Open-ended';
+  const left = s ? s.toLocaleString(STABLE_LOCALE, SHORT_DATE_OPTS) : '—';
+  const right = e ? e.toLocaleString(STABLE_LOCALE, SHORT_DATE_OPTS) : 'Open-ended';
   return `${left} – ${right}`;
 }
 
@@ -82,10 +92,10 @@ export function campaignScheduleBrief(
   const e = parseTs(endDate);
   if (!s && !e) return 'Always on';
   if (s && e) {
-    return `${s.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    return `${s.toLocaleDateString(STABLE_LOCALE, BRIEF_DAY_MONTH_OPTS)} – ${e.toLocaleDateString(STABLE_LOCALE, SHORT_DATE_OPTS)}`;
   }
-  if (e && !s) return `Ends ${e.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  return `From ${s!.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  if (e && !s) return `Ends ${e.toLocaleDateString(STABLE_LOCALE, SHORT_DATE_OPTS)}`;
+  return `From ${s!.toLocaleDateString(STABLE_LOCALE, SHORT_DATE_OPTS)}`;
 }
 
 export function campaignStatusBadgeVariant(

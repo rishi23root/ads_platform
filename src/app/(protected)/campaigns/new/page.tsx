@@ -23,7 +23,7 @@ export default async function NewCampaignPage() {
       title="New campaign"
       description="Configure targeting, schedule, and delivery rules for a new campaign."
     >
-      <CampaignForm {...lists} mode="create" />
+      <CampaignForm {...lists} mode="create" isAdmin />
     </CampaignFormShell>
   );
 }

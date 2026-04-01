@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaigns, notifications } from '@/db/schema';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { getSessionWithRole } from '@/lib/dal';
 import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
         ? undefined
         : eq(campaigns.createdBy, sessionWithRole.user.id);
 
-    const hideDeletedFilter = includeDeleted ? undefined : ne(campaigns.status, 'deleted');
+    const hideDeletedFilter = includeDeleted ? undefined : campaignRowNotSoftDeleted;
     const listWhere =
       hideDeletedFilter && scope
         ? and(hideDeletedFilter, scope)

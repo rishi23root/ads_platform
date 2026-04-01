@@ -184,8 +184,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                {isAdmin && <SelectItem value="deleted">Deleted</SelectItem>}
               </SelectContent>
             </Select>
           </div>
