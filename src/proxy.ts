@@ -1,3 +1,7 @@
+/**
+ * Next.js 16+ edge entry: the `proxy` file convention replaces `middleware`.
+ * See https://nextjs.org/docs/app/api-reference/file-conventions/proxy — do not add `middleware.ts`.
+ */
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 

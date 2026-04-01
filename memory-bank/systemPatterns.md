@@ -50,10 +50,10 @@
 - **Rationale**: Type-safe, lightweight, good TypeScript support
 - **Impact**: Schema-driven types, type-safe queries
 
-### 4. JWT Authentication
-- **Decision**: JWT tokens in HTTP-only cookies
-- **Rationale**: Stateless, secure, scalable
-- **Implementation**: Jose library, 7-day sessions
+### 4. Authentication (staff + extension)
+- **Decision**: **Better Auth** for dashboard staff (email/password, session cookies via `/api/auth`). Extension **end users** use **Bearer tokens** stored in `enduser_sessions` (see `src/lib/enduser-auth.ts`); ad-block and other extension APIs validate `Authorization: Bearer …`.
+- **Rationale**: Clear split between internal admins and anonymous/provisioned extension customers; Better Auth owns staff sessions and plugins (e.g. admin roles).
+- **Implementation**: `better-auth` + Drizzle adapter; `bcryptjs` for end-user passwords; session lifetime configurable (`freshAge` in `src/lib/auth.ts`, end-user session days via `ENDUSER_SESSION_DAYS`). Cryptographic helpers used by Better Auth may pull `jose` transitively—no separate JWT stack in app code for staff.
 
 ### 5. Singleton Patterns
 - **Decision**: Singleton for DB and Redis connections
@@ -127,9 +127,9 @@ export function ClientComponent({ data }) {
 - **API Routes**: CRUD operations for each entity
 
 ### Extension API
-- **Public Routes**: No authentication required
-- **Domain Filtering**: Query parameter-based filtering
-- **Logging**: Automatic request logging for analytics
+- **Routes** (under `/api/extension/`): e.g. `auth/register`, `auth/login`, `auth/logout`, `auth/me`, `domains`, `ad-block` (Bearer required where enforced)
+- **Auth**: Registration/login returns a token; clients send `Authorization: Bearer <token>` for protected extension handlers
+- **Redis**: Optional per-IP rate limit on `POST /api/extension/ad-block` when `REDIS_URL` is set
 
 ### Data Flow
 
@@ -140,26 +140,22 @@ export function ClientComponent({ data }) {
 4. Response returns to client
 5. Client redirects or updates UI
 
-#### Extension Fetches Ad
-1. Extension calls `/api/ads?domain=example.com`
-2. API queries database for active ads
-3. API logs request to `request_logs` table
-4. API returns JSON response
-5. Extension displays content
+#### Extension fetches placements
+1. Extension authenticates (`/api/extension/auth/login` or register) and receives Bearer token
+2. Extension calls `POST /api/extension/ad-block` with domain / request type and Bearer header
+3. API validates subscription/trial, resolves campaigns, returns `ads` + `notifications` arrays
+4. Optional: events recorded in `enduser_events` for analytics
 
 ## API Structure
 
 ### Admin API (Protected)
-- `/api/platforms` - Platform CRUD
-- `/api/ads` - Ad CRUD
-- `/api/notifications` - Notification CRUD
-- `/api/auth/login` - Authentication
-- `/api/auth/logout` - Session termination
+- `/api/platforms`, `/api/ads`, `/api/notifications`, `/api/campaigns`, `/api/end-users`, etc. — CRUD + exports (session required)
+- `/api/auth/[...all]` — Better Auth handler (sign-in, sign-out, session)
 
-### Extension API (Public)
-- `/api/ads?domain={domain}` - Get active ads
-- `/api/notifications?domain={domain}` - Get active notifications
-- `/api/extension/log` - Log request (analytics)
+### Extension API (end-user)
+- `/api/extension/auth/*` - Register, login, logout, session (`me`)
+- `/api/extension/domains` - Platform domains for targeting
+- `POST /api/extension/ad-block` - Ads + notifications for a domain (Bearer, rate-limited via Redis when configured)
 
 ### Response Patterns
 - **Success**: 200/201 with JSON data
@@ -186,10 +182,10 @@ export function ClientComponent({ data }) {
 ## Security Patterns
 
 ### Authentication
-- JWT tokens in HTTP-only cookies
-- Secure flag in production
-- Session expiration validation
-- Protected route middleware
+- **Staff**: Better Auth session cookies; `src/app/(protected)/layout.tsx` redirects unauthenticated users
+- **Extension users**: Opaque Bearer token + DB session row; banned users rejected in resolver
+- Secure cookies / HTTPS in production (hosting-dependent)
+- Next.js **proxy** (`src/proxy.ts`) sets baseline security headers (not Express middleware)
 
 ### Data Validation
 - Zod schemas for environment variables
@@ -204,7 +200,7 @@ export function ClientComponent({ data }) {
 ## Performance Patterns
 
 ### Caching Strategy
-- Redis for session data
+- Redis for realtime connection counts / optional rate limits (not primary session store for Better Auth)
 - Database connection pooling
 - Efficient queries with proper joins
 

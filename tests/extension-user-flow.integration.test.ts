@@ -1,6 +1,6 @@
 /**
- * Hits a running Next app + database. Resolves the API host from env (see extension-test-base-url.ts).
- * Ensure `BETTER_AUTH_BASE_URL` / `BETTER_AUTH_URL` in `.env.local` points at the stack under test.
+ * Hits a running Next app + database. Opt-in via `EXTENSION_INTEGRATION=1` (see `pnpm test:integration`).
+ * Host resolution: `extension-test-base-url.ts` (`BETTER_AUTH_BASE_URL` / `BETTER_AUTH_URL`, optional override).
  */
 import { describe, it, expect } from 'vitest';
 import { extensionIntegrationBaseUrl } from './extension-test-base-url';

@@ -11,6 +11,17 @@ This admin dashboard provides a complete solution for managing:
 - **Events**: Track extension activity (`enduser_events`: one row per serve; **Events** dashboard at `/events`; legacy path `/analytics` redirects there). The **Users** page aggregates extension customers by `enduser_id`.
 - **Extension API**: RESTful API endpoints for browser extensions to fetch ads and notifications
 
+## Architecture at a glance
+
+- **Staff (admin UI)**: Routes under `src/app/(protected)/` use Better Auth session cookies. [`src/lib/dal.ts`](./src/lib/dal.ts) exposes `getSessionWithRole`; API routes use the same pattern for `/api/*` CRUD.
+- **Extension customers**: Public routes under `src/app/api/extension/` (`ad-block`, `domains`, `auth/*`). Authenticated calls use a **Bearer** token (see [`src/lib/enduser-auth.ts`](./src/lib/enduser-auth.ts)), not the staff cookie session.
+- **Realtime in the dashboard**: The home dashboard uses **staff-authenticated** [`/api/realtime/stream`](./src/app/api/realtime/stream/route.ts) (SSE). Do not point admin UI clients at extension-only endpoints for “live” counts.
+- **`end-user` libraries** (easy to mix up):
+  - [`src/lib/end-user-dashboard.ts`](./src/lib/end-user-dashboard.ts) — KPIs and snapshot for **one** extension user (detail pages).
+  - [`src/lib/end-users-dashboard.ts`](./src/lib/end-users-dashboard.ts) — list query, filters, and pagination for `/api/end-users` and the Users table.
+- **Ops / deploy**: Environment and hosting checklist: **[docs/DEPLOY.md](./docs/DEPLOY.md)**.
+- **Edge proxy (security headers)**: [`src/proxy.ts`](./src/proxy.ts) runs before routes (Next.js 16+ `proxy` convention). Do not add `middleware.ts`; Next rejects both files at once.
+
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
@@ -73,8 +84,9 @@ DATABASE_POOL_MAX=10
 
 **Optional variables:**
 - `DATABASE_POOL_MAX` - Database connection pool size (default: 10)
-- `REDIS_URL` - Redis URL for realtime connection count and notifications
+- `REDIS_URL` - Redis URL for realtime features (`/api/realtime/*`) and optional per-IP rate limiting on `POST /api/extension/ad-block` (requests still work without Redis; limits are skipped)
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD` - For seeding first admin user
+- `EXTENSION_INTEGRATION=1` - With `pnpm test:integration`, enables HTTP tests against a running app + DB (see [.env.example](./.env.example))
 
 ### 3. Install Dependencies
 
@@ -217,10 +229,14 @@ admin_dashboard/
 - `pnpm db:migrate` - Apply database migrations
 - `pnpm db:push` - Push schema directly (dev only)
 - `pnpm db:studio` - Open Drizzle Studio
+- `pnpm test` - Vitest unit tests (extension HTTP integration tests are skipped unless `EXTENSION_INTEGRATION=1`)
+- `pnpm test:integration` - Extension register/login/domains/ad-block against a **running** app + DB (`EXTENSION_INTEGRATION=1` is set by the script)
 - `pnpm test:extension-log` - Run test script to simulate extension requests
 - `pnpm load-test:extension` - Load test extension API (10 users × 10 req/min × 10 min)
 
 ## Testing
+
+`pnpm test` runs the full Vitest suite **without** requiring `next dev`. Extension flow integration specs are opt-in: the script `pnpm test:integration` exports `EXTENSION_INTEGRATION=1` and expects `.env.local` (or CI secrets) to point `BETTER_AUTH_BASE_URL` at the live stack.
 
 ### Extension API Testing
 
@@ -334,6 +350,12 @@ The database connection uses a singleton pattern compatible with Next.js dev mod
 - `GET/POST /api/auth/*` - Better Auth catch-all (sign-in, sign-up, sign-out, session, etc.)
 
 See [docs/EXTENSION_AD_BLOCK_API.md](./docs/EXTENSION_AD_BLOCK_API.md) and [docs/EXTENSION_API_DOCS.md](./docs/EXTENSION_API_DOCS.md) for detailed extension API documentation.
+
+## Continuous integration
+
+GitHub Actions ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs `pnpm lint`, `pnpm build`, and `pnpm test` on pushes and PRs to `main` and `dev`. Build and test jobs set minimal `DATABASE_URL` and `BETTER_AUTH_*` values so CI does not rely on committed secrets.
+
+Optional dead-code pass: `pnpm dlx knip` (no Knip config in-repo; add ignores if you adopt it).
 
 ## Documentation
 
