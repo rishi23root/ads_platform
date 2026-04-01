@@ -290,22 +290,25 @@ export function EndUserDetailClient({
     user.id.length > 12 ? `${user.id.slice(0, 8)}…${user.id.slice(-4)}` : user.id
 
   const overviewStart = useMemo(
-    () => new Date(user.startDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    () =>
+      new Date(user.startDate).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }),
     [user.startDate],
   )
   const overviewEnd = useMemo(
     () =>
       user.endDate
-        ? new Date(user.endDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+        ? new Date(user.endDate).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
         : null,
     [user.endDate],
   )
   const overviewCreated = useMemo(
-    () => new Date(user.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    () =>
+      new Date(user.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }),
     [user.createdAt],
   )
   const overviewUpdated = useMemo(
-    () => new Date(user.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    () =>
+      new Date(user.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }),
     [user.updatedAt],
   )
 

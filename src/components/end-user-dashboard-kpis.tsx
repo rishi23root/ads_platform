@@ -19,8 +19,11 @@ import {
 import type { EndUserDashboardSnapshot } from "@/lib/end-user-dashboard-types"
 import { IconLayoutDashboard } from "@tabler/icons-react"
 
+/** Fixed locale so SSR and the browser output match (avoids hydration mismatch). */
+const DISPLAY_LOCALE = "en-US"
+
 function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(DISPLAY_LOCALE, {
     style: "currency",
     currency: currency || "USD",
     minimumFractionDigits: 2,
@@ -30,7 +33,7 @@ function formatMoney(cents: number, currency: string) {
 function formatWhen(iso: string | null) {
   if (!iso) return "—"
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    return new Date(iso).toLocaleString(DISPLAY_LOCALE, {
       dateStyle: "medium",
       timeStyle: "short",
     })
@@ -84,7 +87,7 @@ export function EndUserDashboardKpis({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiStat label="Lifetime events" value={events.total.toLocaleString()} />
+        <KpiStat label="Lifetime events" value={events.total.toLocaleString(DISPLAY_LOCALE)} />
         <KpiStat
           label="First activity"
           value={formatWhen(events.firstAt)}
@@ -139,7 +142,7 @@ export function EndUserDashboardKpis({
                     <TableRow key={row.campaignId}>
                       <TableCell className="font-medium text-sm">{row.campaignName}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {row.eventCount.toLocaleString()}
+                        {row.eventCount.toLocaleString(DISPLAY_LOCALE)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Link
