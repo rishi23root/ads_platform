@@ -37,6 +37,9 @@ export default async function EditCampaignPage({
 
   const [c, lists] = await Promise.all([getCampaignByIdOrUndefined(id), getCampaignFormOptionLists()]);
   if (!c) notFound();
+  if (c.status === 'deleted') {
+    redirect(`/campaigns/${id}`);
+  }
 
   const campaign = campaignRowToFormInitial(c);
 

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { campaignStatusBadgeVariant } from '@/lib/campaign-display';
 import { IconLoader2, IconTargetArrow } from '@tabler/icons-react';
 
 interface LinkedCampaign {
@@ -224,7 +225,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
                     {c.campaignType}
                   </Badge>
                   <Badge
-                    variant={c.status === 'active' ? 'default' : 'secondary'}
+                    variant={campaignStatusBadgeVariant(c.status)}
                     className="px-2 py-0.5 capitalize tabular-nums"
                   >
                     {c.status}
@@ -251,7 +252,7 @@ export function LinkedCampaigns({ type, entityId, embedded = false }: LinkedCamp
               {c.campaignType}
             </Badge>
             <Badge
-              variant={c.status === 'active' ? 'default' : 'secondary'}
+              variant={campaignStatusBadgeVariant(c.status)}
               className="shrink-0 capitalize text-xs"
             >
               {c.status}

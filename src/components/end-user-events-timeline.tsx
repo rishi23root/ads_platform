@@ -181,6 +181,7 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
                           {log.campaignId ? (
                             <CopyableIdCell
                               value={log.campaignId}
+                              href={`/campaigns/${log.campaignId}`}
                               truncateLength={8}
                               copyLabel="Campaign ID copied to clipboard"
                             />

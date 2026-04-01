@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { extensionIntegrationBaseUrl } from './extension-test-base-url';
+import { extensionIntegrationBaseUrl } from '../support/extension-test-base-url';
 
 describe('extensionIntegrationBaseUrl', () => {
   afterEach(() => {

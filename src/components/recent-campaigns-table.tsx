@@ -14,6 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { IconPencil } from '@tabler/icons-react';
+import { campaignStatusBadgeVariant } from '@/lib/campaign-display';
 
 export interface RecentCampaignRow {
   id: string;
@@ -129,15 +130,7 @@ export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTabl
                   <Badge variant="outline">{c.campaignType}</Badge>
                 </TableCell>
                 <TableCell className="py-2 overflow-hidden">
-                  <Badge
-                    variant={
-                      c.status === 'active'
-                        ? 'default'
-                        : c.status === 'expired'
-                          ? 'destructive'
-                          : 'secondary'
-                    }
-                  >
+                  <Badge variant={campaignStatusBadgeVariant(c.status)} className="capitalize">
                     {c.status}
                   </Badge>
                 </TableCell>

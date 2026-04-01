@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaigns, notifications } from '@/db/schema';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
 
@@ -20,10 +20,19 @@ export async function GET(request: NextRequest) {
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '50', 10)));
     const offset = (page - 1) * pageSize;
 
+    const includeDeleted =
+      searchParams.get('includeDeleted') === '1' && sessionWithRole.role === 'admin';
+
     const scope =
       sessionWithRole.role === 'admin'
         ? undefined
         : eq(campaigns.createdBy, sessionWithRole.user.id);
+
+    const hideDeletedFilter = includeDeleted ? undefined : ne(campaigns.status, 'deleted');
+    const listWhere =
+      hideDeletedFilter && scope
+        ? and(hideDeletedFilter, scope)
+        : hideDeletedFilter ?? scope;
 
     const listQuery = db
       .select({
@@ -35,6 +44,7 @@ export async function GET(request: NextRequest) {
         frequencyCount: campaigns.frequencyCount,
         timeStart: campaigns.timeStart,
         timeEnd: campaigns.timeEnd,
+        status: campaigns.status,
         createdBy: campaigns.createdBy,
         adId: campaigns.adId,
         notificationId: campaigns.notificationId,
@@ -52,8 +62,8 @@ export async function GET(request: NextRequest) {
     const countQuery = db.select({ count: sql<number>`count(*)` }).from(campaigns);
 
     const [list, countRow] = await Promise.all([
-      scope ? listQuery.where(scope) : listQuery,
-      scope ? countQuery.where(scope) : countQuery,
+      listWhere ? listQuery.where(listWhere) : listQuery,
+      listWhere ? countQuery.where(listWhere) : countQuery,
     ]);
 
     const totalCount = Number(countRow[0]?.count ?? 0);
@@ -111,6 +121,10 @@ export async function POST(request: NextRequest) {
         { error: 'name, campaignType, and frequencyType are required' },
         { status: 400 }
       );
+    }
+
+    if (status === 'deleted') {
+      return NextResponse.json({ error: 'Cannot create a campaign as deleted' }, { status: 400 });
     }
 
     if (

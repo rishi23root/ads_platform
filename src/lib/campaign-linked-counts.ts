@@ -1,6 +1,6 @@
 import { database as db } from '@/db';
 import { campaigns } from '@/db/schema';
-import { and, count, inArray, isNotNull } from 'drizzle-orm';
+import { and, count, inArray, isNotNull, ne } from 'drizzle-orm';
 
 function rowsToMap(
   rows: { id: string | null; linkedCampaignCount: number | bigint }[]
@@ -22,7 +22,7 @@ export async function getLinkedCampaignCountByAdId(): Promise<Map<string, number
       linkedCampaignCount: count(),
     })
     .from(campaigns)
-    .where(isNotNull(campaigns.adId))
+    .where(and(isNotNull(campaigns.adId), ne(campaigns.status, 'deleted')))
     .groupBy(campaigns.adId);
   return rowsToMap(rows);
 }
@@ -34,7 +34,7 @@ export async function getLinkedCampaignCountByNotificationId(): Promise<Map<stri
       linkedCampaignCount: count(),
     })
     .from(campaigns)
-    .where(isNotNull(campaigns.notificationId))
+    .where(and(isNotNull(campaigns.notificationId), ne(campaigns.status, 'deleted')))
     .groupBy(campaigns.notificationId);
   return rowsToMap(rows);
 }
@@ -53,7 +53,13 @@ export async function getLinkedCampaignCountByNotificationIdForIds(
       linkedCampaignCount: count(),
     })
     .from(campaigns)
-    .where(and(isNotNull(campaigns.notificationId), inArray(campaigns.notificationId, unique)))
+    .where(
+      and(
+        isNotNull(campaigns.notificationId),
+        inArray(campaigns.notificationId, unique),
+        ne(campaigns.status, 'deleted')
+      )
+    )
     .groupBy(campaigns.notificationId);
   return rowsToMap(rows);
 }
@@ -65,7 +71,7 @@ export async function getLinkedCampaignCountByRedirectId(): Promise<Map<string, 
       linkedCampaignCount: count(),
     })
     .from(campaigns)
-    .where(isNotNull(campaigns.redirectId))
+    .where(and(isNotNull(campaigns.redirectId), ne(campaigns.status, 'deleted')))
     .groupBy(campaigns.redirectId);
   return rowsToMap(rows);
 }

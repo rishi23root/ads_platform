@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { campaigns } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 
 type RouteContext = {
@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         status: campaigns.status,
       })
       .from(campaigns)
-      .where(eq(campaigns.adId, adId))
+      .where(and(eq(campaigns.adId, adId), ne(campaigns.status, 'deleted')))
       .orderBy(campaigns.name);
 
     return NextResponse.json(linkedCampaigns);

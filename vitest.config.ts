@@ -3,7 +3,7 @@ import { config as loadEnv } from 'dotenv';
 import { defineConfig } from 'vitest/config';
 
 // Match local dev: BETTER_AUTH_BASE_URL / BETTER_AUTH_URL in .env.local (Next loads it; Vitest does not by default).
-// Extension integration tests use that base URL via tests/extension-test-base-url.ts.
+// Extension integration tests use that base URL via tests/support/extension-test-base-url.ts.
 loadEnv({ path: path.resolve(__dirname, '.env') });
 loadEnv({ path: path.resolve(__dirname, '.env.local'), override: true });
 

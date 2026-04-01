@@ -64,6 +64,12 @@ export async function PUT(
     if (!existing) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
+    if (existing.status === 'deleted') {
+      return NextResponse.json(
+        { error: 'Campaign was deleted and cannot be edited' },
+        { status: 410 }
+      );
+    }
 
     const body = await request.json();
     const {
@@ -83,6 +89,13 @@ export async function PUT(
       notificationId,
       redirectId,
     } = body;
+
+    if (status === 'deleted') {
+      return NextResponse.json(
+        { error: 'Use DELETE to remove a campaign; status cannot be set to deleted via update' },
+        { status: 400 }
+      );
+    }
 
     const effectiveCampaignType = campaignType ?? existing.campaignType;
     const effectivePlatformIds =
@@ -194,10 +207,17 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
+    if (existing.status === 'deleted') {
+      return NextResponse.json({ success: true, softDeleted: true });
+    }
 
+    const now = new Date();
     await publishCampaignUpdated(id);
-    await db.delete(campaigns).where(eq(campaigns.id, id));
-    return NextResponse.json({ success: true });
+    await db
+      .update(campaigns)
+      .set({ status: 'deleted', updatedAt: now })
+      .where(eq(campaigns.id, id));
+    return NextResponse.json({ success: true, softDeleted: true });
   } catch (error) {
     console.error('Error deleting campaign:', error);
     return NextResponse.json({ error: 'Failed to delete campaign' }, { status: 500 });

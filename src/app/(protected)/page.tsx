@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns, enduserEvents, endUsers } from '@/db/schema';
 import { DASHBOARD_SERVED_EVENT_TYPES } from '@/lib/events-dashboard';
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
@@ -23,15 +23,19 @@ export default async function DashboardPage() {
   const session = await getSessionWithRole();
   if (!session) redirect('/login');
 
+  const hideDeleted = ne(campaigns.status, 'deleted');
   const campaignScope =
     session.role === 'admin' ? undefined : eq(campaigns.createdBy, session.user.id);
   const campaignActiveWhere = campaignScope
     ? and(eq(campaigns.status, 'active'), campaignScope)
     : eq(campaigns.status, 'active');
 
-  const totalCampaignsPromise = campaignScope
-    ? db.select({ count: sql<number>`count(*)` }).from(campaigns).where(campaignScope)
-    : db.select({ count: sql<number>`count(*)` }).from(campaigns);
+  const totalCampaignsWhere = campaignScope ? and(campaignScope, hideDeleted) : hideDeleted;
+
+  const totalCampaignsPromise = db
+    .select({ count: sql<number>`count(*)` })
+    .from(campaigns)
+    .where(totalCampaignsWhere);
 
   const impressionsCountPromise = campaignScope
     ? db
@@ -62,10 +66,15 @@ export default async function DashboardPage() {
     ? db
       .select()
       .from(campaigns)
-      .where(campaignScope)
+      .where(and(campaignScope, hideDeleted))
       .orderBy(desc(campaigns.createdAt))
       .limit(10)
-    : db.select().from(campaigns).orderBy(desc(campaigns.createdAt)).limit(10);
+    : db
+      .select()
+      .from(campaigns)
+      .where(hideDeleted)
+      .orderBy(desc(campaigns.createdAt))
+      .limit(10);
 
   const extensionUsersPromise =
     session.role === 'admin'

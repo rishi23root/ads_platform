@@ -336,6 +336,9 @@ export async function buildCampaignUpdateForExtension(
   if (!c) {
     return { campaignId, campaign: null };
   }
+  if (c.status === 'deleted') {
+    return { campaignId, campaign: null };
+  }
 
   const [payload] = await hydrateCampaignPayloads([c as CampaignSelectRow]);
   return { campaignId, campaign: payload };

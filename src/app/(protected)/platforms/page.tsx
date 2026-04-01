@@ -2,6 +2,7 @@ import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns, platforms } from '@/db/schema';
+import { ne } from 'drizzle-orm';
 import { PlatformsTableWithDrawer } from '@/components/platforms-table-with-drawer';
 import type { Metadata } from 'next';
 
@@ -23,7 +24,8 @@ export default async function PlatformsPage({ searchParams }: PageProps) {
   const allPlatforms = await db.select().from(platforms).orderBy(platforms.createdAt);
   const campaignPlatformRows = await db
     .select({ platformIds: campaigns.platformIds })
-    .from(campaigns);
+    .from(campaigns)
+    .where(ne(campaigns.status, 'deleted'));
 
   const linkedCountByPlatformId = new Map<string, number>();
   for (const row of campaignPlatformRows) {

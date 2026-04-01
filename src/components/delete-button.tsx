@@ -48,7 +48,7 @@ const entityLabels = {
   },
   campaign: {
     title: 'Delete Campaign',
-    successMessage: 'Campaign deleted successfully',
+    successMessage: 'Campaign removed from delivery. History and logs are kept.',
     errorMessage: 'Failed to delete campaign',
   },
 };
@@ -107,7 +107,16 @@ export function DeleteButton({ name, entityType, apiPath, redirectTo }: DeleteBu
         <AlertDialogHeader>
           <AlertDialogTitle>{labels.title}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete &quot;{name}&quot;? This action cannot be undone.
+            {entityType === 'campaign' ? (
+              <>
+                Remove &quot;{name}&quot; from delivery? The campaign record and event logs stay in the
+                database for reporting.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete &quot;{name}&quot;? This action cannot be undone.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

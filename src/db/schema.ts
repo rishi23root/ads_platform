@@ -126,7 +126,13 @@ export const frequencyTypeEnum = pgEnum('frequency_type', [
   'specific_count',
 ]);
 export const targetAudienceEnum = pgEnum('target_audience', ['new_users', 'all_users']);
-export const campaignStatusEnum = pgEnum('campaign_status', ['active', 'inactive', 'scheduled', 'expired']);
+export const campaignStatusEnum = pgEnum('campaign_status', [
+  'active',
+  'inactive',
+  'scheduled',
+  'expired',
+  'deleted',
+]);
 
 export const campaigns = pgTable(
   'campaigns',

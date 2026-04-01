@@ -236,6 +236,8 @@ admin_dashboard/
 
 ## Testing
 
+Layout (function-based / task-based / user-flow) and commands: [tests/README.md](./tests/README.md).
+
 `pnpm test` runs the full Vitest suite **without** requiring `next dev`. Extension flow integration specs are opt-in: the script `pnpm test:integration` exports `EXTENSION_INTEGRATION=1` and expects `.env.local` (or CI secrets) to point `BETTER_AUTH_BASE_URL` at the live stack.
 
 ### Extension API Testing

@@ -3,7 +3,7 @@ import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
 import { campaigns as campaignsTable } from '@/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { CampaignsListTable } from '@/components/campaigns-list-table';
@@ -16,11 +16,11 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 async function getCampaignsWithDetails(createdByUserId?: string) {
-  const base = db.select().from(campaignsTable);
+  const hideDeleted = ne(campaignsTable.status, 'deleted');
   const filtered =
     createdByUserId !== undefined
-      ? base.where(eq(campaignsTable.createdBy, createdByUserId))
-      : base;
+      ? db.select().from(campaignsTable).where(and(eq(campaignsTable.createdBy, createdByUserId), hideDeleted))
+      : db.select().from(campaignsTable).where(hideDeleted);
   const list = await filtered.orderBy(desc(campaignsTable.createdAt));
   return list.map((c) => ({
     id: c.id,

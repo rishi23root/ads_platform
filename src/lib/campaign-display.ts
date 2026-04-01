@@ -100,6 +100,8 @@ export function campaignStatusBadgeVariant(
       return 'outline';
     case 'expired':
       return 'destructive';
+    case 'deleted':
+      return 'destructive';
     default:
       return 'secondary';
   }
