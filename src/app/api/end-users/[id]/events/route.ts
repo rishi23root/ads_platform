@@ -50,14 +50,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       data: rows.map((r) => ({
         id: r.id,
-        endUserId: r.endUserId,
+        userIdentifier: r.userIdentifier,
+        endUserUuid: r.endUserUuid,
         email: r.email,
         campaignId: r.campaignId,
         domain: r.domain,
         type: r.type,
         country: r.country,
         userAgent: r.userAgent,
-        statusCode: r.statusCode,
         createdAt: r.createdAt.toISOString(),
       })),
       total,

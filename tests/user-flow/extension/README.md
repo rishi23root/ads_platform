@@ -9,7 +9,7 @@ Integration tests for the **extension** surface: register/login, domains, ad-blo
 | `extension-user-flow.integration.test.ts` | HTTP: `POST` register/login, `GET` domains, `POST` ad-block with bearer token; asserts status codes, token shape, JSON arrays. |
 | `extension-event-types-frequency.integration.test.ts` | Creates campaigns, fires many ad-block requests, asserts per-campaign caps and `enduser_events` row types/counts via Drizzle + live DB. |
 | `extension-multi-user-frequency-load.integration.test.ts` | 10 users × 15 requests per campaign type (`ads`, `popup`, `notification`, `redirect`), asserts per-user `specific_count` cap and DB event rows; runs types sequentially. |
-| `extension-v2-http.integration.test.ts` | v2: `GET /live` (first SSE `init`), `POST /serve/ads`, `POST /events` validation and auth. |
+| `extension-v2-http.integration.test.ts` | v2: `GET /live` (first SSE `init`), `POST /serve/ads`, `POST /serve/redirects`, `POST /events` validation and auth. |
 
 ## Prerequisites
 

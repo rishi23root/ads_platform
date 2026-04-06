@@ -4,13 +4,11 @@ import { platforms } from '@/db/schema';
 import { getCanonicalDisplayDomain } from '@/lib/domain-utils';
 
 /**
- * GET /api/extension/domains
+ * GET /api/extension/domains — public platform hostnames (no auth).
  *
- * Public API - no auth required.
- * Returns all target domains where the extension will load ads and notifications.
- * Use this to know which domains to make ad-block requests for.
+ * Input: none.
  *
- * Response: { "domains": ["instagram.com", "youtube.com", ...] }
+ * Output: `200` `{ domains: string[] }` (canonical, deduped) | `500` `{ error: "Failed to fetch domains" }`.
  */
 export async function GET() {
   try {

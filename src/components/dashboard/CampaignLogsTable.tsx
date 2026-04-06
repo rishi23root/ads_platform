@@ -33,14 +33,14 @@ import { getCountryName } from '@/lib/countries';
 
 interface LogEntry {
   id: string;
-  endUserId: string;
+  userIdentifier: string;
+  endUserUuid: string | null;
   domain: string | null;
   type: string;
-  statusCode: number | null;
   createdAt: string;
   country: string | null;
   email: string | null;
-  plan: string;
+  plan: string | null;
   userAgent: string | null;
 }
 
@@ -68,7 +68,6 @@ const TYPE_OPTIONS = [
   { value: 'ad', label: 'Ad' },
   { value: 'notification', label: 'Notification' },
   { value: 'popup', label: 'Popup' },
-  { value: 'request', label: 'Request' },
   { value: 'redirect', label: 'Redirect' },
   { value: 'visit', label: 'Visit' },
 ] as const;
@@ -125,7 +124,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
   }
 
   const pageSize = 25;
-  const colCount = 6;
+  const colCount = 5;
 
   return (
     <section className="space-y-3">
@@ -135,7 +134,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             Campaign Logs ({loading ? '…' : totalCount.toLocaleString()})
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Extension requests for this campaign. Paginated for performance. Select a row for full
+            Extension events for this campaign. Paginated for performance. Select a row for full
             detail.
           </p>
         </div>
@@ -189,11 +188,10 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>End user</TableHead>
+              <TableHead>User identifier</TableHead>
               <TableHead>Domain</TableHead>
               <TableHead>Country</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -207,7 +205,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             ) : logs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={colCount} className="text-center py-12 text-muted-foreground text-sm">
-                  No logs yet. Extension requests will appear here.
+                  No logs yet. Extension events will appear here.
                 </TableCell>
               </TableRow>
             ) : (
@@ -229,7 +227,12 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                   }}
                 >
                   <TableCell>
-                    <EndUserIdCell endUserId={log.endUserId} />
+                    <EndUserIdCell
+                      userIdentifier={log.userIdentifier}
+                      profileHref={
+                        log.endUserUuid ? `/users/${log.endUserUuid}` : null
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-sm max-w-[180px]">
                     {log.domain ? (
@@ -257,7 +260,6 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                   <TableCell>
                     <Badge variant="outline">{log.type}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums">{log.statusCode ?? '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString(undefined, {
                       year: 'numeric',
@@ -292,7 +294,12 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
                     End user
                   </p>
-                  <EndUserIdCell endUserId={detail.endUserId} />
+                  <EndUserIdCell
+                    userIdentifier={detail.userIdentifier}
+                    profileHref={
+                      detail.endUserUuid ? `/users/${detail.endUserUuid}` : null
+                    }
+                  />
                 </div>
                 {detail.email && (
                   <div>
@@ -302,14 +309,16 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                     <p className="break-all">{detail.email}</p>
                   </div>
                 )}
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-                    Plan
-                  </p>
-                  <Badge variant="secondary" className="capitalize">
-                    {detail.plan}
-                  </Badge>
-                </div>
+                {detail.plan != null && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                      Plan
+                    </p>
+                    <Badge variant="secondary" className="capitalize">
+                      {detail.plan}
+                    </Badge>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
                     Domain
@@ -331,12 +340,6 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                     Type
                   </p>
                   <Badge variant="outline">{detail.type}</Badge>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-                    HTTP status
-                  </p>
-                  <p className="tabular-nums">{detail.statusCode ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">

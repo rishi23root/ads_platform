@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers } from '@/db/schema';
+import { getOrCreateAnonymousEndUserByIdentifier } from '@/lib/extension-anonymous-identifier-session';
+import {
+  consolidateAnonymousWithEmailUserAfterLogin,
+  extensionEndUserIdentifierSchema,
+} from '@/lib/enduser-merge';
 import {
   createEnduserSession,
   endUserPublicPayload,
@@ -11,11 +16,34 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-const loginSchema = z.object({
+function logAuthFailure(message: string, meta?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`[api/extension/auth/login] ${message}`, meta ?? '');
+  }
+}
+
+const loginWithEmailSchema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(1).max(128),
+  identifier: extensionEndUserIdentifierSchema.optional(),
 });
 
+const loginAnonymousSchema = z.object({
+  identifier: extensionEndUserIdentifierSchema,
+});
+
+const loginSchema = z.union([loginWithEmailSchema, loginAnonymousSchema]);
+
+/**
+ * POST /api/extension/auth/login — email/password session (optional device merge), or anonymous
+ * session with `identifier` only (same rules as register when id is linked to an email account).
+ *
+ * Input: JSON `{ email, password, identifier? }` or `{ identifier }`.
+ *
+ * Output: `200`|`201` `{ token, expiresAt (ISO), user, identifier?, identifierReplaced?,
+ * identifierRegenerated? }`.
+ * Errors: `400` invalid/validation; `401` bad credentials; `403` banned; `500` server.
+ */
 export async function POST(request: NextRequest) {
   try {
     let raw: unknown;
@@ -33,14 +61,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const email = parsed.data.email.toLowerCase();
+    const body = parsed.data;
+    if (!('email' in body)) {
+      const anonResult = await getOrCreateAnonymousEndUserByIdentifier({
+        identifier: body.identifier,
+      });
+      if (!anonResult.ok) {
+        if (anonResult.error === 'banned') {
+          return NextResponse.json({ error: 'Account is banned' }, { status: 403 });
+        }
+        if (anonResult.error === 'conflict') {
+          return NextResponse.json(
+            { error: 'Email or identifier already in use' },
+            { status: 409 }
+          );
+        }
+        return NextResponse.json({ error: 'Failed to sign in' }, { status: 500 });
+      }
+
+      const { token, expiresAt } = await createEnduserSession({
+        endUserId: anonResult.endUser.id,
+        request,
+      });
+
+      const canonicalIdentifier = anonResult.endUser.identifier;
+      return NextResponse.json(
+        {
+          token,
+          expiresAt: expiresAt.toISOString(),
+          user: endUserPublicPayload(anonResult.endUser),
+          identifier: canonicalIdentifier,
+          ...(anonResult.identifierRegenerated ? { identifierRegenerated: true } : {}),
+        },
+        { status: anonResult.status }
+      );
+    }
+
+    const email = body.email.toLowerCase();
     const [row] = await db.select().from(endUsers).where(eq(endUsers.email, email)).limit(1);
 
     if (!row?.passwordHash) {
+      logAuthFailure('401: no end user with this email, or user has no password (e.g. anonymous-only)', {
+        email,
+      });
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    if (!verifyEnduserPassword(parsed.data.password, row.passwordHash)) {
+    if (!verifyEnduserPassword(body.password, row.passwordHash)) {
+      logAuthFailure('401: password did not verify', { email });
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
@@ -48,15 +116,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account is banned' }, { status: 403 });
     }
 
+    const idKey = body.identifier;
+    const sessionUser = idKey
+      ? await consolidateAnonymousWithEmailUserAfterLogin({ emailUser: row, identifier: idKey })
+      : row;
+
     const { token, expiresAt } = await createEnduserSession({
-      endUserId: row.id,
+      endUserId: sessionUser.id,
       request,
     });
+
+    const canonicalIdentifier = sessionUser.identifier;
+    const requestedIdentifier = idKey ?? null;
+    const identifierReplaced =
+      requestedIdentifier !== null &&
+      (canonicalIdentifier === null || canonicalIdentifier !== requestedIdentifier);
+
 
     return NextResponse.json({
       token,
       expiresAt: expiresAt.toISOString(),
-      user: endUserPublicPayload(row),
+      user: endUserPublicPayload(sessionUser),
+      identifier: canonicalIdentifier,
+      ...(identifierReplaced ? { identifierReplaced: true } : {}),
     });
   } catch (error) {
     console.error('[api/extension/auth/login]', error);

@@ -71,14 +71,14 @@ export async function GET(
       db
         .select({
           impressions: sql<number>`count(*)::int`,
-          uniqueUsers: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
+          uniqueUsers: sql<number>`count(distinct ${enduserEvents.userIdentifier})::int`,
         })
         .from(enduserEvents)
         .where(periodCurrent),
       db
         .select({
           impressions: sql<number>`count(*)::int`,
-          uniqueUsers: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
+          uniqueUsers: sql<number>`count(distinct ${enduserEvents.userIdentifier})::int`,
         })
         .from(enduserEvents)
         .where(periodPrev),
@@ -86,7 +86,7 @@ export async function GET(
         .select({
           dateStr: sql<string>`${utcDay}::text`,
           impressions: sql<number>`count(*)::int`,
-          users: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
+          users: sql<number>`count(distinct ${enduserEvents.userIdentifier})::int`,
         })
         .from(enduserEvents)
         .where(periodCurrent)

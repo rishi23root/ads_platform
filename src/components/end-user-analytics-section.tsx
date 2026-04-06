@@ -60,7 +60,6 @@ type AnalyticsSummary = {
   popup: number
   notification: number
   redirect: number
-  request: number
   served: number
 }
 
@@ -71,7 +70,6 @@ type SeriesRow = {
   popup: number
   notification: number
   redirect: number
-  request: number
 }
 
 type DomainRow = {
@@ -115,10 +113,10 @@ const PIE_COLORS = [
   "var(--chart-5)",
 ]
 
-function eventsDeepLink(endUserId: string, startIso: string, endIso: string): string {
+function eventsDeepLink(endUserUuid: string, startIso: string, endIso: string): string {
   const from = startIso.slice(0, 10)
   const to = endIso.slice(0, 10)
-  const q = new URLSearchParams({ endUserId, from, to })
+  const q = new URLSearchParams({ endUserIdExact: endUserUuid, from, to })
   return `/events?${q.toString()}`
 }
 
@@ -182,7 +180,6 @@ export function EndUserAnalyticsSection({ endUserId, className }: EndUserAnalyti
       { label: "Popup", value: s.popup },
       { label: "Notification", value: s.notification },
       { label: "Redirect", value: s.redirect },
-      { label: "Request", value: s.request },
     ]
       .filter((r) => r.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -296,13 +293,12 @@ export function EndUserAnalyticsSection({ endUserId, className }: EndUserAnalyti
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                     {(
                       [
                         ["total", "Total events", summary.total],
                         ["visit", "Visits", summary.visit],
                         ["served", "Served", summary.served],
-                        ["request", "Requests (no fill)", summary.request],
                       ] as const
                     ).map(([key, label, value]) => (
                       <Card key={key} className="min-w-0 gap-0 py-0 shadow-sm">

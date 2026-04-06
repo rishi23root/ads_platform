@@ -43,7 +43,7 @@ type CampaignKind = 'ads' | 'popup' | 'notification' | 'redirect';
 
 type UserResult = {
   email: string;
-  endUserId: string;
+  userIdentifier: string;
   servedCount: number;
   expectedCount: number;
   passed: boolean;
@@ -462,7 +462,9 @@ function countServedInResponse(
   return (body.redirects ?? []).some((r) => r.destinationUrl === matchValue);
 }
 
-async function registerAndLogin(email: string): Promise<{ token: string; endUserId: string }> {
+async function registerAndLogin(
+  email: string
+): Promise<{ token: string; endUserId: string; userIdentifier: string }> {
   return registerOrLoginExtensionEndUser(BASE!, email, EXTENSION_INTEGRATION_PASSWORD);
 }
 
@@ -474,7 +476,7 @@ async function runOneUser(
   setup: SetupRow
 ): Promise<UserResult> {
   const email = EXTENSION_SHARED_USER_EMAILS[userIndex];
-  const { token: initialToken, endUserId } = await registerAndLogin(email);
+  const { token: initialToken, userIdentifier } = await registerAndLogin(email);
   const session = { token: initialToken };
   const fwd = syntheticIp(batchIndex, indexInBatch);
 
@@ -506,7 +508,7 @@ async function runOneUser(
   const passed = servedCount === FREQUENCY_COUNT;
   return {
     email,
-    endUserId,
+    userIdentifier,
     servedCount,
     expectedCount: FREQUENCY_COUNT,
     passed,
@@ -514,7 +516,7 @@ async function runOneUser(
 }
 
 async function verifyDbEventTypes(
-  endUserIds: string[],
+  userIdentifiers: string[],
   campaignId: string,
   expectedType: string
 ): Promise<{ totalRows: number; wrongType: number }> {
@@ -522,14 +524,17 @@ async function verifyDbEventTypes(
     .select({ type: enduserEvents.type })
     .from(enduserEvents)
     .where(
-      and(inArray(enduserEvents.endUserId, endUserIds), eq(enduserEvents.campaignId, campaignId))
+      and(
+        inArray(enduserEvents.userIdentifier, userIdentifiers),
+        eq(enduserEvents.campaignId, campaignId)
+      )
     );
   const wrongType = rows.filter((row) => row.type !== expectedType).length;
   return { totalRows: rows.length, wrongType };
 }
 
 async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
-  const endUserIds: string[] = [];
+  const userIdentifiers: string[] = [];
   const { creatorUserId, createdCreatorUserId } = await ensureCreatorUser();
   const { setup } = await ensureCampaignFixture(kind, creatorUserId);
 
@@ -556,7 +561,7 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
       );
 
       for (const r of batchResults) {
-        endUserIds.push(r.endUserId);
+        userIdentifiers.push(r.userIdentifier);
         results.push(r);
       }
 
@@ -569,7 +574,11 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
     expect(failed).toHaveLength(0);
 
     const expectedTotalEvents = TOTAL_USERS * FREQUENCY_COUNT;
-    const { totalRows, wrongType } = await verifyDbEventTypes(endUserIds, setup.campaignId, eventTypeExpected);
+    const { totalRows, wrongType } = await verifyDbEventTypes(
+      userIdentifiers,
+      setup.campaignId,
+      eventTypeExpected
+    );
 
     console.log(`Total event rows: ${totalRows} (expected: ${expectedTotalEvents})`);
     console.log(
@@ -583,8 +592,8 @@ async function runFrequencyLoadTest(kind: CampaignKind): Promise<void> {
       return;
     }
 
-    if (endUserIds.length > 0) {
-      await db.delete(enduserEvents).where(inArray(enduserEvents.endUserId, endUserIds));
+    if (userIdentifiers.length > 0) {
+      await db.delete(enduserEvents).where(inArray(enduserEvents.userIdentifier, userIdentifiers));
     }
     await db
       .update(campaigns)

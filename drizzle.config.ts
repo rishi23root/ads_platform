@@ -1,8 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
-import * as dotenv from 'dotenv';
+import { loadCliEnv } from './src/lib/db/load-cli-env';
 import { normalizeDatabaseUrl } from './src/lib/db/connection-url';
 
-dotenv.config({ path: '.env.local' });
+loadCliEnv({ verbose: process.env.DRIZZLE_VERBOSE === '1' });
 
 const rawUrl = process.env.DATABASE_URL;
 if (!rawUrl) {

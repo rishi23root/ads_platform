@@ -15,6 +15,7 @@ export type EventsActiveFilterChip = {
     | 'domain'
     | 'country'
     | 'endUserId'
+    | 'endUserIdExact'
     | 'email'
     | 'campaignId';
   label: string;
@@ -58,7 +59,7 @@ export function EventsActiveFilterChips({ chips }: EventsActiveFilterChipsProps)
         <p className="text-xs font-medium text-muted-foreground">Active filters</p>
         <ul className="flex flex-wrap gap-2">
           {chips.map((c) => (
-            <li key={c.param}>
+            <li key={`${c.param}:${c.display}`}>
               <span className="inline-flex max-w-full items-center gap-1 rounded-full border bg-background py-1 pl-2.5 pr-1 text-xs shadow-sm">
                 <span className="shrink-0 text-muted-foreground">{c.label}</span>
                 <span className="min-w-0 truncate font-medium tabular-nums" title={c.display}>

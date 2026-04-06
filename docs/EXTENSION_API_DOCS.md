@@ -2,14 +2,20 @@
 
 ## v2 (recommended)
 
-Use **[EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** for the current architecture:
+Use **[EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** for the current architecture (includes an **[implementation checklist](./EXTENSION_V2_API.md#extension-implementation-checklist)** for extension tasks).
 
 - **`GET /api/extension/live`** — SSE: `init` payload (`platforms`, `campaigns`, `frequencyCounts`, …) + realtime updates (requires **Bearer** or **`?token=`**).
-- **`POST /api/extension/serve/ads`** — per-visit **ads, popups**, and **server-matched redirects** (Bearer); logs `ad` / `popup` / `redirect` (or `request` if nothing served). Does **not** log **`visit`**.
-- **`POST /api/extension/events`** — client-reported **`visit`** (batched 5–10 per flush, optional `visitedAt`), **notification**, and **redirect** (client-only deliveries) (Bearer).
-- Legacy **`POST /api/extension/ad-block`** — unchanged; still supported.
+- **`POST /api/extension/serve/redirects`** — Prefetch **redirect** campaigns already filtered by schedule, **frequency/count**, geo, audience, and time-of-day; optional **`domain`** narrows by platform. Each item: **`domain_regex`**, **`target_url`**, **`date_till`**, **`count`**, **`campaignId`**. Does **not** write `enduser_events`; after navigation use **`POST /events`** (`type: "redirect"`).
+- **`POST /api/extension/serve/ads`** — per-visit **ads and popups** only (Bearer); logs **`ad`** / **`popup`**. No **`redirects`** key. Does **not** log **`visit`**.
+- **`POST /api/extension/events`** — client-reported **`visit`** (batched), **`notification`**, and **`redirect`** (Bearer).
+- Legacy **`POST /api/extension/ad-block`** — combined **`ads`**, **`notifications`**, **`redirects`** with server logging for matching serves.
 
 **Authentication:** Extension end users use **`POST /api/extension/auth/register`** and **`POST /api/extension/auth/login`**, then **`Authorization: Bearer <token>`** on REST routes. **`GET /api/extension/domains`** remains public (optional; v2 `init` includes domain data).
+
+- **Anonymous register:** `{ "identifier": "<device id>" }` — **201** on first creation, **200** when that anonymous id already exists (new session). See **EXTENSION_V2_API.md** for full rules.
+- **Email register with `identifier`:** upgrades the existing anonymous row in place (**same user id**), when present.
+- **Email login:** optional **`identifier`** consolidates an email-only row into the anonymous row (**same UUID**): events/payments and credentials end up on the anonymous id; the duplicate email row is removed.
+- **Device id:** generate on install → local storage → reuse on anonymous register, email register, and login. **`user.identifier`** in responses and **`/me`** is the server’s copy—**refresh local storage** when it is non-null so client and backend stay in sync (details in **EXTENSION_V2_API.md**).
 
 Do **not** use `/api/notifications` (admin UI / Better Auth) for the extension.
 
@@ -17,7 +23,7 @@ Do **not** use `/api/notifications` (admin UI / Better Auth) for the extension.
 
 ## Legacy: single ad-block endpoint
 
-This document below focuses on **`POST /api/extension/ad-block`** — fetch ads and/or notifications with automatic visit logging.
+This document below documents **`POST /api/extension/ad-block`** — fetch ads, notifications, and **redirect rules** with automatic visit / serve logging. **New work should use v2** ([EXTENSION_V2_API.md](./EXTENSION_V2_API.md): SSE + **`serve/redirects`** + **`serve/ads`** + batched **`events`**).
 
 **Base URL:** `https://your-admin-dashboard-domain.com` (paths are relative, e.g. `/api/extension/ad-block`)
 
@@ -36,9 +42,11 @@ This document below focuses on **`POST /api/extension/ad-block`** — fetch ads 
 
 ---
 
-## 1. Get Ad Block Data and Log Visit (Recommended)
+## 1. Get Ad Block Data and Log Visit (legacy)
 
-**This is the recommended endpoint for extensions.** Fetches ads and/or notifications for a domain and automatically logs the visit(s) for analytics. Replaces the need for separate GET requests and log POST requests.
+**Legacy only — prefer v2** (`live` + **`serve/redirects`** + `serve/ads` + `events` — see [EXTENSION_V2_API.md](./EXTENSION_V2_API.md)). This endpoint fetches ads, notifications, and **server-selected redirect payloads** for a domain and records matching **`enduser_events`** (including **`redirect`** when a rule matches).
+
+**Redirects are not HTTP 3xx responses.** The API returns JSON with a **`redirects`** array (`sourceDomain`, `includeSubdomains`, `destinationUrl`). The extension **navigates** when the visit hostname matches those fields (same idea as v2 **`serve/redirects`** `domain_regex` + **`target_url`**, documented in **EXTENSION_V2_API.md**).
 
 ### Endpoint
 
@@ -67,7 +75,7 @@ POST /api/extension/ad-block
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `domain` | string | For ads | **Required when requesting ads**; omit when `requestType: "notification"` only. |
-| `requestType` | string | No | `"ad"` or `"notification"`. If omitted, returns both (domain required for ads). |
+| `requestType` | string | No | `"ad"` or `"notification"`. If omitted, returns ads + notifications + redirects for the domain. With `"ad"` only: **ads, popups, and redirects** (redirects ride the ad channel). With `"notification"` only: notifications only; **`redirects` is `[]`**. |
 | `userAgent` | string | No | Optional telemetry. |
 
 User id, email, and plan are **not** sent in the body; they come from the `end_users` row tied to the Bearer token.
@@ -96,16 +104,23 @@ User id, email, and plan are **not** sent in the body; they come from the `end_u
       "message": "We will be performing scheduled maintenance on Saturday.",
       "ctaLink": "https://example.com/maintenance"
     }
+  ],
+  "redirects": [
+    {
+      "sourceDomain": "partner-site.com",
+      "includeSubdomains": false,
+      "destinationUrl": "https://your-offer.example/landing"
+    }
   ]
 }
 ```
 
 **Notes:**
-- Both `ads` and `notifications` arrays are always present, even if empty.
-- If `requestType` is `"ad"`, `notifications` will be empty.
-- If `requestType` is `"notification"`, `ads` will be empty.
-- If `requestType` is omitted, both arrays may contain items.
-- Public fields only: no internal IDs, status, or date ranges.
+- `ads`, `notifications`, and `redirects` are **always** present (each may be `[]`).
+- If `requestType` is `"ad"`, `notifications` will be empty; **redirects may still be non-empty** when rules match `domain`.
+- If `requestType` is `"notification"`, `ads` and **`redirects`** will be empty.
+- If `requestType` is omitted, ads, notifications, and redirects may all contain items (domain required).
+- Public fields only: no internal campaign IDs in payloads; the server still logs `campaignId` in **`enduser_events`**.
 
 ### Visit logging
 
@@ -125,15 +140,16 @@ const response = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   },
   body: JSON.stringify({
     domain: window.location.hostname,
-    // requestType omitted = get both
+    // requestType omitted = ads + notifications + redirects (when domain matches)
   }),
 });
 
-const { ads, notifications } = await response.json();
+const { ads, notifications, redirects } = await response.json();
+// Apply redirects in the extension (navigate tab), not via HTTP redirect from fetch()
 ```
 
 ```javascript
-// Get ads only
+// Get ads + redirects only (no notifications)
 const response = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   method: 'POST',
   headers: {
@@ -146,8 +162,8 @@ const response = await fetch(`${BASE_URL}/api/extension/ad-block`, {
   }),
 });
 
-const { ads, notifications } = await response.json();
-// notifications will be empty array
+const { ads, notifications, redirects } = await response.json();
+// notifications will be []
 ```
 
 ---
@@ -162,13 +178,14 @@ const { ads, notifications } = await response.json();
 interface AdBlockResponse {
   ads: PublicAd[];
   notifications: PublicNotification[];
+  redirects: PublicRedirect[];
 }
 
 interface PublicAd {
   title: string;                 // Ad name/title
   image: string | null;          // URL to ad image/banner
   description: string | null;    // Optional description
-  redirectUrl: string | null;   // URL to redirect when ad is clicked
+  redirectUrl: string | null;   // URL to open when the user clicks the ad (not auto-navigation)
   htmlCode?: string | null;      // Optional HTML content
   displayAs?: 'inline' | 'popup'; // "inline" = simple ad, "popup" = show as popup
 }
@@ -178,9 +195,16 @@ interface PublicNotification {
   message: string;               // Notification message/content
   ctaLink?: string | null;       // Optional call-to-action link
 }
+
+/** Campaign redirect: extension should navigate the tab to destinationUrl when domain matches. */
+interface PublicRedirect {
+  sourceDomain: string;
+  includeSubdomains: boolean;
+  destinationUrl: string;
+}
 ```
 
-**Note:** The ad-block endpoint returns public fields only (no IDs, status, or date ranges). Visit logging happens automatically and does not appear in the response.
+**Note:** The ad-block endpoint returns public fields only (no campaign IDs in the JSON). Visit and serve logging happen server-side and do not appear in the response.
 
 **Ad rendering:** `displayAs: "inline"` → inject `htmlCode` (or image/title/link) into the page. `displayAs: "popup"` → create a modal and render the ad inside it.
 
@@ -238,7 +262,35 @@ async function fetchAdBlock(token, requestType) {
     return await response.json();
   } catch (error) {
     console.error('Error fetching ad block:', error);
-    return { ads: [], notifications: [] };
+    return { ads: [], notifications: [], redirects: [] };
+  }
+}
+
+// Mirror `redirectSourceMatchesVisit` in `src/lib/domain-utils.ts` (this repo).
+function normalizeHost(domain) {
+  const t = domain.trim().toLowerCase();
+  try {
+    const url = t.startsWith('http') ? t : `https://${t}`;
+    return new URL(url).hostname;
+  } catch {
+    return t;
+  }
+}
+
+function visitMatchesRedirect(visitHost, r) {
+  const host = normalizeHost(visitHost);
+  const source = normalizeHost(r.sourceDomain);
+  if (host === source) return true;
+  if (!r.includeSubdomains) return false;
+  return host.endsWith('.' + source);
+}
+
+function applyRedirects(redirects, visitHostname) {
+  for (const r of redirects) {
+    if (visitMatchesRedirect(visitHostname, r)) {
+      window.location.assign(r.destinationUrl);
+      return;
+    }
   }
 }
 
@@ -248,7 +300,8 @@ async function loadExtensionContent() {
     // Prompt user or open /register — example only:
     token = await loginAndStoreToken('user@example.com', 'password');
   }
-  const { ads, notifications } = await fetchAdBlock(token);
+  const { ads, notifications, redirects } = await fetchAdBlock(token);
+  if (redirects.length > 0) applyRedirects(redirects, getCurrentDomain());
   if (ads.length > 0) displayAds(ads);
   if (notifications.length > 0) displayNotifications(notifications);
 }
@@ -291,8 +344,7 @@ loadExtensionContent();
 ### TypeScript Example
 
 ```typescript
-// Use the PublicAd and PublicNotification types from Response Schemas above.
-// The API returns public fields only (no IDs, status, or date ranges).
+// Use PublicAd, PublicNotification, PublicRedirect / AdBlockResponse from Response Schemas above.
 const API_BASE_URL = 'https://your-admin-dashboard-domain.com';
 ```
 
@@ -353,7 +405,7 @@ async function fetchWithErrorHandling(url) {
    - Cache ads/notifications for a short period (e.g., 5-10 minutes)
    - Invalidate cache when user navigates to a new domain
 
-4. **Accounts**: End users register and sign in; store the **session token** securely (not a client-generated `endUserId`).
+4. **Accounts**: End users register and sign in; store the **session token** securely. Telemetry rows are keyed by the server’s **`user.identifier`** (device / install id). For **email-only** extension registration (no `identifier` in the JSON body), the API **allocates** `user.identifier` and returns it — **persist** that value client-side and send it on later **`identifier`** fields when linking devices.
 
 5. **CORS**: Ensure your admin dashboard CORS settings allow requests from your extension's origin.
 
@@ -398,6 +450,10 @@ See [TEST_EXTENSION_LOG.md](./TEST_EXTENSION_LOG.md) for detailed documentation.
 
 ### 2026-03-25
 - **Breaking:** Ad-block requires **`Authorization: Bearer`** (extension user login). Body no longer includes `endUserId` / email / plan. See `EXTENSION_API_REFERENCE.md`.
+
+### 2026-04-06
+- Documented **`redirects`** on legacy **`POST /api/extension/ad-block`** (response shape, `requestType` interaction, client-side navigation — not HTTP redirects). Clarified v2 as preferred path; expanded examples and **`AdBlockResponse`** TypeScript.
+- v2: **`POST /api/extension/serve/redirects`** (prefetch with **`domain_regex`**, **`target_url`**, **`date_till`**, **`count`**); **`serve/ads`** ads/popups only; implementation checklist in **EXTENSION_V2_API.md**.
 
 ---
 

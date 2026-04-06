@@ -5,9 +5,10 @@ This directory contains all documentation for the Admin Dashboard and Extension 
 ## Documentation Files
 
 ### API Documentation
-- **[EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md)** - **Complete extension API reference** — comprehensive guide with `/api/extension/ad-block` (use `requestType: "notification"` for notifications on extension load), request/response formats (arrays), TypeScript types, code examples, error handling, and best practices. **Start here for extension development.**
-- **[EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md)** - Extension API reference (alternative format)
-- **[EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md)** - Additional extension API notes and usage patterns
+- **[EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** — **v2 extension handoff** (SSE **`live`**, **`serve/redirects`**, **`serve/ads`**, **`events`**), auth, and **[implementation checklist](./EXTENSION_V2_API.md#extension-implementation-checklist)**. Prefer this for new browser-extension work.
+- **[EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md)** — Summary + legacy **`ad-block`** detail, schemas, and examples.
+- **[EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md)** — Older combined reference (may lag v2); includes **`ad-block`** patterns.
+- **[EXTENSION_AD_BLOCK_API.md](./EXTENSION_AD_BLOCK_API.md)** — Extension API reference (alternative format).
 
 ### Architecture & System Design
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture, component design, and API endpoints overview
@@ -21,9 +22,9 @@ This directory contains all documentation for the Admin Dashboard and Extension 
 ## Quick Start
 
 For extension developers:
-1. **Read [EXTENSION_API_REFERENCE.md](./EXTENSION_API_REFERENCE.md)** — complete API reference with both endpoints, TypeScript types, code examples, and best practices
-2. See [EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md) for additional notes
-3. Use [test-extension-log.sh](./test-extension-log.sh) to test your integration
+1. **Read [EXTENSION_V2_API.md](./EXTENSION_V2_API.md)** — current v2 flows and task checklist.
+2. Use [EXTENSION_API_DOCS.md](./EXTENSION_API_DOCS.md) for legacy **`ad-block`** and extra examples.
+3. Use [test-extension-log.sh](./test-extension-log.sh) (and `pnpm test:extension-v2` when integration env is set) to validate HTTP.
 
 For system understanding:
 1. Start with [ARCHITECTURE.md](./ARCHITECTURE.md) for high-level overview

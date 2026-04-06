@@ -1,5 +1,5 @@
 /**
- * Extension v2: GET /api/extension/live, POST /serve/ads, POST /events.
+ * Extension v2: GET /api/extension/live, POST /serve/ads, POST /serve/redirects, POST /events.
  * Opt-in: EXTENSION_INTEGRATION=1 and base URL (see extension-test-base-url.ts).
  */
 import { describe, it, expect } from 'vitest';
@@ -8,6 +8,7 @@ import { database as db } from '@/db';
 import { enduserEvents } from '@/db/schema';
 import { postExtensionEvents } from '../../support/extension-events-request';
 import { postExtensionServeAds } from '../../support/extension-serve-ads-request';
+import { postExtensionServeRedirects } from '../../support/extension-serve-redirects-request';
 import { fetchExtensionLiveFirstSseEvent } from '../../support/extension-sse-first-event';
 import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
 import {
@@ -19,7 +20,7 @@ import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-u
 const BASE = extensionIntegrationBaseUrl();
 const integration = BASE ? describe : describe.skip;
 
-integration('extension v2 HTTP (live SSE, serve/ads, events)', () => {
+integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', () => {
   const email = EXTENSION_SHARED_USER_EMAILS[0];
   const password = EXTENSION_INTEGRATION_PASSWORD;
 
@@ -73,11 +74,24 @@ integration('extension v2 HTTP (live SSE, serve/ads, events)', () => {
       { 'user-agent': 'vitest-extension-v2' }
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ads?: unknown[]; redirects?: unknown[] };
+    const body = (await res.json()) as { ads?: unknown[] };
     expect(Array.isArray(body.ads)).toBe(true);
-    if (body.redirects !== undefined) {
-      expect(Array.isArray(body.redirects)).toBe(true);
-    }
+    expect(body).not.toHaveProperty('redirects');
+  });
+
+  it('POST /api/extension/serve/redirects returns redirects array (optional domain)', async () => {
+    const session = await registerOrLoginExtensionEndUser(BASE!, email, password);
+    const res = await postExtensionServeRedirects(
+      BASE!,
+      email,
+      password,
+      { token: session.token },
+      {},
+      { 'user-agent': 'vitest-extension-v2' }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { redirects?: unknown[] };
+    expect(Array.isArray(body.redirects)).toBe(true);
   });
 
   it('POST /api/extension/events rejects empty events (400)', async () => {
@@ -110,7 +124,7 @@ integration('extension v2 HTTP (live SSE, serve/ads, events)', () => {
   });
 
   it('POST /api/extension/events persists a batch of visit events (5–10 pattern)', async () => {
-    const { token, endUserId } = await registerOrLoginExtensionEndUser(BASE!, email, password);
+    const { token, userIdentifier } = await registerOrLoginExtensionEndUser(BASE!, email, password);
     const session = { token };
     const domains = Array.from({ length: 7 }, (_, i) => `vitest-v2-batch-${i}.invalid`);
     let insertedIds: string[] = [];
@@ -139,7 +153,7 @@ integration('extension v2 HTTP (live SSE, serve/ads, events)', () => {
         .from(enduserEvents)
         .where(
           and(
-            eq(enduserEvents.endUserId, String(endUserId)),
+            eq(enduserEvents.userIdentifier, userIdentifier),
             eq(enduserEvents.type, 'visit'),
             inArray(enduserEvents.domain, [...domains, 'vitest-v2-batch-timed.invalid'])
           )

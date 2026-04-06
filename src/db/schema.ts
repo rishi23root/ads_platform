@@ -175,12 +175,11 @@ export const campaigns = pgTable(
   ]
 );
 
-// ============ Extension end-user events (one row per serve / request; distinct from Better Auth `user`) ============
+// ============ Extension end-user events (one row per serve or client-reported visit; distinct from Better Auth `user`) ============
 export const enduserEventTypeEnum = pgEnum('enduser_event_type', [
   'ad',
   'notification',
   'popup',
-  'request',
   'redirect',
   'visit',
 ]);
@@ -192,13 +191,13 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'refunded',
 ]);
 
-/** Extension customers (distinct from Better Auth `user`). Optional `identifier` for anonymous / device id; email/password optional until registration. */
+/** Extension customers (distinct from Better Auth `user`). Stable `identifier` (user identifier for events); email/password optional until registration. */
 export const endUsers = pgTable('end_users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: varchar('email', { length: 255 }).unique(),
   passwordHash: varchar('password_hash', { length: 255 }),
-  /** Stable external id (e.g. extension install key). Nullable; unique when set. */
-  identifier: varchar('identifier', { length: 255 }).unique(),
+  /** Stable external id (extension install / device key); matches `enduser_events.user_identifier`. */
+  identifier: varchar('identifier', { length: 255 }).notNull().unique(),
   name: varchar('name', { length: 255 }),
   plan: enduserPlanEnum('plan').notNull().default('trial'),
   banned: boolean('banned').notNull().default(false),
@@ -248,27 +247,23 @@ export const enduserEvents = pgTable(
   'enduser_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    endUserId: varchar('enduser_id', { length: 255 }).notNull(),
-    email: varchar('email', { length: 255 }),
-    plan: enduserPlanEnum('plan').notNull().default('trial'),
+    /** Stable user key; always `end_users.identifier` (not the row UUID). */
+    userIdentifier: varchar('user_identifier', { length: 255 }).notNull(),
     campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
     domain: varchar('domain', { length: 255 }),
     type: enduserEventTypeEnum('type').notNull(),
     country: varchar('country', { length: 2 }),
-    statusCode: integer('status_code'),
     userAgent: text('user_agent'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('enduser_events_enduser_id_idx').on(t.endUserId),
-    index('enduser_events_email_idx').on(t.email),
+    index('enduser_events_user_identifier_idx').on(t.userIdentifier),
     index('enduser_events_campaign_id_idx').on(t.campaignId),
     index('enduser_events_type_idx').on(t.type),
     index('enduser_events_created_at_idx').on(t.createdAt),
-    index('enduser_events_enduser_created_idx').on(t.endUserId, t.createdAt),
-    index('enduser_events_email_created_idx').on(t.email, t.createdAt),
+    index('enduser_events_user_identifier_created_idx').on(t.userIdentifier, t.createdAt),
     index('enduser_events_campaign_created_idx').on(t.campaignId, t.createdAt),
-    index('enduser_events_enduser_campaign_idx').on(t.endUserId, t.campaignId),
+    index('enduser_events_user_identifier_campaign_idx').on(t.userIdentifier, t.campaignId),
   ]
 );
 

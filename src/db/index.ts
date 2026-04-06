@@ -2,7 +2,7 @@ import 'server-only';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { serverConfig } from '@/lib/config/server';
-import { normalizeDatabaseUrl } from '@/lib/db/connection-url';
+import { normalizeDatabaseUrl, postgresJsPrepareOption } from '@/lib/db/connection-url';
 import * as schema from './schema';
 
 let client: postgres.Sql | null = null;
@@ -21,6 +21,7 @@ function getDatabase() {
       max: poolMax,
       idle_timeout: 20,
       connect_timeout: 10,
+      prepare: postgresJsPrepareOption(connectionString),
     });
   }
 

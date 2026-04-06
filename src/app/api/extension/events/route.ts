@@ -9,6 +9,7 @@ import {
   geoCountryFromRequest,
 } from '@/lib/extension-ad-block-handler';
 import { fetchFrequencyCountsForEndUser } from '@/lib/extension-live-init';
+import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import { publishFrequencyUpdated } from '@/lib/redis';
 import { checkExtensionEventsRateLimit } from '@/lib/rate-limit';
 
@@ -54,6 +55,13 @@ const bodySchema = z.object({
   events: z.array(extensionEventItemSchema).min(1).max(50),
 });
 
+/**
+ * POST /api/extension/events — batched visit / notification / redirect telemetry (max 50 items).
+ *
+ * Input: `Authorization: Bearer <token>`. JSON `{ events: [{ type, domain, campaignId?, visitedAt? }, ...] }` per `bodySchema`.
+ *
+ * Output: `200` `{ ok: true }` | `400`|`401` JSON errors | `500` on failure; may return `ExtensionAdBlockError` body/status.
+ */
 export async function POST(request: NextRequest) {
   try {
     const limited = await checkExtensionEventsRateLimit(request);
@@ -83,15 +91,13 @@ export async function POST(request: NextRequest) {
     }
 
     const endUserIdStr = String(endUser.id);
-    const emailVal = endUser.email?.trim() ? endUser.email.trim().slice(0, 255) : null;
+    const userIdent = userIdentifierForEndUser(endUser);
     const geo = geoCountryFromRequest(request);
     const ua = request.headers.get('user-agent')?.trim().slice(0, 2000) ?? null;
 
     for (const ev of parsed.data.events) {
       await db.insert(enduserEvents).values({
-        endUserId: endUserIdStr,
-        email: emailVal,
-        plan: endUser.plan,
+        userIdentifier: userIdent,
         campaignId: ev.type === 'visit' ? null : (ev.campaignId ?? null),
         domain: ev.domain.slice(0, 255),
         type: ev.type,
@@ -108,7 +114,7 @@ export async function POST(request: NextRequest) {
           .filter((id): id is string => id != null && id.length > 0)
       ),
     ];
-    const counts = await fetchFrequencyCountsForEndUser(endUserIdStr, distinctCampaignIds);
+    const counts = await fetchFrequencyCountsForEndUser(userIdent, distinctCampaignIds);
     for (const campaignId of distinctCampaignIds) {
       await publishFrequencyUpdated({
         endUserId: endUserIdStr,

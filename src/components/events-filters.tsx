@@ -102,7 +102,6 @@ export function EventsFilters({
       typeValue === 'ad' ||
       typeValue === 'notification' ||
       typeValue === 'popup' ||
-      typeValue === 'request' ||
       typeValue === 'redirect' ||
       typeValue === 'visit'
         ? typeValue
@@ -160,7 +159,6 @@ export function EventsFilters({
                   <SelectItem value="notification">Notification</SelectItem>
                   <SelectItem value="redirect">Redirect</SelectItem>
                   <SelectItem value="visit">Visit</SelectItem>
-                  <SelectItem value="request">Request</SelectItem>
                 </SelectContent>
               </Select>
             </div>

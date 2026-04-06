@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { database as db } from '@/db';
-import { enduserEvents } from '@/db/schema';
+import { endUsers, enduserEvents } from '@/db/schema';
 import { and, eq, gte, isNotNull, lte, sql, type SQL } from 'drizzle-orm';
 import { fillMissingDays, getStartDate } from '@/lib/date-range';
 
@@ -20,7 +20,6 @@ export type EndUserEventSummary = {
   popup: number;
   notification: number;
   redirect: number;
-  request: number;
   served: number;
 };
 
@@ -31,7 +30,6 @@ export type EndUserDailySeriesRow = {
   popup: number;
   notification: number;
   redirect: number;
-  request: number;
 };
 
 export type EndUserDomainRow = {
@@ -40,9 +38,9 @@ export type EndUserDomainRow = {
   serves: number;
 };
 
-function endUserTimeWindow(endUserId: string, start: Date, end: Date): SQL {
+function endUserTimeWindow(userIdentifier: string, start: Date, end: Date): SQL {
   return and(
-    eq(enduserEvents.endUserId, endUserId.trim()),
+    eq(enduserEvents.userIdentifier, userIdentifier.trim()),
     gte(enduserEvents.createdAt, start),
     lte(enduserEvents.createdAt, end)
   )!;
@@ -51,11 +49,11 @@ function endUserTimeWindow(endUserId: string, start: Date, end: Date): SQL {
 export async function getEndUserEventSummary(
   role: 'user' | 'admin',
   dashboardUserId: string,
-  endUserId: string,
+  userIdentifier: string,
   start: Date,
   end: Date
 ): Promise<EndUserEventSummary> {
-  const window = endUserTimeWindow(endUserId, start, end);
+  const window = endUserTimeWindow(userIdentifier, start, end);
   const base = db
     .select({
       total: sql<number>`count(*)::int`,
@@ -64,7 +62,6 @@ export async function getEndUserEventSummary(
       popup: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'popup' then 1 else 0 end), 0)::int`,
       notification: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'notification' then 1 else 0 end), 0)::int`,
       redirect: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'redirect' then 1 else 0 end), 0)::int`,
-      request: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'request' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
 
@@ -84,7 +81,6 @@ export async function getEndUserEventSummary(
     popup,
     notification,
     redirect,
-    request: Number(row?.request ?? 0),
     served: ad + popup + notification + redirect,
   };
 }
@@ -92,11 +88,11 @@ export async function getEndUserEventSummary(
 export async function getEndUserDailySeries(
   role: 'user' | 'admin',
   dashboardUserId: string,
-  endUserId: string,
+  userIdentifier: string,
   start: Date,
   end: Date
 ): Promise<EndUserDailySeriesRow[]> {
-  const window = endUserTimeWindow(endUserId, start, end);
+  const window = endUserTimeWindow(userIdentifier, start, end);
   const utcDay = sql`( ${enduserEvents.createdAt} AT TIME ZONE 'UTC' )::date`;
 
   const base = db
@@ -107,7 +103,6 @@ export async function getEndUserDailySeries(
       popup: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'popup' then 1 else 0 end), 0)::int`,
       notification: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'notification' then 1 else 0 end), 0)::int`,
       redirect: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'redirect' then 1 else 0 end), 0)::int`,
-      request: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'request' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
 
@@ -124,7 +119,6 @@ export async function getEndUserDailySeries(
       popup: Number(r.popup),
       notification: Number(r.notification),
       redirect: Number(r.redirect),
-      request: Number(r.request),
     });
   }
 
@@ -134,7 +128,6 @@ export async function getEndUserDailySeries(
     popup: 0,
     notification: 0,
     redirect: 0,
-    request: 0,
   });
 
   return filled.map((d) => ({
@@ -144,19 +137,18 @@ export async function getEndUserDailySeries(
     popup: d.popup,
     notification: d.notification,
     redirect: d.redirect,
-    request: d.request,
   }));
 }
 
 export async function getEndUserTopDomains(
   role: 'user' | 'admin',
   dashboardUserId: string,
-  endUserId: string,
+  userIdentifier: string,
   start: Date,
   end: Date,
   limit = 10
 ): Promise<EndUserDomainRow[]> {
-  const window = endUserTimeWindow(endUserId, start, end);
+  const window = endUserTimeWindow(userIdentifier, start, end);
   const domainCol = sql<string>`coalesce(nullif(trim(${enduserEvents.domain}), ''), '(unknown)')`;
 
   const domainWhere = and(
@@ -194,7 +186,7 @@ export async function getEndUserTopDomains(
 export async function getEndUserAnalyticsBundle(
   role: 'user' | 'admin',
   dashboardUserId: string,
-  endUserId: string,
+  endUserUuid: string,
   range: EndUserAnalyticsRange
 ): Promise<{
   range: EndUserAnalyticsRange;
@@ -204,13 +196,41 @@ export async function getEndUserAnalyticsBundle(
   series: EndUserDailySeriesRow[];
   topDomains: EndUserDomainRow[];
 }> {
+  const [identRow] = await db
+    .select({ identifier: endUsers.identifier })
+    .from(endUsers)
+    .where(eq(endUsers.id, endUserUuid))
+    .limit(1);
+  const userIdentifier = identRow?.identifier ?? '';
+
   const start = getStartDate(range, END_USER_ANALYTICS_RANGE_DAYS, 7);
   const end = new Date();
 
+  const emptySummary: EndUserEventSummary = {
+    total: 0,
+    visit: 0,
+    ad: 0,
+    popup: 0,
+    notification: 0,
+    redirect: 0,
+    served: 0,
+  };
+
+  if (!userIdentifier) {
+    return {
+      range,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      summary: emptySummary,
+      series: [],
+      topDomains: [],
+    };
+  }
+
   const [summary, series, topDomains] = await Promise.all([
-    getEndUserEventSummary(role, dashboardUserId, endUserId, start, end),
-    getEndUserDailySeries(role, dashboardUserId, endUserId, start, end),
-    getEndUserTopDomains(role, dashboardUserId, endUserId, start, end, 10),
+    getEndUserEventSummary(role, dashboardUserId, userIdentifier, start, end),
+    getEndUserDailySeries(role, dashboardUserId, userIdentifier, start, end),
+    getEndUserTopDomains(role, dashboardUserId, userIdentifier, start, end, 10),
   ]);
 
   return {

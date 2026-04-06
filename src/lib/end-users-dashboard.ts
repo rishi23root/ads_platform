@@ -243,7 +243,7 @@ export type EndUserListRow = {
   createdAt: Date;
   /** Latest session row created_at (extension auth), if any. */
   lastSessionAt: Date | null;
-  /** All `enduser_events` rows for this user (`enduser_id` or matching email). */
+  /** All `enduser_events` rows for this user (`user_identifier` = `end_users.identifier`). */
   impressionCount: number;
 };
 
@@ -270,12 +270,7 @@ export function buildEndUsersListBaseQuery(
       impressionCount: sql<number>`(
         select count(*)::int
         from ${enduserEvents}
-        where cast(${enduserEvents.endUserId} as text) = cast(${endUsers.id} as text)
-        or (
-          ${endUsers.email} is not null
-          and ${enduserEvents.email} is not null
-          and lower(${enduserEvents.email}) = lower(${endUsers.email})
-        )
+        where ${enduserEvents.userIdentifier} = ${endUsers.identifier}
       )`.as('impression_count'),
     })
     .from(endUsers)

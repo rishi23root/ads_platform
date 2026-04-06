@@ -43,12 +43,13 @@ flowchart TB
 - **Components**: Reusable UI components built with shadcn/ui
 
 #### 2. API Layer
-- **Extension API** (`/api/extension/ad-block`, `/api/extension/serve/ads`, `/api/extension/events`, `/api/extension/live`, `/api/extension/auth/*`, `/api/extension/domains`)
+- **Extension API** (`/api/extension/ad-block`, `/api/extension/serve/ads`, `/api/extension/serve/redirects`, `/api/extension/events`, `/api/extension/live`, `/api/extension/auth/*`, `/api/extension/domains`)
   - **v2:** **`GET /api/extension/live`** (SSE) sends full `init` (platforms, campaigns, frequency) — auth via **`Authorization: Bearer`** or **`?token=`**
-  - **`POST /api/extension/serve/ads`** — Bearer; per-visit **ads + popup** only; logs `enduser_events`
+  - **`POST /api/extension/serve/ads`** — Bearer; per-visit **ads + popup**; logs `enduser_events` (`ad` / `popup`)
+  - **`POST /api/extension/serve/redirects`** — Bearer; lists eligible redirect campaigns (date + frequency filters); does not log serves — client reports `redirect` via **`/events`**
   - **`POST /api/extension/events`** — Bearer; client-reported **notification** / **redirect** events
   - **Legacy `POST /api/extension/ad-block`** — Bearer; combined ads / notifications / redirects
-  - **Notifications / redirects (v2):** matched client-side from SSE payload; telemetry via **`events`** or legacy ad-block
+  - **Redirects (v2):** prefetch **`POST /api/extension/serve/redirects`** (or SSE); match with **`domain_regex`** → navigate → **`POST /events`** (`redirect`). **Notifications:** match client-side from SSE; telemetry via **`events`** (or legacy ad-block for combined pulls)
   - **`GET /api/extension/domains`** — public list of platform domains (optional if using v2 `init`)
   
 - **Admin API** (`/api/platforms`, `/api/ads`, `/api/notifications`, `/api/redirects`)
@@ -101,12 +102,12 @@ sequenceDiagram
     participant API as Extension API
     participant DB as PostgreSQL
     
-    Ext->>API: POST /api/extension/ad-block<br/>Bearer token + {domain, requestType?}
+    Ext->>API: POST /api/extension/ad-block (legacy) or<br/>serve/redirects + serve/ads (v2)
     API->>DB: Resolve session → end_users
-    API->>DB: Resolve platform/ads/notifications (campaign rules)
-    DB->>API: Return Data
-    API->>DB: Insert enduser_events
-    API->>Ext: {ads: [...], notifications: [...]}
+    API->>DB: Campaign / platform rules
+    DB->>API: Payload
+    API->>DB: Insert enduser_events (per endpoint rules)
+    API->>Ext: JSON (e.g. ads, redirects as applicable)
 ```
 
 ## Data Flow
@@ -120,14 +121,19 @@ sequenceDiagram
 5. **Response**: Returns created ad data
 6. **Client**: Updates UI, redirects or shows success
 
-### Extension Fetching Ads and Notifications
+### Extension fetching (v2 and legacy)
 
-1. **Extension**: User signs in; sends **Bearer token** and `domain` / `requestType` for pulls
-2. **API Call**: POST `/api/extension/ad-block` with `Authorization: Bearer` and JSON body
-3. **Database**: Resolves `end_users` from token; applies campaign/platform rules for ads and notifications
-4. **Response**: `{ ads: [...], notifications: [...] }`
-5. **Extension**: Renders content; may use SSE `/api/extension/live` for realtime signals
-6. **Logging**: Inserts **`enduser_events`**; may update **`end_users`** (e.g. country)
+**v2 (recommended)**  
+1. **Auth**: Bearer on **`/api/extension/live`** (SSE), **`/api/extension/serve/redirects`**, **`/api/extension/serve/ads`**, **`/api/extension/events`**.  
+2. **Redirects**: `POST /api/extension/serve/redirects` — cached list with **`domain_regex`**, **`target_url`**, **`date_till`**, **`count`**; client matches host, then **`POST /events`** for **`redirect`** after navigation (no server log on prefetch).  
+3. **Ads / popups**: `POST /api/extension/serve/ads` with `domain` — response `{ ads: [...] }`; server logs **`ad`** / **`popup`**.  
+4. **Visits / notifications**: batched or immediate **`POST /api/extension/events`**.  
+5. **Realtime**: SSE **`init`** and updates (`campaign_updated`, `frequency_updated`, …).
+
+**Legacy `POST /api/extension/ad-block`**  
+1. Extension sends Bearer + `domain` / optional `requestType`.  
+2. Response `{ ads, notifications, redirects }`; server may insert **`enduser_events`** for matching serves (including **`redirect`** when returned).  
+3. Optional: SSE **`/api/extension/live`** for live signals.
 
 ## API Endpoints Summary
 
@@ -170,7 +176,8 @@ sequenceDiagram
   - Response: `{ ads: [...], notifications: [...], redirects: [...] }`
 - `GET /api/extension/live` — **SSE**, **requires Bearer or `?token=`**; `event: init` + Redis-driven updates
 - `POST /api/extension/serve/ads` — **Bearer**; body `{ domain, userAgent? }`; response `{ ads: [...] }`
-- `POST /api/extension/events` — **Bearer**; body `{ events: [{ campaignId, domain, type: "redirect"|"notification" }] }`
+- `POST /api/extension/serve/redirects` — **Bearer**; body `{ domain? }`; response `{ redirects: [{ campaignId, domain_regex, target_url, date_till, count }] }`
+- `POST /api/extension/events` — **Bearer**; body `{ events: [{ type, domain, campaignId?, visitedAt? }, …] }` — **`visit`**, **`notification`**, **`redirect`**
 - `GET /api/extension/domains` — active platform domains (public).
 
 ### Authentication API

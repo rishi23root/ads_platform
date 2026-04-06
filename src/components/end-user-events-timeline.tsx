@@ -29,14 +29,14 @@ const PAGE_SIZE = 25
 
 type EventRow = {
   id: string
-  endUserId: string
+  userIdentifier: string
+  endUserUuid: string | null
   email: string | null
   campaignId: string | null
   domain: string | null
   type: string
   country: string | null
   userAgent: string | null
-  statusCode: number | null
   createdAt: string
 }
 
@@ -51,13 +51,12 @@ const typeColors: Record<string, "default" | "secondary" | "outline" | "destruct
   ad: "default",
   notification: "secondary",
   popup: "outline",
-  request: "secondary",
   redirect: "outline",
   visit: "secondary",
 }
 
-function eventsDeepLink(endUserId: string): string {
-  const q = new URLSearchParams({ endUserId })
+function eventsDeepLink(endUserUuid: string): string {
+  const q = new URLSearchParams({ endUserIdExact: endUserUuid })
   return `/events?${q.toString()}`
 }
 
@@ -159,9 +158,6 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
                         Country
                       </TableHead>
                       <TableHead className="text-muted-foreground text-xs font-normal whitespace-nowrap">
-                        Status
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-normal whitespace-nowrap">
                         Time
                       </TableHead>
                     </TableRow>
@@ -197,9 +193,6 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
-                        </TableCell>
-                        <TableCell className="py-2 text-sm tabular-nums">
-                          {log.statusCode ?? "—"}
                         </TableCell>
                         <TableCell className="py-2 text-sm text-muted-foreground whitespace-nowrap min-w-0">
                           {new Date(log.createdAt).toLocaleString()}

@@ -2,26 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveEndUserFromRequest } from '@/lib/enduser-auth';
 import { ExtensionAdBlockError } from '@/lib/extension-ad-block-handler';
-import { runServeAds } from '@/lib/extension-serve-handlers';
-import { checkServeAdsRateLimit } from '@/lib/rate-limit';
+import { runServeRedirects } from '@/lib/extension-serve-handlers';
+import { checkServeRedirectsRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
-  domain: z.string().trim().min(1).max(255),
-  userAgent: z.string().max(2000).optional(),
+  /** Optional: narrow to campaigns tied to platforms matching this hostname. Omit for all eligible redirect campaigns. */
+  domain: z.string().trim().min(1).max(255).optional(),
 });
 
 /**
- * POST /api/extension/serve/ads — v2 per-visit ads + popups (logs `ad` / `popup`). Redirect rules: `POST /api/extension/serve/redirects`.
+ * POST /api/extension/serve/redirects — all redirect campaigns that pass schedule, frequency/count, geo, and audience (same qualifiers as serve/ads).
  *
- * Input: `Authorization: Bearer <token>`. JSON `{ domain, userAgent? }`.
+ * Does **not** insert `enduser_events`. After the client navigates, report with `POST /api/extension/events` (`type: "redirect"`).
  *
- * Output: `200` `{ ads }` | `400`|`401` JSON errors | `500` on failure; may return `ExtensionAdBlockError` body/status.
+ * Input: `Authorization: Bearer <token>`. JSON `{ domain? }`.
+ *
+ * Output: `200` `{ redirects: [{ campaignId, domain_regex, target_url, date_till, count }] }` | `400`|`401` | `500`.
  */
 export async function POST(request: NextRequest) {
   try {
-    const limited = await checkServeAdsRateLimit(request);
+    const limited = await checkServeRedirectsRateLimit(request);
     if (limited) return limited;
 
     const resolved = await resolveEndUserFromRequest(request);
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
     try {
       raw = await request.json();
     } catch {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      raw = {};
     }
 
     const parsed = bodySchema.safeParse(raw);
@@ -44,29 +46,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ua =
-      parsed.data.userAgent?.trim().slice(0, 2000) ||
-      request.headers.get('user-agent')?.trim().slice(0, 2000) ||
-      null;
-
-    const result = await runServeAds({
+    const result = await runServeRedirects({
       endUser: resolved.endUser,
       request,
       domain: parsed.data.domain,
-      userAgent: ua,
     });
 
-    return NextResponse.json({
-      ads: result.ads,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ExtensionAdBlockError) {
       return NextResponse.json(error.body, { status: error.status });
     }
-    console.error('[api/extension/serve/ads]', error);
+    console.error('[api/extension/serve/redirects]', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to load ads', details: message },
+      { error: 'Failed to load redirects', details: message },
       { status: 500 }
     );
   }

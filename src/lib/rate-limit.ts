@@ -53,6 +53,12 @@ export async function checkServeAdsRateLimit(request: NextRequest): Promise<Resp
   return checkExtensionRatelimit(request, 'serve-ads');
 }
 
+export async function checkServeRedirectsRateLimit(
+  request: NextRequest
+): Promise<Response | null> {
+  return checkExtensionRatelimit(request, 'serve-redirects');
+}
+
 export async function checkExtensionEventsRateLimit(request: NextRequest): Promise<Response | null> {
   return checkExtensionRatelimit(request, 'events');
 }

@@ -1,18 +1,25 @@
 import 'server-only';
 
 import { database as db } from '@/db';
-import { campaigns, enduserEvents, enduserSessions, payments } from '@/db/schema';
+import { campaigns, endUsers, enduserEvents, enduserSessions, payments } from '@/db/schema';
 import type { EndUserDashboardSnapshot } from '@/lib/end-user-dashboard-types';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 export type { EndUserDashboardSnapshot } from '@/lib/end-user-dashboard-types';
 
 /**
- * Lifetime aggregates for the admin extension user dashboard (exact `enduser_events.enduser_id` match).
+ * Lifetime aggregates for the admin extension user dashboard (events keyed by `end_users.identifier`).
  */
 export async function getEndUserDashboardSnapshot(
   endUserUuidString: string
 ): Promise<EndUserDashboardSnapshot> {
+  const [userRow] = await db
+    .select({ identifier: endUsers.identifier })
+    .from(endUsers)
+    .where(eq(endUsers.id, endUserUuidString))
+    .limit(1);
+  const userIdent = userRow?.identifier ?? null;
+
   const [
     paymentRow,
     paymentCurrencyRow,
@@ -56,7 +63,7 @@ export async function getEndUserDashboardSnapshot(
         distinctCampaignsWithEvents: sql<number>`count(distinct ${enduserEvents.campaignId})::int`,
       })
       .from(enduserEvents)
-      .where(eq(enduserEvents.endUserId, endUserUuidString))
+      .where(userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`)
       .then((rows) => rows[0]),
 
     db
@@ -67,7 +74,7 @@ export async function getEndUserDashboardSnapshot(
       })
       .from(enduserEvents)
       .innerJoin(campaigns, eq(campaigns.id, enduserEvents.campaignId))
-      .where(eq(enduserEvents.endUserId, endUserUuidString))
+      .where(userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`)
       .groupBy(enduserEvents.campaignId, campaigns.name)
       .orderBy(desc(sql`count(*)`))
       .limit(20),

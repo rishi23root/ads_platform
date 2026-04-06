@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { database as db } from '@/db';
-import { campaigns, enduserEvents } from '@/db/schema';
-import { and, desc, eq, gte, ilike, lte, sql, type SQL } from 'drizzle-orm';
+import { campaigns, endUsers, enduserEvents } from '@/db/schema';
+import { and, desc, eq, gte, ilike, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { getQueryParam } from '@/lib/url-search-params';
 import { escapeCsvCell, escapeIlikePattern } from '@/lib/utils';
 
@@ -13,7 +13,10 @@ export type EventsDashboardFilters = {
   domain?: string;
   country?: string;
   endUserId?: string;
-  /** Exact match on `enduser_events.enduser_id` (e.g. end-user UUID). Takes precedence over `endUserId` substring. */
+  /**
+   * Exact match on `enduser_events.user_identifier`.
+   * When this is an end-user row UUID, callers should run `resolveEventsDashboardFilters` first.
+   */
   endUserIdExact?: string;
   email?: string;
   campaignId?: string;
@@ -23,7 +26,6 @@ const EVENT_TYPES = new Set<string>([
   'ad',
   'notification',
   'popup',
-  'request',
   'redirect',
   'visit',
 ]);
@@ -55,6 +57,7 @@ export function parseEventsDashboardFilters(
     domain: getQueryParam(sp, 'domain'),
     country: country && country.length === 2 ? country : undefined,
     endUserId: getQueryParam(sp, 'endUserId'),
+    endUserIdExact: getQueryParam(sp, 'endUserIdExact'),
     email: getQueryParam(sp, 'email'),
     campaignId: getQueryParam(sp, 'campaignId'),
   };
@@ -71,6 +74,31 @@ export function endEventsRequiresCampaignOwnerJoin(role: 'user' | 'admin'): bool
   return false;
 }
 
+async function uuidToUserIdentifier(uuid: string): Promise<string | undefined> {
+  const [row] = await db
+    .select({ identifier: endUsers.identifier })
+    .from(endUsers)
+    .where(eq(endUsers.id, uuid))
+    .limit(1);
+  return row?.identifier;
+}
+
+/**
+ * When `endUserIdExact` is a row UUID, resolves to `end_users.identifier`.
+ * Returns `impossible: true` if the UUID does not match any end user (caller should return empty).
+ */
+export async function resolveEventsDashboardFilters(
+  filters: EventsDashboardFilters
+): Promise<{ filters: EventsDashboardFilters; impossible: boolean }> {
+  const exact = filters.endUserIdExact?.trim();
+  if (exact && UUID_RE.test(exact)) {
+    const ident = await uuidToUserIdentifier(exact);
+    if (!ident) return { filters, impossible: true };
+    return { filters: { ...filters, endUserIdExact: ident }, impossible: false };
+  }
+  return { filters, impossible: false };
+}
+
 function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
   const conditions: SQL[] = [];
   if (filters.type) {
@@ -84,7 +112,6 @@ function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
     if (!filters.to.includes('T')) end.setHours(23, 59, 59, 999);
     conditions.push(lte(enduserEvents.createdAt, end));
   }
-  /** Domain / end-user substring search (same family as other dashboards). */
   if (filters.domain?.trim()) {
     const esc = escapeIlikePattern(filters.domain.trim());
     conditions.push(ilike(enduserEvents.domain, `%${esc}%`));
@@ -93,16 +120,20 @@ function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
     const cc = filters.country.toLowerCase();
     conditions.push(sql`lower(coalesce(${enduserEvents.country}, '')) = ${cc}`);
   }
-  const exactEnd = filters.endUserIdExact?.trim();
-  if (exactEnd && UUID_RE.test(exactEnd)) {
-    conditions.push(eq(enduserEvents.endUserId, exactEnd));
+  const exactUserIdent = filters.endUserIdExact?.trim();
+  if (exactUserIdent) {
+    conditions.push(eq(enduserEvents.userIdentifier, exactUserIdent));
   } else if (filters.endUserId?.trim()) {
     const esc = escapeIlikePattern(filters.endUserId.trim());
-    conditions.push(ilike(enduserEvents.endUserId, `%${esc}%`));
+    conditions.push(ilike(enduserEvents.userIdentifier, `%${esc}%`));
   }
   if (filters.email?.trim()) {
     const esc = escapeIlikePattern(filters.email.trim());
-    conditions.push(ilike(enduserEvents.email, `%${esc}%`));
+    const matchingIds = db
+      .select({ userIdentifier: endUsers.identifier })
+      .from(endUsers)
+      .where(ilike(endUsers.email, `%${esc}%`));
+    conditions.push(inArray(enduserEvents.userIdentifier, matchingIds));
   }
   const cid = filters.campaignId?.trim();
   if (cid && UUID_RE.test(cid)) {
@@ -124,7 +155,6 @@ export type EventStatsRow = {
   notification: number;
   redirect: number;
   visit: number;
-  request: number;
 };
 
 export async function aggregateEventStats(
@@ -132,17 +162,28 @@ export async function aggregateEventStats(
   userId: string,
   filters: EventsDashboardFilters
 ): Promise<EventStatsRow | undefined> {
-  const fw = filterWhereClause(filters);
+  const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
+  if (impossible) {
+    return {
+      total: 0,
+      uniqueUsers: 0,
+      ad: 0,
+      popup: 0,
+      notification: 0,
+      redirect: 0,
+      visit: 0,
+    };
+  }
+  const fw = filterWhereClause(f);
   const base = db
     .select({
       total: sql<number>`count(*)::int`,
-      uniqueUsers: sql<number>`count(distinct ${enduserEvents.endUserId})::int`,
+      uniqueUsers: sql<number>`count(distinct ${enduserEvents.userIdentifier})::int`,
       ad: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'ad' then 1 else 0 end), 0)::int`,
       popup: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'popup' then 1 else 0 end), 0)::int`,
       notification: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'notification' then 1 else 0 end), 0)::int`,
       redirect: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'redirect' then 1 else 0 end), 0)::int`,
       visit: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'visit' then 1 else 0 end), 0)::int`,
-      request: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'request' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
 
@@ -157,7 +198,9 @@ export async function countEvents(
   userId: string,
   filters: EventsDashboardFilters
 ): Promise<number> {
-  const fw = filterWhereClause(filters);
+  const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
+  if (impossible) return 0;
+  const fw = filterWhereClause(f);
   const base = db.select({ count: sql<number>`count(*)::int` }).from(enduserEvents);
   void role;
   void userId;
@@ -167,15 +210,31 @@ export async function countEvents(
 
 export type EventLogRow = {
   id: string;
-  endUserId: string;
+  userIdentifier: string;
+  endUserUuid: string | null;
   email: string | null;
+  /** From `end_users` via join on `user_identifier` (not stored on the event row). */
+  plan: 'trial' | 'paid' | null;
   campaignId: string | null;
   domain: string | null;
   type: string;
   country: string | null;
   userAgent: string | null;
-  statusCode: number | null;
   createdAt: Date;
+};
+
+const eventLogSelect = {
+  id: enduserEvents.id,
+  userIdentifier: enduserEvents.userIdentifier,
+  endUserUuid: endUsers.id,
+  email: endUsers.email,
+  plan: endUsers.plan,
+  campaignId: enduserEvents.campaignId,
+  domain: enduserEvents.domain,
+  type: enduserEvents.type,
+  country: enduserEvents.country,
+  userAgent: enduserEvents.userAgent,
+  createdAt: enduserEvents.createdAt,
 };
 
 export async function listEventsPage(
@@ -184,21 +243,13 @@ export async function listEventsPage(
   filters: EventsDashboardFilters,
   opts: { limit: number; offset: number }
 ): Promise<EventLogRow[]> {
-  const fw = filterWhereClause(filters);
+  const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
+  if (impossible) return [];
+  const fw = filterWhereClause(f);
   const base = db
-    .select({
-      id: enduserEvents.id,
-      endUserId: enduserEvents.endUserId,
-      email: enduserEvents.email,
-      campaignId: enduserEvents.campaignId,
-      domain: enduserEvents.domain,
-      type: enduserEvents.type,
-      country: enduserEvents.country,
-      userAgent: enduserEvents.userAgent,
-      statusCode: enduserEvents.statusCode,
-      createdAt: enduserEvents.createdAt,
-    })
-    .from(enduserEvents);
+    .select(eventLogSelect)
+    .from(enduserEvents)
+    .leftJoin(endUsers, eq(endUsers.identifier, enduserEvents.userIdentifier));
   void role;
   void userId;
   const filtered = fw ? base.where(fw) : base;
@@ -213,21 +264,13 @@ export async function listEventsForExport(
   userId: string,
   filters: EventsDashboardFilters
 ): Promise<EventLogRow[]> {
-  const fw = filterWhereClause(filters);
+  const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
+  if (impossible) return [];
+  const fw = filterWhereClause(f);
   const base = db
-    .select({
-      id: enduserEvents.id,
-      endUserId: enduserEvents.endUserId,
-      email: enduserEvents.email,
-      campaignId: enduserEvents.campaignId,
-      domain: enduserEvents.domain,
-      type: enduserEvents.type,
-      country: enduserEvents.country,
-      userAgent: enduserEvents.userAgent,
-      statusCode: enduserEvents.statusCode,
-      createdAt: enduserEvents.createdAt,
-    })
-    .from(enduserEvents);
+    .select(eventLogSelect)
+    .from(enduserEvents)
+    .leftJoin(endUsers, eq(endUsers.identifier, enduserEvents.userIdentifier));
   void role;
   void userId;
   const filtered = fw ? base.where(fw) : base;
@@ -243,6 +286,7 @@ export function eventsFilterParamsRecord(filters: EventsDashboardFilters): Recor
   if (filters.domain) o.domain = filters.domain;
   if (filters.country) o.country = filters.country;
   if (filters.endUserId) o.endUserId = filters.endUserId;
+  if (filters.endUserIdExact) o.endUserIdExact = filters.endUserIdExact;
   if (filters.email) o.email = filters.email;
   if (filters.campaignId) o.campaignId = filters.campaignId;
   return o;
@@ -256,6 +300,7 @@ export type EventsFilterChipDescriptor = {
     | 'domain'
     | 'country'
     | 'endUserId'
+    | 'endUserIdExact'
     | 'email'
     | 'campaignId';
   label: string;
@@ -299,6 +344,12 @@ export function eventsFilterChips(filters: EventsDashboardFilters): EventsFilter
       label: 'End user',
       display: chipTruncate(filters.endUserId, 22),
     });
+  if (filters.endUserIdExact)
+    chips.push({
+      param: 'endUserIdExact',
+      label: 'End user (exact)',
+      display: chipTruncate(filters.endUserIdExact, 22),
+    });
   if (filters.email)
     chips.push({ param: 'email', label: 'Email', display: chipTruncate(filters.email, 32) });
   if (filters.campaignId)
@@ -313,14 +364,15 @@ export function eventsFilterChips(filters: EventsDashboardFilters): EventsFilter
 export function eventsToCsvLines(rows: EventLogRow[]): string[] {
   const header = [
     'id',
-    'endUserId',
+    'userIdentifier',
+    'endUserUuid',
     'email',
+    'plan',
     'campaignId',
     'domain',
     'type',
     'country',
     'userAgent',
-    'statusCode',
     'createdAt',
   ];
   const lines = [header.map(escapeCsvCell).join(',')];
@@ -328,14 +380,15 @@ export function eventsToCsvLines(rows: EventLogRow[]): string[] {
     lines.push(
       [
         r.id,
-        r.endUserId,
+        r.userIdentifier,
+        r.endUserUuid ?? '',
         r.email ?? '',
+        r.plan ?? '',
         r.campaignId ?? '',
         r.domain ?? '',
         r.type,
         r.country ?? '',
         r.userAgent ?? '',
-        r.statusCode != null ? String(r.statusCode) : '',
         r.createdAt.toISOString(),
       ]
         .map(escapeCsvCell)

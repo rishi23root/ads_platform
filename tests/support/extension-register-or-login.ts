@@ -5,15 +5,16 @@ export async function registerOrLoginExtensionEndUser(
   baseUrl: string,
   email: string,
   password: string
-): Promise<{ token: string; endUserId: string }> {
+): Promise<{ token: string; endUserId: string; userIdentifier: string }> {
   const readAuthBody = async (res: Response, label: string) => {
-    const j = (await res.json()) as { token?: string; user?: { id?: string } };
+    const j = (await res.json()) as { token?: string; user?: { id?: string; identifier?: string } };
     const token = j.token ?? '';
     const endUserId = j.user?.id ?? '';
-    if (token.length <= 16 || !endUserId) {
-      throw new Error(`${label}: missing token or user id`);
+    const userIdentifier = j.user?.identifier ?? '';
+    if (token.length <= 16 || !endUserId || !userIdentifier) {
+      throw new Error(`${label}: missing token, user id, or identifier`);
     }
-    return { token, endUserId };
+    return { token, endUserId, userIdentifier };
   };
 
   const loginRes = await fetch(`${baseUrl}/api/extension/auth/login`, {

@@ -12,6 +12,7 @@ import {
 } from '@/db/schema';
 import type { EndUserRow } from '@/db/schema';
 import { endUserPublicPayload } from '@/lib/enduser-auth';
+import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import { getCanonicalDisplayDomain } from '@/lib/domain-utils';
 import { formatExtensionCampaignScalar } from '@/lib/extension-campaign-scalars';
 
@@ -247,7 +248,7 @@ export async function fetchActiveCampaignRowsForExtension(
   return campaignRows as CampaignSelectRow[];
 }
 
-/** Active ads, popup, and redirect campaigns (for `/api/extension/serve/ads`). */
+/** Active ads and popup campaigns (for `/api/extension/serve/ads`). */
 export async function fetchActiveServeAdsCampaignRowsForExtension(
   now: Date = new Date()
 ): Promise<CampaignSelectRow[]> {
@@ -259,11 +260,25 @@ export async function fetchActiveServeAdsCampaignRowsForExtension(
         eq(campaigns.status, 'active'),
         or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
         or(isNull(campaigns.endDate), gte(campaigns.endDate, now)),
-        or(
-          eq(campaigns.campaignType, 'ads'),
-          eq(campaigns.campaignType, 'popup'),
-          eq(campaigns.campaignType, 'redirect')
-        )
+        or(eq(campaigns.campaignType, 'ads'), eq(campaigns.campaignType, 'popup'))
+      )
+    );
+  return campaignRows as CampaignSelectRow[];
+}
+
+/** Active redirect campaigns (for `/api/extension/serve/redirects`), date window in SQL. */
+export async function fetchActiveRedirectCampaignRowsForExtension(
+  now: Date = new Date()
+): Promise<CampaignSelectRow[]> {
+  const campaignRows = await db
+    .select(extensionCampaignSelectShape)
+    .from(campaigns)
+    .where(
+      and(
+        eq(campaigns.status, 'active'),
+        or(isNull(campaigns.startDate), lte(campaigns.startDate, now)),
+        or(isNull(campaigns.endDate), gte(campaigns.endDate, now)),
+        eq(campaigns.campaignType, 'redirect')
       )
     );
   return campaignRows as CampaignSelectRow[];
@@ -298,7 +313,10 @@ export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promis
   const rowsTyped = campaignRows;
   const out = await hydrateCampaignPayloads(rowsTyped);
 
-  const frequencyCounts = await fetchFrequencyCountsForEndUser(String(endUser.id), rowsTyped.map((c) => c.id));
+  const frequencyCounts = await fetchFrequencyCountsForEndUser(
+    userIdentifierForEndUser(endUser),
+    rowsTyped.map((c) => c.id)
+  );
 
   return {
     user: endUserPublicPayload(endUser),
@@ -311,7 +329,7 @@ export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promis
 
 /** Event counts per campaign for active-in-window campaigns (all event types). */
 export async function fetchFrequencyCountsForEndUser(
-  endUserId: string,
+  userIdentifier: string,
   campaignIds: string[]
 ): Promise<Record<string, number>> {
   const frequencyCounts: Record<string, number> = {};
@@ -323,7 +341,12 @@ export async function fetchFrequencyCountsForEndUser(
       viewCount: sql<number>`COUNT(*)::int`.as('view_count'),
     })
     .from(enduserEvents)
-    .where(and(eq(enduserEvents.endUserId, endUserId), inArray(enduserEvents.campaignId, campaignIds)))
+    .where(
+      and(
+        eq(enduserEvents.userIdentifier, userIdentifier),
+        inArray(enduserEvents.campaignId, campaignIds)
+      )
+    )
     .groupBy(enduserEvents.campaignId);
   for (const row of viewCountRows) {
     if (row.campaignId) frequencyCounts[row.campaignId] = Number(row.viewCount);

@@ -12,7 +12,7 @@ export async function GET() {
 
   const row = await aggregateEventStats(sessionWithRole.role, sessionWithRole.user.id, {});
 
-  const empty = { total: 0, uniqueUsers: 0, ad: 0, popup: 0, notification: 0, redirect: 0, visit: 0, request: 0 };
+  const empty = { total: 0, uniqueUsers: 0, ad: 0, popup: 0, notification: 0, redirect: 0, visit: 0 };
   if (!row) return NextResponse.json(empty);
 
   return NextResponse.json({
@@ -23,6 +23,5 @@ export async function GET() {
     notification: Number(row.notification),
     redirect: Number(row.redirect),
     visit: Number(row.visit),
-    request: Number(row.request),
   });
 }

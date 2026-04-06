@@ -23,6 +23,7 @@ import {
   type ExtensionCampaignQualifyContext,
 } from '@/lib/extension-ad-block-qualify';
 import { computeExtensionDaysLeft } from '@/lib/extension-user-subscription';
+import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 
 export type ExtensionAdBlockPublicAd = {
   title: string;
@@ -142,9 +143,9 @@ export async function runExtensionAdBlock(params: {
     campaignMatchesRequestChannel(c, wantsAds, wantsNotifications)
   );
 
-  const endUserIdStr = String(endUser.id);
+  const uid = userIdentifierForEndUser(endUser);
   const frequencyCounts = await fetchFrequencyCountsForEndUser(
-    endUserIdStr,
+    uid,
     requestScoped.map((c) => c.id)
   );
 
@@ -175,7 +176,6 @@ export async function runExtensionAdBlock(params: {
   const redirects: ExtensionAdBlockPublicRedirect[] = [];
 
   const logDomain = normalizedDomain ? normalizedDomain.slice(0, 255) : null;
-  const emailVal = endUser.email?.trim() ? endUser.email.trim().slice(0, 255) : null;
 
   for (const h of hydrated) {
     if (wantsAds && h.ad && (h.campaignType === 'ads' || h.campaignType === 'popup')) {
@@ -189,9 +189,7 @@ export async function runExtensionAdBlock(params: {
       });
       const evType = h.campaignType === 'popup' ? 'popup' : 'ad';
       await db.insert(enduserEvents).values({
-        endUserId: endUserIdStr,
-        email: emailVal,
-        plan: endUser.plan,
+        userIdentifier: uid,
         campaignId: h.id,
         domain: logDomain,
         type: evType,
@@ -206,9 +204,7 @@ export async function runExtensionAdBlock(params: {
         ctaLink: h.notification.ctaLink,
       });
       await db.insert(enduserEvents).values({
-        endUserId: endUserIdStr,
-        email: emailVal,
-        plan: endUser.plan,
+        userIdentifier: uid,
         campaignId: h.id,
         domain: logDomain,
         type: 'notification',
@@ -233,9 +229,7 @@ export async function runExtensionAdBlock(params: {
         destinationUrl: h.redirect.destinationUrl,
       });
       await db.insert(enduserEvents).values({
-        endUserId: endUserIdStr,
-        email: emailVal,
-        plan: endUser.plan,
+        userIdentifier: uid,
         campaignId: h.id,
         domain: logDomain,
         type: 'redirect',

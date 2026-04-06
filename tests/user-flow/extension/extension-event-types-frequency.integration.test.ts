@@ -194,7 +194,7 @@ integration('extension ad-block event typing + frequency cap', () => {
     const campaignIdsToDeactivate: string[] = [];
     const testForwardedIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
     let createdCreatorUserId: string | null = null;
-    let endUserId: string | null = null;
+    let userIdentifier: string | null = null;
 
     try {
       const { creatorUserId, createdCreatorUserId: newCreator } = await ensureE2eCreatorUser();
@@ -306,7 +306,7 @@ integration('extension ad-block event typing + frequency cap', () => {
         email,
         EXTENSION_INTEGRATION_PASSWORD
       );
-      endUserId = initial.endUserId;
+      userIdentifier = initial.userIdentifier;
       const session = { token: initial.token };
 
       let servedAdCount = 0;
@@ -354,7 +354,7 @@ integration('extension ad-block event typing + frequency cap', () => {
         .from(enduserEvents)
         .where(
           and(
-            eq(enduserEvents.endUserId, endUserId!),
+            eq(enduserEvents.userIdentifier, userIdentifier!),
             inArray(enduserEvents.campaignId, [adCampaign.id, notificationCampaign.id])
           )
         );
@@ -370,9 +370,7 @@ integration('extension ad-block event typing + frequency cap', () => {
       expect(notificationEventTypes).toHaveLength(10);
       expect(adEventTypes.every((t) => t === 'ad')).toBe(true);
       expect(notificationEventTypes.every((t) => t === 'notification')).toBe(true);
-      expect(
-        trackedEvents.some((ev) => ev.type === 'request' || ev.type === 'visit')
-      ).toBe(false);
+      expect(trackedEvents.some((ev) => ev.type === 'visit')).toBe(false);
 
       const softDeletedAt = new Date();
       await db
@@ -385,7 +383,7 @@ integration('extension ad-block event typing + frequency cap', () => {
         .from(enduserEvents)
         .where(
           and(
-            eq(enduserEvents.endUserId, endUserId!),
+            eq(enduserEvents.userIdentifier, userIdentifier!),
             inArray(enduserEvents.campaignId, campaignIdsToDeactivate)
           )
         );
@@ -395,8 +393,8 @@ integration('extension ad-block event typing + frequency cap', () => {
       if (process.env.EXTENSION_TEST_RETAIN_EVENTS === '1') {
         return;
       }
-      if (endUserId) {
-        await db.delete(enduserEvents).where(eq(enduserEvents.endUserId, endUserId));
+      if (userIdentifier) {
+        await db.delete(enduserEvents).where(eq(enduserEvents.userIdentifier, userIdentifier));
       }
       if (campaignIdsToDeactivate.length > 0) {
         await db
@@ -416,7 +414,7 @@ integration('extension ad-block event typing + frequency cap', () => {
     const campaignIdsToDeactivate: string[] = [];
     const testForwardedIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
     let createdCreatorUserId: string | null = null;
-    let endUserId: string | null = null;
+    let userIdentifier: string | null = null;
 
     try {
       const { creatorUserId, createdCreatorUserId: newCreator } = await ensureE2eCreatorUser();
@@ -478,7 +476,7 @@ integration('extension ad-block event typing + frequency cap', () => {
         email,
         EXTENSION_INTEGRATION_PASSWORD
       );
-      endUserId = initialPopup.endUserId;
+      userIdentifier = initialPopup.userIdentifier;
       const sessionPopup = { token: initialPopup.token };
 
       let servedPopupCount = 0;
@@ -511,7 +509,10 @@ integration('extension ad-block event typing + frequency cap', () => {
         .select({ type: enduserEvents.type })
         .from(enduserEvents)
         .where(
-          and(eq(enduserEvents.endUserId, endUserId!), eq(enduserEvents.campaignId, popupCampaign.id))
+          and(
+            eq(enduserEvents.userIdentifier, userIdentifier!),
+            eq(enduserEvents.campaignId, popupCampaign.id)
+          )
         );
 
       expect(popupEventTypes).toHaveLength(10);
@@ -520,8 +521,8 @@ integration('extension ad-block event typing + frequency cap', () => {
       if (process.env.EXTENSION_TEST_RETAIN_EVENTS === '1') {
         return;
       }
-      if (endUserId) {
-        await db.delete(enduserEvents).where(eq(enduserEvents.endUserId, endUserId));
+      if (userIdentifier) {
+        await db.delete(enduserEvents).where(eq(enduserEvents.userIdentifier, userIdentifier));
       }
       if (campaignIdsToDeactivate.length > 0) {
         await db
@@ -542,7 +543,7 @@ integration('extension ad-block event typing + frequency cap', () => {
     const campaignIdsToDeactivate: string[] = [];
     const testForwardedIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
     let createdCreatorUserId: string | null = null;
-    let endUserId: string | null = null;
+    let userIdentifier: string | null = null;
 
     try {
       const { creatorUserId, createdCreatorUserId: newCreator } = await ensureE2eCreatorUser();
@@ -609,7 +610,7 @@ integration('extension ad-block event typing + frequency cap', () => {
         email,
         EXTENSION_INTEGRATION_PASSWORD
       );
-      endUserId = initialRedir.endUserId;
+      userIdentifier = initialRedir.userIdentifier;
       const sessionRedir = { token: initialRedir.token };
 
       let servedRedirectCount = 0;
@@ -641,7 +642,10 @@ integration('extension ad-block event typing + frequency cap', () => {
         .select({ type: enduserEvents.type })
         .from(enduserEvents)
         .where(
-          and(eq(enduserEvents.endUserId, endUserId!), eq(enduserEvents.campaignId, redirectCampaign.id))
+          and(
+            eq(enduserEvents.userIdentifier, userIdentifier!),
+            eq(enduserEvents.campaignId, redirectCampaign.id)
+          )
         );
 
       expect(redirectEventTypes).toHaveLength(10);
@@ -650,8 +654,8 @@ integration('extension ad-block event typing + frequency cap', () => {
       if (process.env.EXTENSION_TEST_RETAIN_EVENTS === '1') {
         return;
       }
-      if (endUserId) {
-        await db.delete(enduserEvents).where(eq(enduserEvents.endUserId, endUserId));
+      if (userIdentifier) {
+        await db.delete(enduserEvents).where(eq(enduserEvents.userIdentifier, userIdentifier));
       }
       if (campaignIdsToDeactivate.length > 0) {
         await db

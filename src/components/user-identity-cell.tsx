@@ -36,14 +36,25 @@ export function UserIdentityCell({
     primary.length > TRUNCATE_LENGTH ? `${primary.slice(0, TRUNCATE_LENGTH)}…` : primary;
   const useMono = !name && !email && !identifier;
 
+  const copyValue = email ?? identifier ?? endUserId;
+  const copyLabel =
+    email != null ? 'Email' : identifier != null ? 'Identifier' : 'User ID';
+
   const copyToClipboard = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(endUserId);
-      toast.success('User ID copied');
+      await navigator.clipboard.writeText(copyValue);
+      toast.success(`${copyLabel} copied`);
     } catch {
       toast.error('Failed to copy');
     }
-  }, [endUserId]);
+  }, [copyValue, copyLabel]);
+
+  const copyButtonTitle =
+    email != null
+      ? 'Copy email'
+      : identifier != null
+        ? 'Copy identifier'
+        : 'Copy user ID';
 
   return (
     <TooltipProvider>
@@ -65,10 +76,6 @@ export function UserIdentityCell({
             side="top"
             className="max-w-[min(90vw,480px)] space-y-1 overflow-x-auto text-left [&_p]:whitespace-nowrap"
           >
-            <p className="font-mono text-xs">
-              <span className="text-muted-foreground">UUID: </span>
-              {endUserId}
-            </p>
             {identifier ? (
               <p className="font-mono text-xs">
                 <span className="text-muted-foreground">Identifier: </span>
@@ -95,12 +102,12 @@ export function UserIdentityCell({
               type="button"
               onClick={copyToClipboard}
               className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-opacity shrink-0"
-              aria-label="Copy user UUID"
+              aria-label={copyButtonTitle}
             >
               <IconCopy className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top">Copy user UUID</TooltipContent>
+          <TooltipContent side="top">{copyButtonTitle}</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>

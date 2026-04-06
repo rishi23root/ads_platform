@@ -5,15 +5,16 @@
  *
  * Run: npx tsx scripts/truncate-endusers-and-events.ts
  */
-import dotenv from 'dotenv';
 import postgres from 'postgres';
 
-dotenv.config({ path: '.env.local' });
+import { loadCliEnv } from '../src/lib/db/load-cli-env';
+
+loadCliEnv();
 
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    console.error('DATABASE_URL not set. Use .env.local or set the env var.');
+    console.error('DATABASE_URL not set. Add it to .env or .env.local, or export it.');
     process.exit(1);
   }
 

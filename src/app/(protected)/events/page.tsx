@@ -124,19 +124,22 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
+                <col style={{ width: 'auto' }} />
                 <col style={{ width: '80px' }} />
                 <col style={{ width: 'minmax(120px, 1fr)' }} />
                 <col style={{ width: '90px' }} />
-                <col style={{ width: '80px' }} />
                 <col style={{ width: '170px' }} />
               </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-muted-foreground text-xs font-normal">
-                    End-user ID
+                    User identifier
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     Email
+                  </TableHead>
+                  <TableHead className="text-muted-foreground text-xs font-normal">
+                    Plan
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     Campaign
@@ -152,9 +155,6 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     Type
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Status
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-normal">
                     Timestamp
@@ -173,9 +173,12 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                     <TableRow key={log.id}>
                       <TableCell className="py-2 overflow-hidden">
                         <CopyableIdCell
-                          value={log.endUserId}
+                          value={log.userIdentifier}
                           truncateLength={12}
-                          copyLabel="End-user ID copied to clipboard"
+                          copyLabel="User identifier copied to clipboard"
+                          href={
+                            log.endUserUuid ? `/users/${log.endUserUuid}` : undefined
+                          }
                         />
                       </TableCell>
                       <TableCell className="py-2 overflow-hidden text-sm">
@@ -183,6 +186,15 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                           <span className="truncate block max-w-[180px]" title={log.email}>
                             {log.email}
                           </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 overflow-hidden text-sm">
+                        {log.plan ? (
+                          <Badge variant="outline" className="font-normal capitalize">
+                            {log.plan}
+                          </Badge>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -223,9 +235,6 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
                       </TableCell>
                       <TableCell className="py-2 overflow-hidden">
                         <Badge variant={typeColors[log.type] || 'secondary'}>{log.type}</Badge>
-                      </TableCell>
-                      <TableCell className="py-2 text-sm tabular-nums">
-                        {log.statusCode ?? '—'}
                       </TableCell>
                       <TableCell className="py-2 text-sm text-muted-foreground min-w-0">
                         <HumanReadableDate date={new Date(log.createdAt)} />

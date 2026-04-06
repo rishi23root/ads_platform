@@ -7,7 +7,7 @@ import path from 'path';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
-import { normalizeDatabaseUrl } from './connection-url';
+import { normalizeDatabaseUrl, postgresJsPrepareOption } from './connection-url';
 
 export function resolveMigrationsFolder(): string {
   const envDir = process.env.DRIZZLE_MIGRATIONS_DIR;
@@ -108,7 +108,7 @@ export function ensureCampaignStatusDeletedEnumReady(): Promise<void> {
       return;
     }
     const url = normalizeDatabaseUrl(rawUrl);
-    const client = postgres(url, { max: 1 });
+    const client = postgres(url, { max: 1, prepare: postgresJsPrepareOption(url) });
     try {
       await addCampaignStatusDeletedIfMissing(client);
     } finally {
@@ -147,7 +147,7 @@ export function ensureRedirectsSchemaOnce(): Promise<void> {
         return;
       }
       const url = normalizeDatabaseUrl(rawUrl);
-      const client = postgres(url, { max: 1 });
+      const client = postgres(url, { max: 1, prepare: postgresJsPrepareOption(url) });
       try {
         await ensureRedirectsTables(client);
       } finally {
@@ -172,7 +172,7 @@ export async function runMigrations(): Promise<void> {
   const migrationsFolder = resolveMigrationsFolder();
   console.log('[migrate] Using migrations folder:', migrationsFolder);
 
-  const client = postgres(url, { max: 1 });
+  const client = postgres(url, { max: 1, prepare: postgresJsPrepareOption(url) });
   const db = drizzle(client);
 
   try {

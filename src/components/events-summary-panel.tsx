@@ -7,7 +7,6 @@ import {
   IconLoader2,
   IconRoute,
   IconUsers,
-  IconWebhook,
   IconWindow,
   IconWorld,
 } from '@tabler/icons-react';
@@ -22,7 +21,6 @@ type SummaryPayload = {
   notification: number;
   redirect: number;
   visit: number;
-  request: number;
 };
 
 const kpiCards: {
@@ -37,7 +35,6 @@ const kpiCards: {
   { key: 'notification', label: 'Notification', icon: IconBell },
   { key: 'redirect', label: 'Redirect', icon: IconRoute },
   { key: 'visit', label: 'Visit', icon: IconWorld },
-  { key: 'request', label: 'Request', icon: IconWebhook },
 ];
 
 type EventsSummaryPanelProps = {

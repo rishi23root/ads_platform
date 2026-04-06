@@ -32,6 +32,13 @@ function waitForAbort(req: NextRequest): Promise<void> {
   });
 }
 
+/**
+ * GET /api/extension/live — SSE stream (`init` + optional realtime updates).
+ *
+ * Input: `Authorization: Bearer <token>` **or** query `?token=<same>` (for EventSource). No body.
+ *
+ * Output: `200` `text/event-stream` (first `init` event JSON per extension-live-init) | `401` JSON `{ error: "Unauthorized" }`.
+ */
 export async function GET(request: NextRequest) {
   const resolved = await resolveEndUserFromExtensionRequest(request);
   if (!resolved) {

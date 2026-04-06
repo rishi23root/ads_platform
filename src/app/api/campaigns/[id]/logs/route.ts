@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { enduserEvents } from '@/db/schema';
-import { eq, desc, sql, and } from 'drizzle-orm';
+import { endUsers, enduserEvents } from '@/db/schema';
+import { desc, eq, sql, and } from 'drizzle-orm';
 import { getAccessibleCampaignById } from '@/lib/campaign-access';
 import { getSessionWithRole } from '@/lib/dal';
 
@@ -14,7 +14,6 @@ const EVENT_TYPES = [
   'ad',
   'notification',
   'popup',
-  'request',
   'redirect',
   'visit',
 ] as const;
@@ -54,18 +53,19 @@ export async function GET(
     const rows = await db
       .select({
         id: enduserEvents.id,
-        endUserId: enduserEvents.endUserId,
+        userIdentifier: enduserEvents.userIdentifier,
+        endUserUuid: endUsers.id,
         domain: enduserEvents.domain,
         type: enduserEvents.type,
-        statusCode: enduserEvents.statusCode,
         createdAt: enduserEvents.createdAt,
         country: enduserEvents.country,
-        email: enduserEvents.email,
-        plan: enduserEvents.plan,
+        email: endUsers.email,
+        plan: endUsers.plan,
         userAgent: enduserEvents.userAgent,
         totalCount: sql<number>`count(*) over ()::int`,
       })
       .from(enduserEvents)
+      .leftJoin(endUsers, eq(endUsers.identifier, enduserEvents.userIdentifier))
       .where(whereClause)
       .orderBy(desc(enduserEvents.createdAt))
       .limit(pageSize)

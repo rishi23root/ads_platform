@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:squash": "rm -f drizzle/migrations/*.sql drizzle/migrations/meta/*_snapshot.json && node -e \"require('fs').writeFileSync('drizzle/migrations/meta/_journal.json', JSON.stringify({version:'7',dialect:'postgresql',entries:[]},null,2)+'\\n')\" && pnpm db:generate",
     "db:migrate": "NODE_OPTIONS='--dns-result-order=ipv4first' drizzle-kit migrate",
+    "db:migration-status": "npx tsx scripts/migration-status.ts",
     "db:migrate:app": "npx tsx scripts/apply-migrations.ts",
     "db:truncate:endusers": "npx tsx scripts/truncate-endusers-and-events.ts",
     "db:cleanup:extension-tests": "npx tsx scripts/cleanup-extension-integration-fixtures.ts",

@@ -9,6 +9,7 @@ Shared helpers for Vitest (not test cases themselves).
 | `extension-register-or-login.ts` | Login; register on 401; returns token + `endUserId`. |
 | `extension-ad-block-request.ts` | `POST /api/extension/ad-block` with 401 retry. |
 | `extension-serve-ads-request.ts` | `POST /api/extension/serve/ads` with 401 retry. |
+| `extension-serve-redirects-request.ts` | `POST /api/extension/serve/redirects` with 401 retry. |
 | `extension-events-request.ts` | `POST /api/extension/events` with 401 retry. |
 | `extension-sse-first-event.ts` | Reads the first SSE frame from `/api/extension/live?token=…` (Vitest / Node). |
 

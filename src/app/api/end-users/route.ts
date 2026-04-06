@@ -17,6 +17,7 @@ import {
   computePaidSubscriptionEndFromNow,
   computeTrialEndDateFromNow,
 } from '@/lib/extension-user-subscription';
+import { allocateUniqueEndUserIdentifier } from '@/lib/enduser-merge';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,12 +145,14 @@ export async function POST(request: NextRequest) {
     if (p.email?.length) {
       const normalizedEmail = p.email.toLowerCase();
       const plan = p.plan ?? 'trial';
+      const identifier =
+        p.identifier?.trim() ?? (await allocateUniqueEndUserIdentifier());
       const [created] = await db
         .insert(endUsers)
         .values({
           email: normalizedEmail,
           passwordHash: hashEnduserPassword(p.password!),
-          identifier: p.identifier ?? null,
+          identifier,
           name: p.name ?? null,
           plan,
           banned: p.banned ?? false,

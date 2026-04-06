@@ -75,6 +75,28 @@ export function redirectSourceMatchesVisit(
   return host.endsWith(`.${source}`);
 }
 
+/** Escape a string for use inside a `RegExp` pattern. */
+export function escapeRegExpChars(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Hostname-oriented pattern aligned with {@link redirectSourceMatchesVisit}: match normalized
+ * visit hostnames with `new RegExp(pattern, 'i')` (case-insensitive ASCII host).
+ *
+ * - `includeSubdomains: false` → exact host only.
+ * - `includeSubdomains: true` → host is either exactly `source` or `*.source` (one or more labels).
+ */
+export function redirectSourceToHostnameRegex(
+  sourceDomain: string,
+  includeSubdomains: boolean
+): string {
+  const source = normalizeDomainForMatch(sourceDomain);
+  const esc = escapeRegExpChars(source);
+  if (!includeSubdomains) return `^${esc}$`;
+  return `^(?:.+\\.)?${esc}$`;
+}
+
 /** Platform ids whose stored domain matches `normalizedVisitDomain` (from {@link normalizeDomainForMatch}). */
 export function platformIdSetForNormalizedDomain(
   normalizedVisitDomain: string,

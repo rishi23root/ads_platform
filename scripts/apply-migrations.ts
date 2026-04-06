@@ -1,12 +1,11 @@
 /**
- * One-off: load .env.local and run the same migration pipeline as instrumentation.
- * Usage: npx tsx scripts/apply-migrations.ts
+ * Load `.env` / `.env.local` and run the same migration pipeline as instrumentation.
+ * Usage: pnpm db:migrate:app
  */
-import { config } from 'dotenv';
+import { loadCliEnv } from '../src/lib/db/load-cli-env';
 import { runMigrations } from '../src/lib/db/run-migrate';
 
-config();
-config({ path: '.env.local', override: true });
+loadCliEnv({ verbose: true });
 
 runMigrations().catch((err) => {
   console.error(err);
