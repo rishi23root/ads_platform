@@ -728,10 +728,10 @@ function OverviewBentoGrid({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Row 1: separate cards — profile fixed width, chart takes the rest */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_20rem] lg:items-stretch">
-        {/* Chart card — takes all remaining space */}
-        <div className="flex min-h-[20rem] flex-col overflow-hidden rounded-xl border border-border bg-card/40 shadow-none">
+      {/* Row 1: 70/30 split (7fr / 3fr); both cards stretch to the same row height */}
+      <div className="grid min-h-[20rem] gap-3 lg:grid-cols-[7fr_3fr] lg:items-stretch">
+        {/* Chart card — 70% */}
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/40 shadow-none">
           <EndUserAnalyticsSection
             endUserId={user.id}
             embedded
@@ -741,13 +741,13 @@ function OverviewBentoGrid({
           />
         </div>
 
-        {/* Profile card — fixed 20rem column, self-start so content drives height */}
-        <div className="flex flex-col rounded-xl border border-border bg-card/40 px-4 pb-4 pt-4 shadow-none lg:self-start">
+        {/* Profile card — 30%, full height of row */}
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card/40 px-4 pb-4 pt-4 shadow-none">
           <h3 className="text-sm font-medium flex items-center gap-2 text-foreground shrink-0">
             <IconUser className="h-4 w-4 text-muted-foreground" aria-hidden />
             Profile &amp; access
           </h3>
-          <dl className="mt-3 flex flex-col gap-3 text-sm">
+          <dl className="mt-3 flex min-h-0 flex-1 flex-col gap-3 text-sm">
             <ProfileRow label="Identifier" value={user.identifier} mono />
             <ProfileRow label="Name" value={user.name?.trim()} />
             <ProfileRow label="Email" value={user.email} />
@@ -772,7 +772,10 @@ function OverviewBentoGrid({
             </div>
             <ProfileRow label="Access starts" value={overviewStart} tabular />
             <ProfileRow label="Access ends" value={overviewEnd ?? "Open-ended"} tabular />
-            <ProfileEventCountriesRow countries={dashboard.eventCountries} />
+            <ProfileEventCountriesRow
+              countries={dashboard.eventCountries}
+              className="mt-auto shrink-0"
+            />
           </dl>
         </div>
       </div>
