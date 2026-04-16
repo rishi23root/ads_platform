@@ -9,7 +9,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true 
  * Load test: extension ad-block requests with Bearer auth (multi-domain).
  *
  * Requires extension user credentials (same as POST /api/extension/auth/login):
- *   EXTENSION_EMAIL, EXTENSION_PASSWORD
+ *   EXTENSION_EMAIL, EXTENSION_PASSWORD. Login resolves country from headers; this script sends
+ *   x-vercel-ip-country (EXTENSION_COUNTRY, ISO2, default US) so local runs succeed without edge.
  *
  * Usage:
  *   EXTENSION_EMAIL=a@b.com EXTENSION_PASSWORD=secret pnpm load-test:extension
@@ -29,6 +30,8 @@ const BASE_URL = resolveBaseUrl();
 const REQUESTS_PER_DOMAIN = 10;
 const EXTENSION_EMAIL = process.env.EXTENSION_EMAIL?.trim();
 const EXTENSION_PASSWORD = process.env.EXTENSION_PASSWORD;
+const EXTENSION_COUNTRY =
+  process.env.EXTENSION_COUNTRY?.trim().toUpperCase().slice(0, 2) || 'US';
 
 const DOMAINS = [
   'test.buildyourresume.in',
@@ -59,8 +62,14 @@ async function loginExtensionUser(): Promise<string> {
   }
   const res = await fetch(`${BASE_URL}/api/extension/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EXTENSION_EMAIL, password: EXTENSION_PASSWORD }),
+    headers: {
+      'Content-Type': 'application/json',
+      'x-vercel-ip-country': EXTENSION_COUNTRY,
+    },
+    body: JSON.stringify({
+      email: EXTENSION_EMAIL,
+      password: EXTENSION_PASSWORD,
+    }),
   });
   const data = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
   if (!res.ok) {

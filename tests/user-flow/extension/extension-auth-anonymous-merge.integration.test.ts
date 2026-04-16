@@ -6,7 +6,10 @@ import { describe, it, expect } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, enduserEvents } from '@/db/schema';
-import { EXTENSION_INTEGRATION_PASSWORD } from '../../support/extension-test-constants';
+import {
+  EXTENSION_INTEGRATION_LOGIN_HEADERS,
+  EXTENSION_INTEGRATION_PASSWORD,
+} from '../../support/extension-test-constants';
 import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-url';
 
 const BASE = extensionIntegrationBaseUrl();
@@ -76,7 +79,7 @@ integration('extension auth: anonymous idempotency and link-email (same end_user
 
     const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({
         email,
         password: EXTENSION_INTEGRATION_PASSWORD,
@@ -224,7 +227,7 @@ integration('extension auth: anonymous idempotency and link-email (same end_user
     const wrongLocalId = randomKey('wronglocal');
     const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({
         email,
         password: EXTENSION_INTEGRATION_PASSWORD,

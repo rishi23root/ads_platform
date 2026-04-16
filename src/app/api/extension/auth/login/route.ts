@@ -13,6 +13,10 @@ import {
   endUserPublicPayload,
   verifyEnduserPassword,
 } from '@/lib/enduser-auth';
+import {
+  backfillEndUserCountryIfEmpty,
+  countryCodeFromRequestHeaders,
+} from '@/lib/enduser-request-country';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +43,8 @@ const loginSchema = z.union([loginWithEmailSchema, loginAnonymousSchema]);
  * session with `identifier` only (same rules as register when id is linked to an email account).
  *
  * Input: JSON `{ email, password, identifier? }` or `{ identifier }`.
+ * A valid ISO 3166-1 alpha-2 country must be present on the request via edge headers
+ * (`x-vercel-ip-country` or `cf-ipcountry`). When `end_users.country` is empty, it is set from that value.
  *
  * Output: `200`|`201` `{ token, expiresAt (ISO), user, identifier?, identifierReplaced?,
  * identifierRegenerated? }`.
@@ -62,6 +68,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = parsed.data;
+    const countryCode = countryCodeFromRequestHeaders(request);
+    if (!countryCode) {
+      return NextResponse.json(
+        {
+          error:
+            'Country could not be determined: request must include x-vercel-ip-country or cf-ipcountry (ISO 3166-1 alpha-2)',
+        },
+        { status: 400 }
+      );
+    }
+
     if (!('email' in body)) {
       const anonResult = await getOrCreateAnonymousEndUserByIdentifier({
         identifier: body.identifier,
@@ -79,17 +96,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to sign in' }, { status: 500 });
       }
 
+      const endUser = await backfillEndUserCountryIfEmpty(anonResult.endUser, countryCode);
+
       const { token, expiresAt } = await createEnduserSession({
-        endUserId: anonResult.endUser.id,
+        endUserId: endUser.id,
         request,
       });
 
-      const canonicalIdentifier = anonResult.endUser.identifier;
+      const canonicalIdentifier = endUser.identifier;
       return NextResponse.json(
         {
           token,
           expiresAt: expiresAt.toISOString(),
-          user: endUserPublicPayload(anonResult.endUser),
+          user: endUserPublicPayload(endUser),
           identifier: canonicalIdentifier,
           ...(anonResult.identifierRegenerated ? { identifierRegenerated: true } : {}),
         },
@@ -117,9 +136,11 @@ export async function POST(request: NextRequest) {
     }
 
     const idKey = body.identifier;
-    const sessionUser = idKey
+    let sessionUser = idKey
       ? await consolidateAnonymousWithEmailUserAfterLogin({ emailUser: row, identifier: idKey })
       : row;
+
+    sessionUser = await backfillEndUserCountryIfEmpty(sessionUser, countryCode);
 
     const { token, expiresAt } = await createEnduserSession({
       endUserId: sessionUser.id,

@@ -1,6 +1,8 @@
 /**
  * Stable extension end-user session: prefer login (cheap, safe under parallel runners), then register on 401.
  */
+import { EXTENSION_INTEGRATION_LOGIN_HEADERS } from './extension-test-constants';
+
 export async function registerOrLoginExtensionEndUser(
   baseUrl: string,
   email: string,
@@ -19,7 +21,7 @@ export async function registerOrLoginExtensionEndUser(
 
   const loginRes = await fetch(`${baseUrl}/api/extension/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
     body: JSON.stringify({ email, password }),
   });
 
@@ -45,7 +47,7 @@ export async function registerOrLoginExtensionEndUser(
   if (regRes.status === 409) {
     const retryLogin = await fetch(`${baseUrl}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     if (retryLogin.status === 200) {

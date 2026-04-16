@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
 import {
+  EXTENSION_INTEGRATION_LOGIN_HEADERS,
   EXTENSION_INTEGRATION_PASSWORD,
   EXTENSION_SHARED_USER_EMAILS,
 } from '../../support/extension-test-constants';
@@ -27,7 +28,7 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
   it('login returns token', async () => {
     const res = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     expect(res.status).toBe(200);
@@ -45,7 +46,7 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
   it('ad-block returns ads + notifications arrays', async () => {
     const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     expect(loginRes.ok).toBe(true);
@@ -79,7 +80,7 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
   it('ad-block with requestType notification omits domain and returns empty ads', async () => {
     const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     expect(loginRes.ok).toBe(true);
@@ -110,7 +111,7 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
   it('ad-block rejects ad request without domain (400)', async () => {
     const loginRes = await fetch(`${BASE}/api/extension/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...EXTENSION_INTEGRATION_LOGIN_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     expect(loginRes.ok).toBe(true);

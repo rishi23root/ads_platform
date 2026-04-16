@@ -22,13 +22,12 @@ import {
 } from '@/lib/extension-live-init';
 import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import { normalizeDomainForMatch, platformIdSetForNormalizedDomain, redirectSourceToHostnameRegex } from '@/lib/domain-utils';
+import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { getCachedPlatformList, setCachedPlatformList } from '@/lib/redis';
 
 function endUserGeoCountryFromRequest(request: NextRequest, endUser: EndUserRow): string | null {
-  const vercel = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase();
-  if (vercel && vercel.length === 2) return vercel;
-  const cf = request.headers.get('cf-ipcountry')?.trim().toUpperCase();
-  if (cf && cf.length === 2 && cf !== 'XX') return cf;
+  const fromHeaders = countryCodeFromRequestHeaders(request);
+  if (fromHeaders) return fromHeaders;
   const fromRow = endUser.country?.trim().toUpperCase();
   return fromRow && fromRow.length === 2 ? fromRow : null;
 }
