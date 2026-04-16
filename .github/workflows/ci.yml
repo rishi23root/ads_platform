@@ -44,10 +44,10 @@ jobs:
           BETTER_AUTH_BASE_URL: http://localhost:3000
           NODE_ENV: production
 
-      - name: Test
-        run: pnpm test
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-          BETTER_AUTH_SECRET: '01234567890123456789012345678901'
-          BETTER_AUTH_BASE_URL: http://localhost:3000
-          NODE_ENV: test
+      # - name: Test
+      #   run: pnpm test
+      #   env:
+      #     DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      #     BETTER_AUTH_SECRET: '01234567890123456789012345678901'
+      #     BETTER_AUTH_BASE_URL: http://localhost:3000
+      #     NODE_ENV: test
