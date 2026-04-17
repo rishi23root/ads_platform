@@ -61,13 +61,14 @@ export type ExtensionLiveSseHttpMeta = {
  */
 export async function fetchExtensionLiveSseInitWithHttpMeta(
   baseUrl: string,
-  token: string
+  token: string,
+  extraHeaders?: Record<string, string>
 ): Promise<ExtensionLiveSseHttpMeta> {
   const url = new URL(`${baseUrl}/api/extension/live`);
   url.searchParams.set('token', token);
 
   const res = await fetch(url.toString(), {
-    headers: { Accept: 'text/event-stream' },
+    headers: { Accept: 'text/event-stream', ...extraHeaders },
   });
 
   const contentType = res.headers.get('content-type') ?? '';
@@ -109,13 +110,14 @@ export async function fetchExtensionLiveSseInitWithHttpMeta(
  */
 export async function fetchExtensionLiveFirstSseEvent(
   baseUrl: string,
-  token: string
+  token: string,
+  extraHeaders?: Record<string, string>
 ): Promise<{ ok: boolean; status: number; eventName: string; data: string }> {
   const url = new URL(`${baseUrl}/api/extension/live`);
   url.searchParams.set('token', token);
 
   const res = await fetch(url.toString(), {
-    headers: { Accept: 'text/event-stream' },
+    headers: { Accept: 'text/event-stream', ...extraHeaders },
   });
 
   if (!res.ok) {

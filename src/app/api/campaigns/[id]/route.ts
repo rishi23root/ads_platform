@@ -4,7 +4,11 @@ import { campaigns, enduserEvents, notifications } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { formatCampaignResponse, getAccessibleCampaignById } from '@/lib/campaign-access';
 import { getSessionWithRole } from '@/lib/dal';
-import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
+import {
+  publishCampaignUpdated,
+  publishRealtimeNotification,
+  publishRedirectsUpdated,
+} from '@/lib/redis';
 import { ensureCampaignStatusDeletedEnumReady } from '@/lib/db/run-migrate';
 
 export const dynamic = 'force-dynamic';
@@ -226,6 +230,7 @@ export async function DELETE(
         await tx.delete(enduserEvents).where(eq(enduserEvents.campaignId, id));
         await tx.delete(campaigns).where(eq(campaigns.id, id));
       });
+      await publishRedirectsUpdated();
       return NextResponse.json({ success: true, permanent: true });
     }
 

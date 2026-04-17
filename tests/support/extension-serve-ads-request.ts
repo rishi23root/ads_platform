@@ -5,20 +5,25 @@ import {
 
 export type { ExtensionBearerSession };
 
+export type ExtensionServeBody = {
+  domain: string;
+  type?: 'ads' | 'popup' | 'notification';
+};
+
 /**
- * POST /api/extension/serve/ads. On 401, refreshes session and retries once.
+ * POST /api/extension/serve. On 401, refreshes session and retries once.
  */
-export async function postExtensionServeAds(
+export async function postExtensionServe(
   baseUrl: string,
   email: string,
   password: string,
   session: ExtensionBearerSession,
-  body: { domain: string; userAgent?: string },
+  body: ExtensionServeBody,
   extraHeaders: Record<string, string> = {}
 ): Promise<Response> {
   return postExtensionWithBearerRetry(
     baseUrl,
-    '/api/extension/serve/ads',
+    '/api/extension/serve',
     email,
     password,
     session,

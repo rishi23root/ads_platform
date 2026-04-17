@@ -98,6 +98,51 @@ export function campaignScheduleBrief(
   return `From ${s!.toLocaleDateString(STABLE_LOCALE, SHORT_DATE_OPTS)}`;
 }
 
+/**
+ * True when today's calendar date (UTC) is after the end date's calendar day (UTC).
+ * Matches {@link campaignScheduleBrief} / list tables (UTC). Open-ended (null end) is never past.
+ */
+export function isCampaignScheduleEndPastUtc(
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  const e = parseTs(endDate);
+  if (!e) return false;
+  const endY = e.getUTCFullYear();
+  const endM = e.getUTCMonth();
+  const endD = e.getUTCDate();
+  const nowY = now.getUTCFullYear();
+  const nowM = now.getUTCMonth();
+  const nowD = now.getUTCDate();
+  if (nowY !== endY) return nowY > endY;
+  if (nowM !== endM) return nowM > endM;
+  return nowD > endD;
+}
+
+/** Active campaign whose schedule end (UTC calendar day) is before today — highlight in tables. */
+export function isCampaignActiveButScheduleEnded(
+  status: string,
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  return status === 'active' && isCampaignScheduleEndPastUtc(endDate, now);
+}
+
+/** Soft rose-red so expired-but-active schedules read as a light warning, not destructive. */
+const SCHEDULE_ACTIVE_PAST_END_TEXT_CLASS =
+  'text-rose-500/75 dark:text-rose-400/80';
+
+/** Text color for schedule cells: soft red when active but past end, else muted. */
+export function campaignScheduleTableTextColorClass(
+  status: string,
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): string {
+  return isCampaignActiveButScheduleEnded(status, endDate, now)
+    ? SCHEDULE_ACTIVE_PAST_END_TEXT_CLASS
+    : 'text-muted-foreground';
+}
+
 export function campaignStatusBadgeVariant(
   status: string
 ): 'default' | 'secondary' | 'outline' | 'destructive' {

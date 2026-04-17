@@ -1,16 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { getCanonicalDisplayDomain } from '@/lib/domain-utils';
 import { resolveEndUserFromExtensionRequest } from '@/lib/enduser-auth';
 import {
   buildCampaignUpdateForExtension,
+  buildCampaignUsedDomainsFromDB,
   buildExtensionLiveInit,
-  fetchExtensionPlatformsList,
+  buildExtensionLiveRedirectsForEndUser,
 } from '@/lib/extension-live-init';
 import {
   createRedisClient,
-  decrConnectionCount,
-  incrConnectionCount,
   REALTIME_CHANNEL,
+  REALTIME_LIVE_LEASE_HEARTBEAT_MS,
+  refreshLiveConnectionLease,
+  registerLiveConnectionLease,
+  removeLiveConnectionLease,
 } from '@/lib/redis';
 
 export const maxDuration = 300;
@@ -22,22 +25,25 @@ function sseEvent(name: string, data: string): Uint8Array {
   return encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
 }
 
-function waitForAbort(req: NextRequest): Promise<void> {
+function waitForDisconnect(req: NextRequest, streamSignal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    if (req.signal.aborted) {
-      resolve();
+    const done = () => resolve();
+    if (req.signal.aborted || streamSignal.aborted) {
+      done();
       return;
     }
-    req.signal.addEventListener('abort', () => resolve(), { once: true });
+    req.signal.addEventListener('abort', done, { once: true });
+    streamSignal.addEventListener('abort', done, { once: true });
   });
 }
 
 /**
- * GET /api/extension/live — SSE stream (`init` + optional realtime updates).
+ * GET /api/extension/live — SSE stream (`init` + realtime updates).
  *
  * Input: `Authorization: Bearer <token>` **or** query `?token=<same>` (for EventSource). No body.
  *
- * Output: `200` `text/event-stream` (first `init` event JSON per extension-live-init) | `401` JSON `{ error: "Unauthorized" }`.
+ * Output: `200` `text/event-stream` — first event is `init` (`{ user, domains, redirects }`).
+ *         `401` JSON `{ error: "Unauthorized" }`.
  */
 export async function GET(request: NextRequest) {
   const resolved = await resolveEndUserFromExtensionRequest(request);
@@ -49,9 +55,8 @@ export async function GET(request: NextRequest) {
   }
 
   const { endUser } = resolved;
-  const endUserIdStr = String(endUser.id);
 
-  await incrConnectionCount();
+  const streamLifecycle = new AbortController();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -59,10 +64,16 @@ export async function GET(request: NextRequest) {
       const redisMain: RedisClientNonNull | null = await createRedisClient();
       let subscriber: Awaited<ReturnType<RedisClientNonNull['duplicate']>> | null = null;
       let finished = false;
+      let leaseId: string | null = null;
+      let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
       const cleanup = async () => {
         if (finished) return;
         finished = true;
+        if (heartbeatTimer != null) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
         try {
           if (subscriber) {
             await subscriber.unsubscribe(REALTIME_CHANNEL);
@@ -80,10 +91,13 @@ export async function GET(request: NextRequest) {
         } catch {
           /* ignore */
         }
-        try {
-          await decrConnectionCount();
-        } catch {
-          /* ignore */
+        if (leaseId != null) {
+          try {
+            await removeLiveConnectionLease(leaseId);
+          } catch {
+            /* ignore */
+          }
+          leaseId = null;
         }
         try {
           controller.close();
@@ -95,9 +109,27 @@ export async function GET(request: NextRequest) {
       try {
         const init = await buildExtensionLiveInit(endUser);
         controller.enqueue(sseEvent('init', JSON.stringify(init)));
+        leaseId = randomUUID();
+        await registerLiveConnectionLease(leaseId);
+        const sseCommentPing = encoder.encode(': ping\n\n');
+        heartbeatTimer = setInterval(() => {
+          try {
+            controller.enqueue(sseCommentPing);
+          } catch {
+            if (heartbeatTimer != null) {
+              clearInterval(heartbeatTimer);
+              heartbeatTimer = null;
+            }
+            streamLifecycle.abort();
+            return;
+          }
+          if (leaseId != null) {
+            void refreshLiveConnectionLease(leaseId);
+          }
+        }, REALTIME_LIVE_LEASE_HEARTBEAT_MS);
 
         if (!redisMain) {
-          await waitForAbort(request);
+          await waitForDisconnect(request, streamLifecycle.signal);
           return;
         }
 
@@ -111,31 +143,11 @@ export async function GET(request: NextRequest) {
               const parsed = JSON.parse(message) as {
                 type?: string;
                 campaignId?: string;
-                endUserId?: string;
-                count?: number;
               };
               if (!parsed.type) return;
 
-              if (parsed.type === 'frequency_updated') {
-                if (parsed.endUserId !== endUserIdStr) return;
-                try {
-                  controller.enqueue(
-                    sseEvent(
-                      'frequency_updated',
-                      JSON.stringify({
-                        campaignId: parsed.campaignId,
-                        count: parsed.count ?? 0,
-                      })
-                    )
-                  );
-                } catch {
-                  /* stream closed */
-                }
-                return;
-              }
-
               if (parsed.type === 'campaign_updated' && typeof parsed.campaignId === 'string') {
-                const upd = await buildCampaignUpdateForExtension(parsed.campaignId);
+                const upd = await buildCampaignUpdateForExtension(parsed.campaignId, endUser);
                 try {
                   controller.enqueue(sseEvent('campaign_updated', JSON.stringify(upd)));
                 } catch {
@@ -145,13 +157,24 @@ export async function GET(request: NextRequest) {
               }
 
               if (parsed.type === 'platforms_updated') {
-                const pl = await fetchExtensionPlatformsList();
-                const domains = pl
-                  .map((p) => getCanonicalDisplayDomain(p.domain))
-                  .filter((d, i, arr) => arr.indexOf(d) === i);
+                // Emit campaign-referenced domains only (same derivation as init).
+                const domains = await buildCampaignUsedDomainsFromDB();
                 try {
+                  controller.enqueue(sseEvent('platforms_updated', JSON.stringify({ domains })));
+                } catch {
+                  /* stream closed */
+                }
+                return;
+              }
+
+              if (parsed.type === 'redirects_updated') {
+                try {
+                  const redirects = await buildExtensionLiveRedirectsForEndUser(endUser);
                   controller.enqueue(
-                    sseEvent('platforms_updated', JSON.stringify({ platforms: pl, domains }))
+                    sseEvent(
+                      'redirects_updated',
+                      JSON.stringify({ type: parsed.type, redirects })
+                    )
                   );
                 } catch {
                   /* stream closed */
@@ -159,15 +182,9 @@ export async function GET(request: NextRequest) {
                 return;
               }
 
-              if (
-                parsed.type === 'redirects_updated' ||
-                parsed.type === 'ads_updated' ||
-                parsed.type === 'notifications_updated'
-              ) {
+              if (parsed.type === 'ads_updated' || parsed.type === 'notifications_updated') {
                 try {
-                  controller.enqueue(
-                    sseEvent(parsed.type, JSON.stringify({ type: parsed.type }))
-                  );
+                  controller.enqueue(sseEvent(parsed.type, JSON.stringify({ type: parsed.type })));
                 } catch {
                   /* stream closed */
                 }
@@ -178,12 +195,15 @@ export async function GET(request: NextRequest) {
           })();
         });
 
-        await waitForAbort(request);
+        await waitForDisconnect(request, streamLifecycle.signal);
       } catch (err) {
         console.error('[api/extension/live]', err);
       } finally {
         await cleanup();
       }
+    },
+    cancel() {
+      streamLifecycle.abort();
     },
   });
 

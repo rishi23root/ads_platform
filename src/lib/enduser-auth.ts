@@ -142,7 +142,5 @@ export function endUserPublicPayload(user: EndUserRow) {
     country: user.country,
     startDate: user.startDate,
     endDate: user.endDate,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
   };
 }

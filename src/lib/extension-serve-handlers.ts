@@ -1,10 +1,8 @@
 import 'server-only';
 
-import { eq, min } from 'drizzle-orm';
 import type { NextRequest } from 'next/server';
 import { database as db } from '@/db';
-import { enduserEvents } from '@/db/schema';
-import type { EndUserRow } from '@/db/schema';
+import { enduserEvents, type EndUserRow } from '@/db/schema';
 import {
   currentLocalMinutesSinceMidnight,
   filterQualifyingExtensionCampaigns,
@@ -12,39 +10,87 @@ import {
   type ExtensionCampaignQualifyContext,
 } from '@/lib/extension-ad-block-qualify';
 import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
-import type { CampaignSelectRow, ExtensionLiveCampaignPayload } from '@/lib/extension-live-init';
+import type {
+  CampaignSelectRow,
+  ExtensionServeCreativePayload,
+  ExtensionServeCreativesResult,
+} from '@/lib/extension-live-init';
 import {
-  fetchActiveRedirectCampaignRowsForExtension,
-  fetchActiveServeAdsCampaignRowsForExtension,
+  buildServeCreativeBuckets,
+  fetchActiveCampaignRowsForExtension,
   fetchExtensionPlatformsList,
+  fetchFirstEventCreatedAt,
   fetchFrequencyCountsForEndUser,
-  hydrateCampaignPayloads,
+  newUserAnchorDate,
 } from '@/lib/extension-live-init';
 import { userIdentifierForEndUser } from '@/lib/enduser-merge';
-import { normalizeDomainForMatch, platformIdSetForNormalizedDomain, redirectSourceToHostnameRegex } from '@/lib/domain-utils';
+import { normalizeDomainForMatch, platformIdSetForNormalizedDomain } from '@/lib/domain-utils';
 import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { getCachedPlatformList, setCachedPlatformList } from '@/lib/redis';
+
+export type { ExtensionServeCreativesResult, ExtensionServeCreativePayload };
+
+/**
+ * Inserts one `enduser_events` row per creative returned from `POST /api/extension/serve`
+ * (`ad`, `popup`, or `notification`), so the dashboard reflects serves even when the client
+ * does not batch separate impression calls.
+ */
+export async function logExtensionServeEvents(params: {
+  endUser: EndUserRow;
+  request: NextRequest;
+  domain: string;
+  ads: ExtensionServeCreativePayload[];
+  popups: ExtensionServeCreativePayload[];
+  notifications: ExtensionServeCreativePayload[];
+}): Promise<void> {
+  const total =
+    params.ads.length + params.popups.length + params.notifications.length;
+  if (total === 0) return;
+
+  const userIdentifier = userIdentifierForEndUser(params.endUser);
+  const country =
+    countryCodeFromRequestHeaders(params.request) ?? params.endUser.country ?? null;
+  const userAgent = params.request.headers.get('user-agent')?.slice(0, 2000) ?? null;
+
+  const rows: (typeof enduserEvents.$inferInsert)[] = [];
+  for (const p of params.ads) {
+    rows.push({
+      userIdentifier,
+      campaignId: p.id,
+      domain: params.domain,
+      type: 'ad',
+      country,
+      userAgent,
+    });
+  }
+  for (const p of params.popups) {
+    rows.push({
+      userIdentifier,
+      campaignId: p.id,
+      domain: params.domain,
+      type: 'popup',
+      country,
+      userAgent,
+    });
+  }
+  for (const p of params.notifications) {
+    rows.push({
+      userIdentifier,
+      campaignId: p.id,
+      domain: params.domain,
+      type: 'notification',
+      country,
+      userAgent,
+    });
+  }
+  await db.insert(enduserEvents).values(rows);
+}
 
 function endUserGeoCountryFromRequest(request: NextRequest, endUser: EndUserRow): string | null {
   const fromHeaders = countryCodeFromRequestHeaders(request);
   if (fromHeaders) return fromHeaders;
   const fromRow = endUser.country?.trim().toUpperCase();
   return fromRow && fromRow.length === 2 ? fromRow : null;
-}
-
-async function fetchFirstEventCreatedAt(userIdentifier: string): Promise<Date | null> {
-  const [row] = await db
-    .select({ firstAt: min(enduserEvents.createdAt) })
-    .from(enduserEvents)
-    .where(eq(enduserEvents.userIdentifier, userIdentifier));
-  return row?.firstAt ?? null;
-}
-
-/** Anchor "account age" for new-user targeting: earliest of first telemetry and `startDate`. */
-function newUserAnchorDate(endUser: EndUserRow, firstEventAt: Date | null): Date {
-  const start = endUser.startDate;
-  if (!firstEventAt) return start;
-  return firstEventAt.getTime() < start.getTime() ? firstEventAt : start;
 }
 
 function campaignMatchesPlatformIds(
@@ -93,26 +139,30 @@ async function buildQualifyContext(params: {
   };
 }
 
-export async function runServeAds(params: {
+export type ExtensionServeCreativeType = 'ads' | 'popup' | 'notification';
+
+export async function runServeCreatives(params: {
   endUser: EndUserRow;
   request: NextRequest;
   domain: string;
-  userAgent: string | null;
-}): Promise<{ ads: ExtensionLiveCampaignPayload[] }> {
-  void params.userAgent;
+  campaignTypes: ExtensionServeCreativeType[];
+}): Promise<ExtensionServeCreativesResult> {
   const now = new Date();
   const [rows, platforms] = await Promise.all([
-    fetchActiveServeAdsCampaignRowsForExtension(now),
+    fetchActiveCampaignRowsForExtension(now),
     loadPlatformsList(),
   ]);
+
+  const typeSet = new Set(params.campaignTypes);
+  const typeFiltered = rows.filter((c) => typeSet.has(c.campaignType as ExtensionServeCreativeType));
 
   const normalizedVisit = normalizeDomainForMatch(params.domain);
   const matchingPlatformIds = platformIdSetForNormalizedDomain(normalizedVisit, platforms);
 
-  const domainFiltered = rows.filter((c) => campaignMatchesPlatformIds(c, matchingPlatformIds));
+  const domainFiltered = typeFiltered.filter((c) => campaignMatchesPlatformIds(c, matchingPlatformIds));
 
   if (domainFiltered.length === 0) {
-    return { ads: [] };
+    return { ads: [], popups: [], notifications: [] };
   }
 
   const ctx = await buildQualifyContext({
@@ -126,65 +176,5 @@ export async function runServeAds(params: {
   const qualifiedIds = new Set(qualifiedRules.map((r) => r.id));
   const qualifiedRows = domainFiltered.filter((c) => qualifiedIds.has(c.id));
 
-  const ads = await hydrateCampaignPayloads(qualifiedRows);
-  return { ads };
-}
-
-export type ServeRedirectItem = {
-  campaignId: string;
-  domain_regex: string;
-  target_url: string;
-  date_till: string | null;
-  count: number;
-};
-
-export async function runServeRedirects(params: {
-  endUser: EndUserRow;
-  request: NextRequest;
-  domain?: string;
-}): Promise<{ redirects: ServeRedirectItem[] }> {
-  const now = new Date();
-  const [rows, platforms] = await Promise.all([
-    fetchActiveRedirectCampaignRowsForExtension(now),
-    params.domain ? loadPlatformsList() : Promise.resolve([] as { id: string; domain: string }[]),
-  ]);
-
-  let domainFiltered = rows;
-  if (params.domain) {
-    const normalizedVisit = normalizeDomainForMatch(params.domain);
-    const matchingPlatformIds = platformIdSetForNormalizedDomain(normalizedVisit, platforms);
-    domainFiltered = rows.filter((c) => campaignMatchesPlatformIds(c, matchingPlatformIds));
-  }
-
-  if (domainFiltered.length === 0) {
-    return { redirects: [] };
-  }
-
-  const ctx = await buildQualifyContext({
-    endUser: params.endUser,
-    request: params.request,
-    campaignIds: domainFiltered.map((c) => c.id),
-  });
-
-  const rules = domainFiltered.map(campaignSelectRowToRuleFields);
-  const qualifiedRules = filterQualifyingExtensionCampaigns(rules, ctx);
-  const qualifiedIds = new Set(qualifiedRules.map((r) => r.id));
-  const qualifiedRows = domainFiltered.filter((c) => qualifiedIds.has(c.id));
-
-  const hydrated = await hydrateCampaignPayloads(qualifiedRows);
-
-  const redirects: ServeRedirectItem[] = [];
-  for (const c of hydrated) {
-    const r = c.redirect;
-    if (!r) continue;
-    redirects.push({
-      campaignId: c.id,
-      domain_regex: redirectSourceToHostnameRegex(r.sourceDomain, r.includeSubdomains),
-      target_url: r.destinationUrl,
-      date_till: c.endDate,
-      count: ctx.viewCountByCampaignId.get(c.id) ?? 0,
-    });
-  }
-
-  return { redirects };
+  return buildServeCreativeBuckets(qualifiedRows);
 }

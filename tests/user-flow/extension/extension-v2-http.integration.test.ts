@@ -1,5 +1,6 @@
 /**
- * Extension v2: GET /api/extension/live, POST /serve/ads, POST /serve/redirects, POST /events.
+ * Extension v2: GET /api/extension/live, POST /serve, POST /events.
+ * Redirect rules: SSE `init.redirects` and `redirects_updated` only.
  * Opt-in: EXTENSION_INTEGRATION=1 and base URL (see extension-test-base-url.ts).
  */
 import { describe, it, expect } from 'vitest';
@@ -7,8 +8,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { enduserEvents } from '@/db/schema';
 import { postExtensionEvents } from '../../support/extension-events-request';
-import { postExtensionServeAds } from '../../support/extension-serve-ads-request';
-import { postExtensionServeRedirects } from '../../support/extension-serve-redirects-request';
+import { postExtensionServe } from '../../support/extension-serve-ads-request';
 import { fetchExtensionLiveFirstSseEvent } from '../../support/extension-sse-first-event';
 import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
 import {
@@ -20,7 +20,7 @@ import { extensionIntegrationBaseUrl } from '../../support/extension-test-base-u
 const BASE = extensionIntegrationBaseUrl();
 const integration = BASE ? describe : describe.skip;
 
-integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', () => {
+integration('extension v2 HTTP (live SSE, serve, events)', () => {
   const email = EXTENSION_SHARED_USER_EMAILS[0];
   const password = EXTENSION_INTEGRATION_PASSWORD;
 
@@ -31,28 +31,23 @@ integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', 
     expect(res.status).toBe(401);
   });
 
-  it('SSE first frame is event init with platforms, campaigns, frequencyCounts', async () => {
+  it('SSE first frame is event init with domains and redirects (no platforms/campaigns/frequencyCounts)', async () => {
     const { token } = await registerOrLoginExtensionEndUser(BASE!, email, password);
     const frame = await fetchExtensionLiveFirstSseEvent(BASE!, token);
     expect(frame.ok).toBe(true);
     expect(frame.eventName).toBe('init');
-    const payload = JSON.parse(frame.data) as {
-      user?: unknown;
-      domains?: unknown;
-      platforms?: unknown;
-      campaigns?: unknown;
-      frequencyCounts?: unknown;
-    };
+    const payload = JSON.parse(frame.data) as Record<string, unknown>;
     expect(payload.user).toBeTruthy();
     expect(Array.isArray(payload.domains)).toBe(true);
-    expect(Array.isArray(payload.platforms)).toBe(true);
-    expect(Array.isArray(payload.campaigns)).toBe(true);
-    expect(payload.frequencyCounts && typeof payload.frequencyCounts === 'object').toBe(true);
+    expect(Array.isArray(payload.redirects)).toBe(true);
+    expect(payload.platforms).toBeUndefined();
+    expect(payload.campaigns).toBeUndefined();
+    expect(payload.frequencyCounts).toBeUndefined();
   });
 
-  it('POST /api/extension/serve/ads rejects missing domain (400)', async () => {
+  it('POST /api/extension/serve rejects missing domain (400)', async () => {
     const session = await registerOrLoginExtensionEndUser(BASE!, email, password);
-    const res = await fetch(`${BASE}/api/extension/serve/ads`, {
+    const res = await fetch(`${BASE}/api/extension/serve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,9 +58,9 @@ integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', 
     expect(res.status).toBe(400);
   });
 
-  it('POST /api/extension/serve/ads returns ads array', async () => {
+  it('POST /api/extension/serve returns ads, popups, and notifications arrays', async () => {
     const session = await registerOrLoginExtensionEndUser(BASE!, email, password);
-    const res = await postExtensionServeAds(
+    const res = await postExtensionServe(
       BASE!,
       email,
       password,
@@ -74,24 +69,45 @@ integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', 
       { 'user-agent': 'vitest-extension-v2' }
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ads?: unknown[] };
+    const body = (await res.json()) as {
+      ads?: unknown[];
+      popups?: unknown[];
+      notifications?: unknown[];
+    };
     expect(Array.isArray(body.ads)).toBe(true);
+    expect(Array.isArray(body.popups)).toBe(true);
+    expect(Array.isArray(body.notifications)).toBe(true);
     expect(body).not.toHaveProperty('redirects');
   });
 
-  it('POST /api/extension/serve/redirects returns redirects array (optional domain)', async () => {
+  it('POST /api/extension/serve accepts optional type filter', async () => {
     const session = await registerOrLoginExtensionEndUser(BASE!, email, password);
-    const res = await postExtensionServeRedirects(
+    const res = await postExtensionServe(
       BASE!,
       email,
       password,
       { token: session.token },
-      {},
+      { domain: 'example.com', type: 'notification' },
       { 'user-agent': 'vitest-extension-v2' }
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { redirects?: unknown[] };
-    expect(Array.isArray(body.redirects)).toBe(true);
+    const body = (await res.json()) as {
+      ads?: unknown[];
+      popups?: unknown[];
+      notifications?: unknown[];
+    };
+    expect(body.ads).toEqual([]);
+    expect(body.popups).toEqual([]);
+    expect(Array.isArray(body.notifications)).toBe(true);
+    for (const item of body.notifications ?? []) {
+      expect(item).toMatchObject({
+        id: expect.any(String),
+        notification: expect.objectContaining({
+          title: expect.any(String),
+          message: expect.any(String),
+        }),
+      });
+    }
   });
 
   it('POST /api/extension/events rejects empty events (400)', async () => {
@@ -115,7 +131,7 @@ integration('extension v2 HTTP (live SSE, serve/ads, serve/redirects, events)', 
           {
             campaignId: '00000000-0000-4000-8000-000000000001',
             domain: 'example.com',
-            type: 'notification',
+            type: 'redirect',
           },
         ],
       }),

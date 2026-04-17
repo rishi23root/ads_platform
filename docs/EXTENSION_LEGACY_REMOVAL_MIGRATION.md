@@ -42,11 +42,11 @@ Legacy is **removed** from the server. Clients must use **v2** only:
 
 | Need | Replacement endpoint | Notes |
 |------|----------------------|--------|
-| Live config, campaigns, `frequencyCounts`, domains | `GET /api/extension/live` (SSE) | Query: `?token=<bearer>` or streaming `fetch` with `Authorization`. First event: `init`. |
-| Ads & popups for a visit (server logs **`ad`** / **`popup`**) | `POST /api/extension/serve/ads` | Body: `{ "domain": "<hostname>", "userAgent"?: string }`. Response: `{ "ads": [...] }` only. |
-| Prefetch redirect rules (`domain_regex`, `target_url`, caps) | `POST /api/extension/serve/redirects` | Body: `{}` or `{ "domain": "<hostname>" }`. Does **not** log redirects. |
-| Visits, client-reported **notification** & **redirect** | `POST /api/extension/events` | Body: `{ "events": [ ... ] }` (max 50 items). Types: `visit`, `notification`, `redirect`. |
-| Public platform hostnames (optional if you use `init`) | `GET /api/extension/domains` | Unchanged. |
+| User info, campaign-referenced domains, qualifying redirect rules | `GET /api/extension/live` (SSE) | Query: `?token=<bearer>` or streaming `fetch` with `Authorization`. First event: `init` with shape `{ user, domains, redirects }`. Ads and notifications are **not** in `init`; fetch them on-demand. |
+| Inline ads, popups & notifications for a visit | `POST /api/extension/serve` | Body: `{ "domain": "<hostname>", "type"?: "ads" \| "popup" \| "notification" }` (strict — no `userAgent` in JSON). Omit `type` to return all three kinds. Send the real UA on the `User-Agent` header. Response: `{ "ads": [], "popups": [], "notifications": [] }` — each item is **`id` + `ad`** or **`id` + `notification`** only (no campaign-level targeting fields; see `EXTENSION_CLIENT_CONTRACT.md`). Server logs matching `enduser_events` rows on each successful serve. |
+| Qualifying redirect rules (`domain_regex`, `target_url`, caps) | SSE `init.redirects` and `redirects_updated` | **No dedicated HTTP route** for redirects. The live stream’s first `init` event and each `redirects_updated` event include the full `redirects` array (same shape). Patch single rules via `campaign_updated` when the server includes `redirect`. |
+| Visits, client-reported **notification** & **redirect** | `POST /api/extension/events` | Body: `{ "events": [ ... ] }` (max 100 items). Types: `visit`, `notification`, `redirect`. Flush at ≥10 events or ~60 s. |
+| ~~Public platform hostnames~~ | ~~`GET /api/extension/domains`~~ | **Removed.** Use `init.domains` from SSE; update on `platforms_updated` event. |
 | Auth | `POST .../auth/register`, `login`, `GET .../auth/me`, etc. | Unchanged. |
 
 **Do not** call `POST /api/extension/ad-block`. It should **404** or be absent after removal.
@@ -58,8 +58,8 @@ Legacy is **removed** from the server. Clients must use **v2** only:
 ### 3.1 Redirects: prefetch → match locally → navigate → then telemetry
 
 - **Before (legacy):** Redirect could appear in the **ad-block JSON**; server might log **`redirect`** when it returned a matching rule.
-- **Now:**1. Hydrate rules from **`serve/redirects`** and/or SSE **`init`**.  
-  2. Match the tab hostname locally (e.g. `domain_regex` from `serve/redirects`).  
+- **Now:** 1. Hydrate rules from SSE **`init.redirects`** and refresh from **`redirects_updated`** (full list) or **`campaign_updated`** (single-rule patch).  
+  2. Match the tab hostname locally (e.g. `domain_regex` from the cached rows).  
   3. **Navigate immediately** when a rule matches (do not wait on HTTP for UX).  
   4. Report with **`POST /api/extension/events`**: `{ "type": "redirect", "campaignId": "<uuid>", "domain": "<pre-redirect hostname>" }`.  
   Use non-blocking `fetch` (e.g. `keepalive: true` from the background context) so navigation is not delayed.
@@ -67,12 +67,12 @@ Legacy is **removed** from the server. Clients must use **v2** only:
 ### 3.2 Notifications
 
 - **Before:** Could be fetched via ad-block with `requestType: "notification"`, with server-side logging when returned.
-- **Now:** Decide what to show from **SSE `init` / `campaigns`** (and updates). When you actually show a notification, send **`POST /api/extension/events`** with `type: "notification"` and **`campaignId`** + **`domain`**.
+- **Now:** Call **`POST /api/extension/serve`** when a domain in `init.domains` is visited (optional `"type": "notification"` to fetch only notifications). Show the notification when the response contains a `notification`-type campaign. Report the impression with **`POST /api/extension/events`** `type: "notification"` + `campaignId` + `domain`.
 
 ### 3.3 Ads / popups
 
 - **Before:** Part of ad-block response; server logged when returned.
-- **Now:** **`POST /api/extension/serve/ads`** with the tab **`domain`** returns creatives and is where the server records **`ad`** / **`popup`** rows. There is **no** `ad` / `popup` type on `POST /events` in the standard contract—do not assume you can replace `serve/ads` with events-only for impressions unless your backend explicitly adds that.
+- **Now:** **`POST /api/extension/serve`** with the tab **`domain`** returns inline ad, popup, and notification creatives (or a subset via `type`). There is **no** `ad` / `popup` type on `POST /events` — use that endpoint for `visit`, `redirect`, and `notification` only.
 
 ### 3.4 Visits
 
@@ -93,19 +93,21 @@ On backends that align with the post-legacy dashboard:
 | Legacy (`ad-block`) | v2 |
 |---------------------|-----|
 | One POST per navigation for everything | SSE `live` + targeted POSTs |
-| `requestType: "ad"` + `domain` | `POST /serve/ads` `{ domain }` |
-| `requestType: "notification"` | SSE + `POST /events` `notification` |
-| `redirects` in JSON + server log sometimes | `POST /serve/redirects` + local match + `POST /events` `redirect` |
-| Mixed response keys | `serve/ads` → `{ ads }`; `serve/redirects` → `{ redirects }` |
+| `requestType: "ad"` + `domain` | `POST /api/extension/serve` `{ domain }` (or `"type": "ads"` / `"popup"` as needed) |
+| `requestType: "notification"` | `POST /api/extension/serve` `{ "domain", "type": "notification" }` + `POST /events` `notification` for impressions |
+| `redirects` in JSON + server log sometimes | SSE `init` / `redirects_updated` + local match + `POST /events` `redirect` |
+| Mixed response keys | `serve` → `{ ads, popups, notifications }`; redirects **only** on the SSE live stream |
 
 ---
 
 ## 5. Extension team checklist (definition of done)
 
 - [ ] Remove every `fetch` / XHR to **`/api/extension/ad-block`** (including fallbacks and feature flags).
-- [ ] Implement **`GET /api/extension/live`** (`?token=` or authorized stream) and handle **`init`** + relevant update events.
-- [ ] Implement **`POST /api/extension/serve/redirects`** caching and local hostname / regex matching; fire **`events`** for `redirect` without blocking navigation.
-- [ ] Implement **`POST /api/extension/serve/ads`** for ad/popup serves (or your agreed prefetch + background reconciliation strategy).
+- [ ] Implement **`GET /api/extension/live`** (`?token=` or authorized stream). On `init` cache `user`, `domains` (campaign-referenced hostnames), and `redirects` (rewrite rules + caps). Refresh `domains` on `platforms_updated { domains }`. **Do not** call `GET /api/extension/domains` — that endpoint has been removed.
+- [ ] On each navigation, if the visited host matches a domain in cached `domains`, call **`POST /api/extension/serve`** (optional `type` filter).
+- [ ] Apply redirect rules from `init.redirects` locally (match `domain_regex`) and refresh them when SSE emits `redirects_updated` (replace full list) or `campaign_updated` (patch/remove one rule via `redirect`).
+- [ ] **Do not** add a separate HTTP fetch for redirect rules. Cache rules from SSE in memory + extension storage; fire **`events`** for `redirect` without blocking navigation.
+- [ ] Implement **`POST /api/extension/serve`** for creatives (or your agreed prefetch + background reconciliation strategy).
 - [ ] Implement **`POST /api/extension/events`** for `visit`, `notification`, and `redirect` as required.
 - [ ] Update env / build configs so the extension **only** targets API bases that have shipped the removal (no mixed old/new servers without branching).
 - [ ] QA: frequency caps, geo, schedule, and “no double logging” (no parallel legacy + v2 calls).
@@ -124,7 +126,7 @@ If a doc path is missing in your checkout, use this file plus the route implemen
 
 ## 7. One-line summary for PMs / leads
 
-**We removed the combined `POST /api/extension/ad-block` endpoint; the extension must use SSE `live`, `serve/ads`, `serve/redirects`, and batched `events` only—prefetch redirects for instant navigation and report telemetry on `events`.**
+**We removed the combined `POST /api/extension/ad-block` endpoint and `POST /api/extension/serve/ads`; redirect rules never had a supported standalone POST on v2. The extension must use SSE `live` (including `init.redirects` and `redirects_updated`), `POST /api/extension/serve`, and batched `events` only—apply redirects locally for instant navigation and report telemetry on `events`.**
 
 ---
 

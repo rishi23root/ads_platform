@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Simulate extension ad-block calls using a real extension user session.
+# Simulate extension POST /api/extension/serve calls using a real extension user session.
 # Requires: EXTENSION_EMAIL, EXTENSION_PASSWORD (same account you'd use in the extension).
 # Uses public GET /api/extension/domains for a hostname (not admin /api/platforms).
 #
@@ -58,37 +58,32 @@ fi
 echo "Login OK (token acquired)."
 echo ""
 
-echo "Fetching target domains (public API)..."
-DOMAINS_JSON=$(curl -s "$BASE_URL/api/extension/domains")
-DOMAIN=$(echo "$DOMAINS_JSON" | jq -r '.domains[0] // empty')
-
-if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "null" ]; then
-  echo "Warning: No domains from /api/extension/domains — using example.com"
-  DOMAIN="example.com"
-else
-  echo "Using domain from API: $DOMAIN"
-fi
+# /api/extension/domains has been removed. Extensions should obtain domains from
+# the SSE init.domains field. For testing purposes we fall back to example.com.
+echo "Note: /api/extension/domains removed — using example.com as test domain."
+echo "In production the extension reads domains from GET /api/extension/live (SSE init.domains)."
+DOMAIN="example.com"
 
 echo ""
 echo "=========================================="
-echo "Testing ad-block endpoint (Bearer auth)..."
+echo "Testing POST /api/extension/serve (Bearer auth)..."
 echo "=========================================="
 echo ""
 
-test_ad_block() {
-  local request_type=$1
+test_serve() {
+  local serve_type=$1
   local description=$2
 
   echo "Testing: $description"
   echo "  Domain: $DOMAIN"
 
-  if [ -n "$request_type" ]; then
-    body_json="{\"domain\": \"$DOMAIN\", \"requestType\": \"$request_type\"}"
+  if [ -n "$serve_type" ]; then
+    body_json="{\"domain\": \"$DOMAIN\", \"type\": \"$serve_type\"}"
   else
     body_json="{\"domain\": \"$DOMAIN\"}"
   fi
 
-  response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/extension/ad-block" \
+  response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/extension/serve" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
     -d "$body_json")
@@ -98,9 +93,8 @@ test_ad_block() {
 
   if [ "$http_code" = "200" ]; then
     echo "  ✓ Success"
-    ads_count=$(echo "$body" | jq '.ads | length' 2>/dev/null || echo "0")
-    notifs_count=$(echo "$body" | jq '.notifications | length' 2>/dev/null || echo "0")
-    echo "  Found: $ads_count ad(s), $notifs_count notification(s)"
+    count=$(echo "$body" | jq '.ads | length' 2>/dev/null || echo "0")
+    echo "  Found: $count campaign row(s) in ads[]"
   else
     echo "  ✗ Failed with HTTP $http_code"
     echo "    $body"
@@ -109,9 +103,9 @@ test_ad_block() {
   echo ""
 }
 
-test_ad_block "" "Get both ads and notifications (default)"
-test_ad_block "ad" "Get ads only"
-test_ad_block "notification" "Get notifications only"
+test_serve "" "Get all creative types (default)"
+test_serve "ads" "Get inline ad campaigns only (type=ads)"
+test_serve "notification" "Get notification campaigns only"
 
 echo "=========================================="
 echo "Done!"
@@ -121,7 +115,7 @@ echo "Sample curl (after login):"
 echo "  TOKEN=\$(curl -s -X POST \"$BASE_URL/api/extension/auth/login\" \\"
 echo "    -H 'Content-Type: application/json' \\"
 echo "    -d '{\"email\":\"$EXTENSION_EMAIL\",\"password\":\"…\"}' | jq -r .token)"
-echo "  curl -X POST \"$BASE_URL/api/extension/ad-block\" \\"
+echo "  curl -X POST \"$BASE_URL/api/extension/serve\" \\"
 echo "    -H 'Content-Type: application/json' \\"
 echo "    -H \"Authorization: Bearer \$TOKEN\" \\"
 echo "    -d '{\"domain\":\"$DOMAIN\"}'"

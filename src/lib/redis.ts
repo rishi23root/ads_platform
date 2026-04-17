@@ -2,7 +2,15 @@ import { createClient } from 'redis';
 
 const REDIS_URL = process.env.REDIS_URL;
 const REALTIME_CHANNEL = 'realtime:notifications';
+/** @deprecated Legacy string counter; removed on reset. Active count uses REALTIME_LEASES_KEY. */
 const REALTIME_COUNT_KEY = 'realtime:connections';
+/** Sorted set: member = lease id, score = last heartbeat unix ms */
+const REALTIME_LEASES_KEY = 'realtime:connections:leases';
+/** If no heartbeat refresh in this window, the lease is dropped (crashed server / lost TCP). */
+const REALTIME_LEASE_MAX_STALE_MS = 120_000;
+
+/** Interval for `/api/extension/live` to refresh the Redis lease while the stream stays open. */
+export const REALTIME_LIVE_LEASE_HEARTBEAT_MS = 40_000;
 const REALTIME_COUNT_CHANNEL = 'realtime:connection_count';
 
 /** JSON list of `{ id, domain }` for platforms; used by extension ad-block hot path */
@@ -11,28 +19,16 @@ const EXTENSION_PLATFORMS_TTL_SEC = 60;
 
 /** Cached active campaign rows for extension serve/live paths */
 const EXTENSION_CAMPAIGNS_KEY_ALL = 'extension:campaigns:active:all';
-const EXTENSION_CAMPAIGNS_KEY_ADS = 'extension:campaigns:active:ads';
 const EXTENSION_CAMPAIGNS_KEY_REDIRECTS = 'extension:campaigns:active:redirects';
 const EXTENSION_CAMPAIGNS_TTL_SEC = 20;
 
 export const EXTENSION_CAMPAIGNS_KEYS = {
   all: EXTENSION_CAMPAIGNS_KEY_ALL,
-  ads: EXTENSION_CAMPAIGNS_KEY_ADS,
   redirects: EXTENSION_CAMPAIGNS_KEY_REDIRECTS,
 } as const;
 export type CampaignCacheKey = keyof typeof EXTENSION_CAMPAIGNS_KEYS;
 
-/** Atomically DECR connection count and floor stored value at 0 (avoids negative keys in Redis). */
-const DECR_CONNECTION_COUNT_LUA = `
-local v = redis.call('DECR', KEYS[1])
-if v < 0 then
-  redis.call('SET', KEYS[1], '0')
-  return 0
-end
-return v
-`;
-
-export { REALTIME_CHANNEL, REALTIME_COUNT_KEY, REALTIME_COUNT_CHANNEL };
+export { REALTIME_CHANNEL, REALTIME_COUNT_CHANNEL };
 export type CachedPlatformRow = { id: string; domain: string };
 
 function getRedisUrl(): string | undefined {
@@ -196,7 +192,6 @@ export async function invalidateActiveCampaignCache(): Promise<void> {
   try {
     await client.del([
       EXTENSION_CAMPAIGNS_KEY_ALL,
-      EXTENSION_CAMPAIGNS_KEY_ADS,
       EXTENSION_CAMPAIGNS_KEY_REDIRECTS,
     ]);
   } catch {
@@ -231,25 +226,6 @@ export async function publishNotificationsUpdated(): Promise<void> {
 }
 
 /**
- * After client-reported events, notify this user's SSE connections of new frequency count.
- * Handlers must filter by `endUserId` so other users do not receive foreign updates.
- */
-export async function publishFrequencyUpdated(params: {
-  endUserId: string;
-  campaignId: string;
-  count: number;
-}): Promise<void> {
-  await publishRealtimeNotification(
-    JSON.stringify({
-      type: 'frequency_updated',
-      endUserId: params.endUserId,
-      campaignId: params.campaignId,
-      count: params.count,
-    })
-  );
-}
-
-/**
  * Publish the current connection count to REALTIME_COUNT_CHANNEL so dashboard SSE subscribers get updates.
  * No-op if Redis is not configured.
  */
@@ -259,15 +235,57 @@ export async function publishConnectionCount(count: number): Promise<void> {
   await client.publish(REALTIME_COUNT_CHANNEL, String(count));
 }
 
+async function pruneStaleLiveLeases(client: RedisClient): Promise<void> {
+  const cutoff = Date.now() - REALTIME_LEASE_MAX_STALE_MS;
+  await client.zRemRangeByScore(REALTIME_LEASES_KEY, 0, cutoff);
+}
+
+async function liveLeaseCountAfterPrune(
+  client: RedisClient
+): Promise<{ count: number; pruned: boolean }> {
+  const before = await client.zCard(REALTIME_LEASES_KEY);
+  await pruneStaleLiveLeases(client);
+  const count = Math.max(0, await client.zCard(REALTIME_LEASES_KEY));
+  return { count, pruned: before > count };
+}
+
 /**
- * Increment the live connection count. Returns the new count, or 0 if Redis unavailable.
- * Publishes the new count for dashboard SSE subscribers.
+ * Register one extension live SSE connection. Heartbeat with {@link refreshLiveConnectionLease}
+ * until {@link removeLiveConnectionLease} or the lease goes stale.
  */
-export async function incrConnectionCount(): Promise<number> {
+export async function registerLiveConnectionLease(connectionId: string): Promise<number> {
   const client = await getRedisClient();
   if (!client) return 0;
   try {
-    const count = await client.incr(REALTIME_COUNT_KEY);
+    const now = Date.now();
+    await client.zAdd(REALTIME_LEASES_KEY, { score: now, value: connectionId });
+    const { count } = await liveLeaseCountAfterPrune(client);
+    await publishConnectionCount(count);
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+/** Extend lease TTL (call periodically while the SSE is open). */
+export async function refreshLiveConnectionLease(connectionId: string): Promise<void> {
+  const client = await getRedisClient();
+  if (!client) return;
+  try {
+    const now = Date.now();
+    await client.zAdd(REALTIME_LEASES_KEY, { score: now, value: connectionId });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Remove lease when the SSE ends normally. Publishes updated count. */
+export async function removeLiveConnectionLease(connectionId: string): Promise<number> {
+  const client = await getRedisClient();
+  if (!client) return 0;
+  try {
+    await client.zRem(REALTIME_LEASES_KEY, connectionId);
+    const { count } = await liveLeaseCountAfterPrune(client);
     await publishConnectionCount(count);
     return count;
   } catch {
@@ -276,48 +294,32 @@ export async function incrConnectionCount(): Promise<number> {
 }
 
 /**
- * Decrement the live connection count. Returns the new count, or 0 if Redis unavailable.
- * Stored Redis value never goes below 0 (Lua script). Publishes the new count for dashboard SSE.
- */
-export async function decrConnectionCount(): Promise<number> {
-  const client = await getRedisClient();
-  if (!client) return 0;
-  try {
-    const raw = await client.eval(DECR_CONNECTION_COUNT_LUA, {
-      keys: [REALTIME_COUNT_KEY],
-    });
-    const n = typeof raw === 'number' ? raw : Number(raw);
-    const count = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
-    await publishConnectionCount(count);
-    return count;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Get the current live connection count. Returns 0 if Redis unavailable or key not set.
+ * Current live extension SSE connections. Prunes stale leases (no recent heartbeat).
  */
 export async function getConnectionCount(): Promise<number> {
   const client = await getRedisClient();
   if (!client) return 0;
   try {
-    const value = await client.get(REALTIME_COUNT_KEY);
-    if (!value) return 0;
-    const n = parseInt(value, 10);
-    return Number.isFinite(n) ? Math.max(0, n) : 0;
+    const { count, pruned } = await liveLeaseCountAfterPrune(client);
+    if (pruned) {
+      await publishConnectionCount(count);
+    }
+    return count;
   } catch {
     return 0;
   }
 }
 
 /**
- * Reset the live connection count to 0 and publish to dashboard subscribers.
- * Use on server startup or for manual correction when the count is stale.
+ * Clear all connection leases and the legacy counter key; publish 0 to dashboard subscribers.
  */
 export async function resetConnectionCount(): Promise<void> {
   const client = await getRedisClient();
   if (!client) return;
-  await client.set(REALTIME_COUNT_KEY, '0');
+  try {
+    await client.del([REALTIME_LEASES_KEY, REALTIME_COUNT_KEY]);
+  } catch {
+    /* ignore */
+  }
   await publishConnectionCount(0);
 }

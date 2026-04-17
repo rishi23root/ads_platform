@@ -24,7 +24,12 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconPencil, IconSearch, IconX } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
-import { campaignScheduleBrief, campaignStatusBadgeVariant } from '@/lib/campaign-display';
+import {
+  campaignScheduleBrief,
+  campaignScheduleTableTextColorClass,
+  campaignStatusBadgeVariant,
+  isCampaignActiveButScheduleEnded,
+} from '@/lib/campaign-display';
 
 /** Idle delay before applying name/ID filter (matches users quick search). */
 const SEARCH_DEBOUNCE_MS = 500;
@@ -218,90 +223,103 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((c) => (
-                <TableRow
-                  key={c.id}
-                  className="cursor-pointer"
-                  tabIndex={0}
-                  aria-label={`Open campaign ${c.name}`}
-                  onClick={(e) => {
-                    if (isWithinInteractiveControl(e.target)) return;
-                    goToCampaign(c.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+              filtered.map((c) => {
+                const schedulePastEndWhileActive = isCampaignActiveButScheduleEnded(
+                  c.status,
+                  c.endDate
+                );
+                return (
+                  <TableRow
+                    key={c.id}
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    aria-label={`Open campaign ${c.name}`}
+                    onClick={(e) => {
+                      if (isWithinInteractiveControl(e.target)) return;
                       goToCampaign(c.id);
-                    }
-                  }}
-                >
-                  <TableCell className="font-medium">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Link
-                          href={`/campaigns/${c.id}`}
-                          className="hover:underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
-                        >
-                          {c.name}
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs text-balance">
-                        {audienceHint(c.targetAudience)}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{c.campaignType}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={campaignStatusBadgeVariant(c.status)}
-                      className="capitalize"
-                    >
-                      {c.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {campaignScheduleBrief(c.startDate, c.endDate)}
-                  </TableCell>
-                  <TableCell className="text-sm capitalize">
-                    {c.frequencyType.replace(/_/g, ' ')}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-muted-foreground text-sm">
-                      {(c.campaignType === 'notification' || c.campaignType === 'redirect') &&
-                      (c.platformIds?.length ?? 0) === 0
-                        ? 'All domains'
-                        : `${c.platformIds?.length ?? 0} platforms`}
-                      {(c.countryCodes?.length ?? 0) > 0
-                        ? ` · ${c.countryCodes!.length} countries`
-                        : ' · All countries'}
-                      {(c.campaignType === 'ads' || c.campaignType === 'popup') &&
-                        (c.adId ? ' · 1 ad' : '')}
-                      {c.campaignType === 'notification' && (c.notificationId ? ' · 1 notification' : '')}
-                      {c.campaignType === 'redirect' && (c.redirectId ? ' · 1 redirect' : '')}
-                    </span>
-                  </TableCell>
-                  {isAdmin && (
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/campaigns/${c.id}/edit`} className="size-9">
-                            <IconPencil className="h-4 w-4" />
-                            <span className="sr-only">Edit {c.name}</span>
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        goToCampaign(c.id);
+                      }
+                    }}
+                  >
+                    <TableCell className="font-medium">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Link
+                            href={`/campaigns/${c.id}`}
+                            className="hover:underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                          >
+                            {c.name}
                           </Link>
-                        </Button>
-                        <DeleteButton
-                          name={c.name}
-                          entityType="campaign"
-                          campaignStatus={c.status}
-                          apiPath={`/api/campaigns/${c.id}`}
-                        />
-                      </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-balance">
+                          {audienceHint(c.targetAudience)}
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
-                  )}
-                </TableRow>
-              ))
+                    <TableCell>
+                      <Badge variant="outline">{c.campaignType}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={campaignStatusBadgeVariant(c.status)}
+                        className="capitalize"
+                      >
+                        {c.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell
+                      className={`text-sm ${campaignScheduleTableTextColorClass(c.status, c.endDate)}`}
+                      title={
+                        schedulePastEndWhileActive
+                          ? 'Schedule ended; status is still active'
+                          : undefined
+                      }
+                    >
+                      {campaignScheduleBrief(c.startDate, c.endDate)}
+                    </TableCell>
+                    <TableCell className="text-sm capitalize">
+                      {c.frequencyType.replace(/_/g, ' ')}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground text-sm">
+                        {(c.campaignType === 'notification' || c.campaignType === 'redirect') &&
+                        (c.platformIds?.length ?? 0) === 0
+                          ? 'All domains'
+                          : `${c.platformIds?.length ?? 0} platforms`}
+                        {(c.countryCodes?.length ?? 0) > 0
+                          ? ` · ${c.countryCodes!.length} countries`
+                          : ' · All countries'}
+                        {(c.campaignType === 'ads' || c.campaignType === 'popup') &&
+                          (c.adId ? ' · 1 ad' : '')}
+                        {c.campaignType === 'notification' && (c.notificationId ? ' · 1 notification' : '')}
+                        {c.campaignType === 'redirect' && (c.redirectId ? ' · 1 redirect' : '')}
+                      </span>
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/campaigns/${c.id}/edit`} className="size-9">
+                              <IconPencil className="h-4 w-4" />
+                              <span className="sr-only">Edit {c.name}</span>
+                            </Link>
+                          </Button>
+                          <DeleteButton
+                            name={c.name}
+                            entityType="campaign"
+                            campaignStatus={c.status}
+                            apiPath={`/api/campaigns/${c.id}`}
+                          />
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

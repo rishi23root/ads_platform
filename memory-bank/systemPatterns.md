@@ -127,9 +127,9 @@ export function ClientComponent({ data }) {
 - **API Routes**: CRUD operations for each entity
 
 ### Extension API
-- **Routes** (under `/api/extension/`): e.g. `auth/register`, `auth/login`, `auth/logout`, `auth/me`, `domains`, `ad-block` (Bearer required where enforced)
+- **Routes** (under `/api/extension/`): `auth/register`, `auth/login`, `auth/logout`, `auth/me`, `live` (SSE), `serve`, `events` (Bearer required where enforced)
 - **Auth**: Registration/login returns a token; clients send `Authorization: Bearer <token>` for protected extension handlers
-- **Redis**: Optional per-IP rate limit on `POST /api/extension/ad-block` when `REDIS_URL` is set
+- **Redis**: Used for realtime fan-out and optional lease bookkeeping on `GET /api/extension/live` when `REDIS_URL` is set
 
 ### Data Flow
 
@@ -141,10 +141,11 @@ export function ClientComponent({ data }) {
 5. Client redirects or updates UI
 
 #### Extension fetches placements
+
 1. Extension authenticates (`/api/extension/auth/login` or register) and receives Bearer token
-2. Extension calls `POST /api/extension/ad-block` with domain / request type and Bearer header
-3. API validates subscription/trial, resolves campaigns, returns `ads` + `notifications` arrays
-4. Optional: events recorded in `enduser_events` for analytics
+2. Extension opens `GET /api/extension/live` (SSE) for `init` (`user`, `domains`, `redirects`) and incremental updates
+3. For supported hosts, extension calls `POST /api/extension/serve` with `{ domain }` (optional `type`) for creatives; reports visits, redirects, and notification milestones via `POST /api/extension/events`
+4. Server writes matching rows in `enduser_events` for analytics where applicable
 
 ## API Structure
 
@@ -154,8 +155,11 @@ export function ClientComponent({ data }) {
 
 ### Extension API (end-user)
 - `/api/extension/auth/*` - Register, login, logout, session (`me`)
-- `/api/extension/domains` - Platform domains for targeting
-- `POST /api/extension/ad-block` - Ads + notifications for a domain (Bearer, rate-limited via Redis when configured)
+- `GET /api/extension/live` (SSE) - First event `init`: `{ user, domains, redirects }`. Follow-ups: `platforms_updated { domains }`, `redirects_updated { type, redirects }`, `ads_updated`, `notifications_updated`, `campaign_updated`.
+- `POST /api/extension/serve` - Per-domain creatives: inline ads, popups, notifications (Bearer). JSON body: `domain` and optional `type` only (strict). Real UA on `User-Agent` header, not in JSON. Response `{ ads, popups, notifications }` (arrays per kind). Inserts `ad` / `popup` / `notification` rows in `enduser_events` for each creative returned.
+- `POST /api/extension/events` - Batch event reporting: `visit`, `redirect`, `notification` (Bearer, max 100 items).
+- ~~`/api/extension/domains`~~ - **Removed.** Use `init.domains` from SSE.
+- ~~`POST /api/extension/ad-block`~~ - **Removed.** Use v2 endpoints above.
 
 ### Response Patterns
 - **Success**: 200/201 with JSON data

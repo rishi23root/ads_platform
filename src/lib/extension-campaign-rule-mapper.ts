@@ -4,6 +4,13 @@ import type { CampaignSelectRow } from '@/lib/extension-live-init';
 import type { ExtensionCampaignRuleFields } from '@/lib/extension-ad-block-qualify';
 import { formatExtensionCampaignScalar } from '@/lib/extension-campaign-scalars';
 
+function toDateOrNull(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function campaignSelectRowToRuleFields(c: CampaignSelectRow): ExtensionCampaignRuleFields {
   return {
     id: c.id,
@@ -13,8 +20,8 @@ export function campaignSelectRowToRuleFields(c: CampaignSelectRow): ExtensionCa
     timeStart: formatExtensionCampaignScalar(c.timeStart),
     timeEnd: formatExtensionCampaignScalar(c.timeEnd),
     status: c.status,
-    startDate: c.startDate,
-    endDate: c.endDate,
+    startDate: toDateOrNull(c.startDate),
+    endDate: toDateOrNull(c.endDate),
     countryCodes: c.countryCodes,
   };
 }

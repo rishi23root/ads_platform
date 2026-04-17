@@ -14,14 +14,20 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { IconPencil } from '@tabler/icons-react';
-import { campaignStatusBadgeVariant } from '@/lib/campaign-display';
+import {
+  campaignScheduleBrief,
+  campaignScheduleTableTextColorClass,
+  campaignStatusBadgeVariant,
+  isCampaignActiveButScheduleEnded,
+} from '@/lib/campaign-display';
 
 export interface RecentCampaignRow {
   id: string;
   name: string;
   campaignType: string;
   status: string;
-  createdAt: Date | string;
+  startDate: Date | string | null;
+  endDate: Date | string | null;
 }
 
 interface RecentCampaignsTableProps {
@@ -40,18 +46,6 @@ function isWithinInteractiveControl(target: EventTarget | null): boolean {
   return Boolean(
     el.closest('a[href], button, input, select, textarea, [role="button"], [role="link"]')
   );
-}
-
-/** Stable across SSR and client (avoids default-locale / timezone hydration mismatches). */
-function formatCreatedDate(createdAt: Date | string): string {
-  const d = new Date(createdAt);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTableProps) {
@@ -79,7 +73,7 @@ export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTabl
               Status
             </TableHead>
             <TableHead className="text-muted-foreground text-xs font-normal">
-              Created
+              Schedule
             </TableHead>
             <TableHead className="text-right text-muted-foreground text-xs font-normal">
               Actions
@@ -100,56 +94,70 @@ export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTabl
               </TableCell>
             </TableRow>
           ) : (
-            campaigns.map((c) => (
-              <TableRow
-                key={c.id}
-                className="cursor-pointer"
-                tabIndex={0}
-                aria-label={`Open campaign ${c.name}`}
-                onClick={(e) => {
-                  if (isWithinInteractiveControl(e.target)) return;
-                  goToCampaign(c.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
+            campaigns.map((c) => {
+              const scheduleLabel = campaignScheduleBrief(c.startDate, c.endDate);
+              const schedulePastEndWhileActive = isCampaignActiveButScheduleEnded(
+                c.status,
+                c.endDate
+              );
+              return (
+                <TableRow
+                  key={c.id}
+                  className="cursor-pointer"
+                  tabIndex={0}
+                  aria-label={`Open campaign ${c.name}`}
+                  onClick={(e) => {
+                    if (isWithinInteractiveControl(e.target)) return;
                     goToCampaign(c.id);
-                  }
-                }}
-              >
-                <TableCell className="py-2 overflow-hidden font-medium min-w-0">
-                  <Link
-                    href={`/campaigns/${c.id}`}
-                    className="text-foreground block truncate hover:underline underline-offset-4"
-                    title={c.name}
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      goToCampaign(c.id);
+                    }
+                  }}
+                >
+                  <TableCell className="py-2 overflow-hidden font-medium min-w-0">
+                    <Link
+                      href={`/campaigns/${c.id}`}
+                      className="text-foreground block truncate hover:underline underline-offset-4"
+                      title={c.name}
+                    >
+                      {c.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="py-2 overflow-hidden">
+                    <Badge variant="outline">{c.campaignType}</Badge>
+                  </TableCell>
+                  <TableCell className="py-2 overflow-hidden">
+                    <Badge variant={campaignStatusBadgeVariant(c.status)} className="capitalize">
+                      {c.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell
+                    className={`py-2 text-sm ${campaignScheduleTableTextColorClass(c.status, c.endDate)}`}
+                    title={
+                      schedulePastEndWhileActive
+                        ? 'Schedule ended; status is still active'
+                        : undefined
+                    }
                   >
-                    {c.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="py-2 overflow-hidden">
-                  <Badge variant="outline">{c.campaignType}</Badge>
-                </TableCell>
-                <TableCell className="py-2 overflow-hidden">
-                  <Badge variant={campaignStatusBadgeVariant(c.status)} className="capitalize">
-                    {c.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="py-2 text-sm text-muted-foreground">
-                  {formatCreatedDate(c.createdAt)}
-                </TableCell>
-                <TableCell className="py-2 text-right">
-                  <div className="flex justify-end gap-1">
-                    {isAdmin && (
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/campaigns/${c.id}/edit`} aria-label="Edit campaign">
-                          <IconPencil className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+                    {scheduleLabel}
+                  </TableCell>
+                  <TableCell className="py-2 text-right">
+                    <div className="flex justify-end gap-1">
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link href={`/campaigns/${c.id}/edit`} aria-label="Edit campaign">
+                            <IconPencil className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>

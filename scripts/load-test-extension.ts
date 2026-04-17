@@ -6,7 +6,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 
 /**
- * Load test: extension ad-block requests with Bearer auth (multi-domain).
+ * Load test: extension `POST /api/extension/serve` requests with Bearer auth (multi-domain).
  *
  * Requires extension user credentials (same as POST /api/extension/auth/login):
  *   EXTENSION_EMAIL, EXTENSION_PASSWORD. Login resolves country from headers; this script sends
@@ -81,13 +81,13 @@ async function loginExtensionUser(): Promise<string> {
   return data.token;
 }
 
-async function makeAdBlockRequest(
+async function makeServeRequest(
   token: string,
   domain: string,
   logErrors: boolean
 ): Promise<{ ok: boolean; status: number; adsCount: number; notifsCount: number; errorBody?: string }> {
   try {
-    const res = await fetch(`${BASE_URL}/api/extension/ad-block`, {
+    const res = await fetch(`${BASE_URL}/api/extension/serve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,9 +99,16 @@ async function makeAdBlockRequest(
     let notifsCount = 0;
     let errorBody: string | undefined;
     if (res.ok) {
-      const data = await res.json();
-      adsCount = Array.isArray(data.ads) ? data.ads.length : 0;
-      notifsCount = Array.isArray(data.notifications) ? data.notifications.length : 0;
+      const data = (await res.json()) as {
+        ads?: Array<{ ad?: unknown }>;
+        popups?: Array<{ ad?: unknown }>;
+        notifications?: Array<{ notification?: unknown }>;
+      };
+      adsCount = (Array.isArray(data.ads) ? data.ads : []).filter((r) => r.ad != null).length;
+      adsCount += (Array.isArray(data.popups) ? data.popups : []).filter((r) => r.ad != null).length;
+      notifsCount = (Array.isArray(data.notifications) ? data.notifications : []).filter(
+        (r) => r.notification != null
+      ).length;
     } else if (logErrors) {
       const text = await res.text();
       try {
@@ -131,7 +138,7 @@ async function testDomain(token: string, domain: string): Promise<DomainResult> 
   };
 
   for (let i = 0; i < REQUESTS_PER_DOMAIN; i++) {
-    const resp = await makeAdBlockRequest(token, domain, result.failed === 0);
+    const resp = await makeServeRequest(token, domain, result.failed === 0);
     result.responses.push({
       request: i + 1,
       status: resp.status,

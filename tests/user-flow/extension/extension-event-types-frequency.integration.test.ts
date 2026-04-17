@@ -11,7 +11,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
-import { postExtensionAdBlock } from '../../support/extension-ad-block-request';
+import { postExtensionEvents } from '../../support/extension-events-request';
+import { postExtensionServe } from '../../support/extension-serve-ads-request';
+import { fetchExtensionLiveFirstSseEvent } from '../../support/extension-sse-first-event';
 import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
 import {
   EXTENSION_INTEGRATION_PASSWORD,
@@ -314,10 +316,10 @@ integration('extension ad-block event typing + frequency cap', () => {
       for (let i = 0; i < 100; i++) {
         const isAdRequest = i % 2 === 0;
         const payload = isAdRequest
-          ? { domain: platformDomain, requestType: 'ad' as const }
-          : { requestType: 'notification' as const };
+          ? { domain: platformDomain, type: 'ads' as const }
+          : { domain: platformDomain, type: 'notification' as const };
 
-        const blockRes = await postExtensionAdBlock(
+        const blockRes = await postExtensionServe(
           BASE!,
           email,
           EXTENSION_INTEGRATION_PASSWORD,
@@ -330,14 +332,16 @@ integration('extension ad-block event typing + frequency cap', () => {
         );
         expect(blockRes.status).toBe(200);
         const blockJson = (await blockRes.json()) as {
-          ads?: Array<{ title?: string }>;
-          notifications?: Array<{ title?: string }>;
+          ads?: Array<{ ad?: { title?: string } }>;
+          notifications?: Array<{
+            notification?: { title?: string };
+          }>;
         };
-        const adsPayload = blockJson.ads ?? [];
-        const notificationsPayload = blockJson.notifications ?? [];
-        const adSeen = adsPayload.some((a) => a?.title === sharedAd.name);
-        const notificationSeen = notificationsPayload.some(
-          (n) => n?.title === sharedNotification.title
+        const adSeen = (blockJson.ads ?? []).some(
+          (row) => row.ad?.title === sharedAd.name
+        );
+        const notificationSeen = (blockJson.notifications ?? []).some(
+          (row) => row.notification?.title === sharedNotification.title
         );
         if (adSeen) servedAdCount += 1;
         if (notificationSeen) servedNotificationCount += 1;
@@ -481,12 +485,12 @@ integration('extension ad-block event typing + frequency cap', () => {
 
       let servedPopupCount = 0;
       for (let i = 0; i < 20; i++) {
-        const blockRes = await postExtensionAdBlock(
+        const blockRes = await postExtensionServe(
           BASE!,
           email,
           EXTENSION_INTEGRATION_PASSWORD,
           sessionPopup,
-          { domain: platformDomain, requestType: 'ad' as const },
+          { domain: platformDomain, type: 'popup' },
           {
             'user-agent': 'vitest-extension-popup-frequency',
             'x-forwarded-for': testForwardedIp,
@@ -494,11 +498,13 @@ integration('extension ad-block event typing + frequency cap', () => {
         );
         expect(blockRes.status).toBe(200);
         const blockJson = (await blockRes.json()) as {
-          ads?: Array<{ title?: string; displayAs?: string }>;
+          popups?: Array<{
+            ad?: { title?: string; displayAs?: string };
+          }>;
         };
-        const adsPayload = blockJson.ads ?? [];
-        const popupSeen = adsPayload.some(
-          (a) => a?.title === sharedAd.name && a?.displayAs === 'popup'
+        const popupSeen = (blockJson.popups ?? []).some(
+          (row) =>
+            row.ad?.title === sharedAd.name && row.ad?.displayAs === 'popup'
         );
         if (popupSeen) servedPopupCount += 1;
       }
@@ -615,24 +621,39 @@ integration('extension ad-block event typing + frequency cap', () => {
 
       let servedRedirectCount = 0;
       for (let i = 0; i < 20; i++) {
-        const blockRes = await postExtensionAdBlock(
-          BASE!,
-          email,
-          EXTENSION_INTEGRATION_PASSWORD,
-          sessionRedir,
-          { domain: platformDomain, requestType: 'ad' as const },
-          {
-            'user-agent': 'vitest-extension-redirect-frequency',
-            'x-forwarded-for': testForwardedIp,
-          }
-        );
-        expect(blockRes.status).toBe(200);
-        const blockJson = (await blockRes.json()) as {
-          redirects?: Array<{ destinationUrl?: string }>;
+        const frame = await fetchExtensionLiveFirstSseEvent(BASE!, sessionRedir.token, {
+          'user-agent': 'vitest-extension-redirect-frequency',
+          'x-forwarded-for': testForwardedIp,
+        });
+        expect(frame.ok).toBe(true);
+        expect(frame.eventName).toBe('init');
+        const payload = JSON.parse(frame.data) as {
+          redirects?: Array<{ target_url?: string }>;
         };
-        const redirectsPayload = blockJson.redirects ?? [];
-        if (redirectsPayload.some((r) => r.destinationUrl === destinationUrl)) {
+        const redirectsPayload = payload.redirects ?? [];
+        const eligible = redirectsPayload.some((r) => r.target_url === destinationUrl);
+        if (eligible) {
           servedRedirectCount += 1;
+          const evRes = await postExtensionEvents(
+            BASE!,
+            email,
+            EXTENSION_INTEGRATION_PASSWORD,
+            sessionRedir,
+            {
+              events: [
+                {
+                  type: 'redirect',
+                  campaignId: redirectCampaign.id,
+                  domain: platformDomain,
+                },
+              ],
+            },
+            {
+              'user-agent': 'vitest-extension-redirect-frequency',
+              'x-forwarded-for': testForwardedIp,
+            }
+          );
+          expect(evRes.status).toBe(200);
         }
       }
 

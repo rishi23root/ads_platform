@@ -15,7 +15,7 @@ const BASE = extensionIntegrationBaseUrl();
 
 const integration = BASE ? describe : describe.skip;
 
-integration('extension user HTTP flow (register → login → domains → ad-block)', () => {
+integration('extension user HTTP flow (register → login → ad-block)', () => {
   const email = EXTENSION_SHARED_USER_EMAILS[0];
   const password = EXTENSION_INTEGRATION_PASSWORD;
 
@@ -36,11 +36,9 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
     expect(data.token && data.token.length > 16).toBe(true);
   });
 
-  it('domains list is JSON', async () => {
+  it('GET /api/extension/domains returns 404 (removed — use SSE init.domains)', async () => {
     const res = await fetch(`${BASE}/api/extension/domains`);
-    expect(res.ok).toBe(true);
-    const data = (await res.json()) as { domains?: unknown };
-    expect(Array.isArray(data.domains)).toBe(true);
+    expect(res.status).toBe(404);
   });
 
   it('ad-block returns ads + notifications arrays', async () => {
@@ -52,10 +50,9 @@ integration('extension user HTTP flow (register → login → domains → ad-blo
     expect(loginRes.ok).toBe(true);
     const { token } = (await loginRes.json()) as { token: string };
 
-    const domRes = await fetch(`${BASE}/api/extension/domains`);
-    const domJson = (await domRes.json()) as { domains: string[] };
-    const domain =
-      domJson.domains?.[0]?.trim() || 'example.com';
+    // Domain obtained from a seeded platform or a safe fallback; extensions should use
+    // init.domains from the SSE connection rather than the now-removed /api/extension/domains.
+    const domain = 'example.com';
 
     const blockRes = await fetch(`${BASE}/api/extension/ad-block`, {
       method: 'POST',

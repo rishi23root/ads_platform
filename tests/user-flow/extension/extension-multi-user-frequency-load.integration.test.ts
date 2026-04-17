@@ -12,7 +12,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
-import { postExtensionAdBlock } from '../../support/extension-ad-block-request';
+import { postExtensionEvents } from '../../support/extension-events-request';
+import { postExtensionServe } from '../../support/extension-serve-ads-request';
+import { fetchExtensionLiveFirstSseEvent } from '../../support/extension-sse-first-event';
 import { registerOrLoginExtensionEndUser } from '../../support/extension-register-or-login';
 import {
   EXTENSION_INTEGRATION_PASSWORD,
@@ -442,24 +444,37 @@ async function ensureCampaignFixture(
 function countServedInResponse(
   kind: CampaignKind,
   body: {
-    ads?: Array<{ title?: string; displayAs?: string }>;
-    notifications?: Array<{ title?: string }>;
-    redirects?: Array<{ destinationUrl?: string }>;
+    ads?: Array<{
+      ad?: { title?: string; displayAs?: string };
+      notification?: { title?: string };
+    }>;
+    popups?: Array<{
+      ad?: { title?: string; displayAs?: string };
+    }>;
+    notifications?: Array<{
+      notification?: { title?: string };
+    }>;
+    redirects?: Array<{ target_url?: string; destinationUrl?: string }>;
   },
   matchValue: string
 ): boolean {
   if (kind === 'ads') {
-    return (body.ads ?? []).some((a) => a?.title === matchValue);
+    return (body.ads ?? []).some((row) => row.ad?.title === matchValue);
   }
   if (kind === 'popup') {
-    return (body.ads ?? []).some(
-      (a) => a?.title === matchValue && a?.displayAs === 'popup'
+    return (body.popups ?? []).some(
+      (row) =>
+        row.ad?.title === matchValue && row.ad?.displayAs === 'popup'
     );
   }
   if (kind === 'notification') {
-    return (body.notifications ?? []).some((n) => n?.title === matchValue);
+    return (body.notifications ?? []).some(
+      (row) => row.notification?.title === matchValue
+    );
   }
-  return (body.redirects ?? []).some((r) => r.destinationUrl === matchValue);
+  return (body.redirects ?? []).some(
+    (r) => r.target_url === matchValue || r.destinationUrl === matchValue
+  );
 }
 
 async function registerAndLogin(
@@ -482,26 +497,61 @@ async function runOneUser(
 
   let servedCount = 0;
   for (let r = 0; r < REQUESTS_PER_USER; r++) {
-    const payload =
-      kind === 'notification'
-        ? { requestType: 'notification' as const }
-        : { domain: setup.platformDomain!, requestType: 'ad' as const };
-
-    const blockRes = await postExtensionAdBlock(
-      BASE!,
-      email,
-      EXTENSION_INTEGRATION_PASSWORD,
-      session,
-      payload,
-      {
+    if (kind === 'redirect') {
+      const frame = await fetchExtensionLiveFirstSseEvent(BASE!, session.token, {
         'user-agent': 'vitest-frequency-load',
         'x-forwarded-for': fwd,
+      });
+      expect(frame.ok).toBe(true);
+      expect(frame.eventName).toBe('init');
+      const payload = JSON.parse(frame.data) as Parameters<typeof countServedInResponse>[1];
+      const blockJson: Parameters<typeof countServedInResponse>[1] = {
+        redirects: payload.redirects ?? [],
+      };
+      if (countServedInResponse(kind, blockJson, setup.matchValue)) {
+        servedCount += 1;
+        const evRes = await postExtensionEvents(
+          BASE!,
+          email,
+          EXTENSION_INTEGRATION_PASSWORD,
+          session,
+          {
+            events: [
+              {
+                type: 'redirect',
+                campaignId: setup.campaignId,
+                domain: setup.platformDomain!,
+              },
+            ],
+          },
+          {
+            'user-agent': 'vitest-frequency-load',
+            'x-forwarded-for': fwd,
+          }
+        );
+        expect(evRes.status).toBe(200);
       }
-    );
-    expect(blockRes.status).toBe(200);
-    const blockJson = (await blockRes.json()) as Parameters<typeof countServedInResponse>[1];
-    if (countServedInResponse(kind, blockJson, setup.matchValue)) {
-      servedCount += 1;
+    } else {
+      const blockRes = await postExtensionServe(
+        BASE!,
+        email,
+        EXTENSION_INTEGRATION_PASSWORD,
+        session,
+        kind === 'notification'
+          ? { domain: 'example.com', type: 'notification' }
+          : kind === 'popup'
+            ? { domain: setup.platformDomain!, type: 'popup' }
+            : { domain: setup.platformDomain!, type: 'ads' },
+        {
+          'user-agent': 'vitest-frequency-load',
+          'x-forwarded-for': fwd,
+        }
+      );
+      expect(blockRes.status).toBe(200);
+      const blockJson = (await blockRes.json()) as Parameters<typeof countServedInResponse>[1];
+      if (countServedInResponse(kind, blockJson, setup.matchValue)) {
+        servedCount += 1;
+      }
     }
   }
 

@@ -83,9 +83,9 @@ export default async function EndUserDetailPage({
         : String(raw.endDate)
       : null,
     createdAt:
-      raw.createdAt instanceof Date ? raw.createdAt.toISOString() : String(raw.createdAt),
+      user.createdAt instanceof Date ? user.createdAt.toISOString() : String(user.createdAt),
     updatedAt:
-      raw.updatedAt instanceof Date ? raw.updatedAt.toISOString() : String(raw.updatedAt),
+      user.updatedAt instanceof Date ? user.updatedAt.toISOString() : String(user.updatedAt),
   };
 
   const initialPayments: EndUserPaymentListItem[] = paymentRows.map((p) => ({

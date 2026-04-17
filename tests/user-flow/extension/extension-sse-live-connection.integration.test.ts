@@ -58,17 +58,17 @@ describe.skipIf(!BASE)('SSE extension live: connection + init data (login → st
     const init = JSON.parse(meta.data) as {
       user?: { id?: string; identifier?: string; email?: string | null };
       domains?: unknown;
-      platforms?: unknown;
-      campaigns?: unknown;
-      frequencyCounts?: unknown;
+      redirects?: unknown;
     };
 
     expect(init.user?.id).toBe(endUserId);
     expect(init.user?.identifier).toBe(userIdentifier);
     expect(Array.isArray(init.domains)).toBe(true);
-    expect(Array.isArray(init.platforms)).toBe(true);
-    expect(Array.isArray(init.campaigns)).toBe(true);
-    expect(init.frequencyCounts && typeof init.frequencyCounts === 'object').toBe(true);
+    expect(Array.isArray(init.redirects)).toBe(true);
+    // platforms, campaigns, and frequencyCounts are no longer in init
+    expect((init as Record<string, unknown>).platforms).toBeUndefined();
+    expect((init as Record<string, unknown>).campaigns).toBeUndefined();
+    expect((init as Record<string, unknown>).frequencyCounts).toBeUndefined();
 
     if (process.env.SSE_LIVE_VERBOSE === '1') {
       console.info('[SSE live test] connection headers:', {
