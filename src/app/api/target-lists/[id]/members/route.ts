@@ -197,7 +197,7 @@ export async function DELETE(
     const removeSet = new Set(userIds);
     const filterJson = existing.filterJson as TargetListFilterJson;
 
-    let nextMembers = [...(existing.memberIds ?? []).filter((mid) => !removeSet.has(mid))];
+    const nextMembers = [...(existing.memberIds ?? []).filter((mid) => !removeSet.has(mid))];
     const nextExcluded = new Set([...(existing.excludedIds ?? [])]);
 
     for (const row of found) {

@@ -74,7 +74,7 @@ export function buildTargetListFilterWhereSql(filter: TargetListFilterJson): SQL
     if (!Number.isNaN(d.getTime())) parts.push(gte(endUsers.createdAt, d));
   }
   if (f.createdBefore) {
-    let end = new Date(f.createdBefore);
+    const end = new Date(f.createdBefore);
     if (!Number.isNaN(end.getTime())) {
       if (!f.createdBefore.includes('T')) end.setHours(23, 59, 59, 999);
       parts.push(lte(endUsers.createdAt, end));

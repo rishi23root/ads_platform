@@ -312,7 +312,9 @@ export function TargetListQualifyingPreview(props: {
   filterSummaryLine: string;
 }) {
   const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
+  useEffect(() => {
+    queueMicrotask(() => setHydrated(true));
+  }, []);
 
   if (!hydrated) {
     return <QualifyingPreviewSkeleton />;
