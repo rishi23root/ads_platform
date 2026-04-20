@@ -14,6 +14,7 @@ import {
   time,
   pgEnum,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // ============ Better Auth ============
@@ -113,6 +114,24 @@ export const redirects = pgTable('redirects', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Reusable audience segments (filter and/or explicit end_user ids). */
+export const targetLists = pgTable('target_lists', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 255 }).notNull(),
+  filterJson: jsonb('filter_json'),
+  memberIds: uuid('member_ids')
+    .array()
+    .notNull()
+    .default(sql`'{}'::uuid[]`),
+  /** Users excluded from filter-based membership (overrides explicit + filter). */
+  excludedIds: uuid('excluded_ids')
+    .array()
+    .notNull()
+    .default(sql`'{}'::uuid[]`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Placeholder Better Auth user id: campaigns reassigned here when creator is deleted */
 export const SYSTEM_USER_ID = 'SYSTEM';
 
@@ -161,6 +180,7 @@ export const campaigns = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::varchar(2)[]`),
+    targetListId: uuid('target_list_id').references(() => targetLists.id, { onDelete: 'set null' }),
     createdBy: varchar('created_by', { length: 255 })
       .notNull()
       .default(SYSTEM_USER_ID),
@@ -171,6 +191,7 @@ export const campaigns = pgTable(
     index('campaigns_ad_id_idx').on(t.adId),
     index('campaigns_notification_id_idx').on(t.notificationId),
     index('campaigns_redirect_id_idx').on(t.redirectId),
+    index('campaigns_target_list_id_idx').on(t.targetListId),
   ]
 );
 
@@ -283,6 +304,8 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type Redirect = typeof redirects.$inferSelect;
 export type NewRedirect = typeof redirects.$inferInsert;
+export type TargetList = typeof targetLists.$inferSelect;
+export type NewTargetList = typeof targetLists.$inferInsert;
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
 export type EnduserEvent = typeof enduserEvents.$inferSelect;

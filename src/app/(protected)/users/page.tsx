@@ -8,7 +8,7 @@ import { UsersFilters } from '@/components/users-filters';
 import { UsersEmailSearch } from '@/components/users-email-search';
 import { UsersActiveFilterChips } from '@/components/users-visual-filters';
 import { UsersPageLayout } from '@/components/users-page-layout';
-import { UsersTable } from '@/components/users-table';
+import { UsersPageTableSection } from '@/components/users-page-table-section';
 import { DateDisplayToggleButton } from '@/components/date-display-toggle-button';
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { ExportCsvButton } from '@/components/export-csv-button';
@@ -142,7 +142,7 @@ export default async function UsersPage({
         </div>
         <UsersActiveFilterChips chips={filterChips} />
         <div className="rounded-md border">
-          <UsersTable rows={usersList} isAdmin={isAdmin} />
+          <UsersPageTableSection rows={usersList} isAdmin={isAdmin} />
         </div>
       </section>
     </UsersPageLayout>

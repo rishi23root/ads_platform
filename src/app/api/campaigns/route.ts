@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaigns, notifications } from '@/db/schema';
+import { campaigns, notifications, targetLists } from '@/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
+import { parseListPagination } from '@/lib/api-pagination';
+import { resolveCampaignTargetAudienceForInsert } from '@/lib/campaign-api-target-payload';
 import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { getSessionWithRole } from '@/lib/dal';
 import { publishCampaignUpdated, publishRealtimeNotification } from '@/lib/redis';
@@ -17,9 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '50', 10)));
-    const offset = (page - 1) * pageSize;
+    const { page, pageSize, offset } = parseListPagination(searchParams);
 
     const includeDeleted =
       searchParams.get('includeDeleted') === '1' && sessionWithRole.role === 'admin';
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         redirectId: campaigns.redirectId,
         platformIds: campaigns.platformIds,
         countryCodes: campaigns.countryCodes,
+        targetListId: campaigns.targetListId,
         createdAt: campaigns.createdAt,
         updatedAt: campaigns.updatedAt,
       })
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
       adId,
       notificationId,
       redirectId,
+      targetListId,
     } = body;
 
     if (!name || !campaignType || !frequencyType) {
@@ -149,6 +151,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let resolvedTargetListId: string | null = null;
+    if (targetListId != null && targetListId !== '') {
+      const tid = String(targetListId);
+      const [tl] = await db.select({ id: targetLists.id }).from(targetLists).where(eq(targetLists.id, tid)).limit(1);
+      if (!tl) {
+        return NextResponse.json({ error: 'target list not found' }, { status: 400 });
+      }
+      resolvedTargetListId = tl.id;
+    }
+
     const contentLinks =
       campaignType === 'ads' || campaignType === 'popup'
         ? { adId, notificationId: null as string | null, redirectId: null as string | null }
@@ -167,7 +179,10 @@ export async function POST(request: NextRequest) {
       .insert(campaigns)
       .values({
         name,
-        targetAudience: targetAudience ?? 'all_users',
+        targetAudience: resolveCampaignTargetAudienceForInsert(
+          targetAudience,
+          resolvedTargetListId != null
+        ),
         campaignType,
         frequencyType,
         frequencyCount: frequencyCount ?? null,
@@ -181,6 +196,7 @@ export async function POST(request: NextRequest) {
         redirectId: contentLinks.redirectId,
         platformIds: platformIdArray,
         countryCodes: countryCodeArray,
+        targetListId: resolvedTargetListId,
         createdBy: sessionWithRole.user.id,
       })
       .returning({ id: campaigns.id });

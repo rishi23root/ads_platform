@@ -25,6 +25,7 @@ import {
   IconUserSearch,
   IconUserCircle,
   IconRoute,
+  IconListCheck,
   IconCreditCard,
   IconMoon,
   IconSun,
@@ -44,15 +45,6 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
       section: "Overview",
       icon: <IconDashboard className="size-4" />,
       perform: () => router.push("/"),
-    },
-    {
-      id: "campaigns",
-      name: "Campaigns",
-      shortcut: ["c", "c"],
-      keywords: "campaign targets",
-      section: "Overview",
-      icon: <IconTargetArrow className="size-4" />,
-      perform: () => router.push("/campaigns"),
     },
     {
       id: "users",
@@ -80,6 +72,27 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
       section: "Overview",
       icon: <IconUserCircle className="size-4" />,
       perform: () => router.push("/account"),
+    },
+  ]
+
+  const delivery: Action[] = [
+    {
+      id: "campaigns",
+      name: "Campaigns",
+      shortcut: ["c", "c"],
+      keywords: "campaign targets",
+      section: "Delivery",
+      icon: <IconTargetArrow className="size-4" />,
+      perform: () => router.push("/campaigns"),
+    },
+    {
+      id: "target-lists",
+      name: "Target lists",
+      shortcut: ["t", "l"],
+      keywords: "audience segment list cohort",
+      section: "Delivery",
+      icon: <IconListCheck className="size-4" />,
+      perform: () => router.push("/target-lists"),
     },
   ]
 
@@ -123,7 +136,7 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
   ]
 
   if (role !== "admin") {
-    return [...overview, ...content]
+    return [...overview, ...delivery, ...content]
   }
 
   const team: Action[] = [
@@ -147,7 +160,7 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
     },
   ]
 
-  return [...overview, ...content, ...team]
+  return [...overview, ...delivery, ...content, ...team]
 }
 
 const KBAR_THEME_PARENT = "kbar-theme"

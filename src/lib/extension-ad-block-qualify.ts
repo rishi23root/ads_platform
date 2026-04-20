@@ -27,6 +27,7 @@ export type ExtensionCampaignRuleFields = {
   startDate: Date | null;
   endDate: Date | null;
   countryCodes: string[] | null;
+  targetListId: string | null;
 };
 
 export type ExtensionCampaignQualifyContext = {
@@ -38,6 +39,8 @@ export type ExtensionCampaignQualifyContext = {
   endUserGeoCountry: string | null;
   /** Prior event counts per campaignId (all types with that campaign_id) */
   viewCountByCampaignId: Map<string, number>;
+  /** Target list IDs the current end-user belongs to (pre-computed). */
+  targetListMembership: Set<string>;
 };
 
 /** "New" = first enduser event OR end_users.startDate is within 7 days (same as ad-block). */
@@ -131,6 +134,8 @@ export function filterQualifyingExtensionCampaigns<T extends ExtensionCampaignRu
     }
 
     if (!passesCountryTarget(c.countryCodes, ctx.endUserGeoCountry)) continue;
+
+    if (c.targetListId && !ctx.targetListMembership.has(c.targetListId)) continue;
 
     out.push(c);
   }

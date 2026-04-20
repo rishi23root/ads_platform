@@ -25,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { IconPencil, IconSearch, IconX } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
 import {
+  campaignAudienceLabel,
   campaignScheduleBrief,
   campaignScheduleTableTextColorClass,
   campaignStatusBadgeVariant,
@@ -39,6 +40,10 @@ export interface CampaignListRow {
   name: string;
   campaignType: string;
   targetAudience: string;
+  /** When set, campaign delivery is scoped to this list. */
+  targetListId: string | null;
+  /** Resolved name for display (null if list was deleted). */
+  targetListName: string | null;
   frequencyType: string;
   status: string;
   startDate: string | null;
@@ -71,7 +76,8 @@ function isWithinInteractiveControl(target: EventTarget | null): boolean {
   );
 }
 
-function audienceHint(audience: string): string {
+function audienceHint(targetListName: string | null, audience: string): string {
+  if (targetListName) return `Target list: ${targetListName}`;
   return audience === 'new_users'
     ? 'Target audience: new users (within 7 days)'
     : 'Target audience: all users';
@@ -115,7 +121,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
   }, [campaigns, debouncedSearch, typeFilter, statusFilter]);
 
   const showClearSearch = search.trim().length > 0;
-  const colCount = isAdmin ? 7 : 6;
+  const colCount = isAdmin ? 8 : 7;
 
   return (
     <div className="flex flex-col gap-4">
@@ -205,6 +211,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
               <TableHead>Status</TableHead>
               <TableHead className="min-w-[9rem]">Schedule</TableHead>
               <TableHead>Frequency</TableHead>
+              <TableHead className="min-w-[10rem]">Target list</TableHead>
               <TableHead>Targets</TableHead>
               {isAdmin && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
@@ -256,7 +263,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                           </Link>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="max-w-xs text-balance">
-                          {audienceHint(c.targetAudience)}
+                          {audienceHint(c.targetListName, c.targetAudience)}
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
@@ -283,6 +290,35 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                     </TableCell>
                     <TableCell className="text-sm capitalize">
                       {c.frequencyType.replace(/_/g, ' ')}
+                    </TableCell>
+                    <TableCell className="max-w-[14rem]">
+                      {c.targetListId ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              href={`/target-lists/${c.targetListId}`}
+                              className="line-clamp-2 text-sm text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {c.targetListName ?? 'Unknown list'}
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            Target list: {c.targetListName ?? 'Unknown list'} — open list
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground text-sm">
+                              {campaignAudienceLabel(c.targetAudience)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs text-balance">
+                            {audienceHint(null, c.targetAudience)}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="text-muted-foreground text-sm">

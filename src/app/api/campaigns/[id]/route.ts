@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
-import { campaigns, enduserEvents, notifications } from '@/db/schema';
+import { campaigns, enduserEvents, notifications, targetLists } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { formatCampaignResponse, getAccessibleCampaignById } from '@/lib/campaign-access';
 import { getSessionWithRole } from '@/lib/dal';
@@ -10,6 +10,7 @@ import {
   publishRedirectsUpdated,
 } from '@/lib/redis';
 import { ensureCampaignStatusDeletedEnumReady } from '@/lib/db/run-migrate';
+import { resolveCampaignTargetAudienceForUpdate } from '@/lib/campaign-api-target-payload';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,7 +87,25 @@ export async function PUT(
       adId,
       notificationId,
       redirectId,
+      targetListId,
     } = body;
+
+    let nextTargetListId: string | null | undefined = undefined;
+    if (targetListId !== undefined) {
+      if (targetListId === null || targetListId === '') {
+        nextTargetListId = null;
+      } else {
+        const [tl] = await db
+          .select({ id: targetLists.id })
+          .from(targetLists)
+          .where(eq(targetLists.id, String(targetListId)))
+          .limit(1);
+        if (!tl) {
+          return NextResponse.json({ error: 'target list not found' }, { status: 400 });
+        }
+        nextTargetListId = tl.id;
+      }
+    }
 
     if (status === 'deleted') {
       return NextResponse.json(
@@ -147,12 +166,18 @@ export async function PUT(
       }
     }
 
+    const audienceUpdate = resolveCampaignTargetAudienceForUpdate(
+      existing.targetListId ?? null,
+      nextTargetListId,
+      targetAudience
+    );
+
     const now = new Date();
     await db
       .update(campaigns)
       .set({
         ...(name !== undefined && { name }),
-        ...(targetAudience !== undefined && { targetAudience }),
+        ...(audienceUpdate !== undefined && { targetAudience: audienceUpdate }),
         ...(campaignType !== undefined && { campaignType }),
         ...(frequencyType !== undefined && { frequencyType }),
         ...(frequencyCount !== undefined && { frequencyCount }),
@@ -172,6 +197,7 @@ export async function PUT(
             ? countryCodes.map((code: string) => code.toUpperCase().slice(0, 2))
             : [],
         }),
+        ...(nextTargetListId !== undefined && { targetListId: nextTargetListId }),
         updatedAt: now,
       })
       .where(eq(campaigns.id, id));

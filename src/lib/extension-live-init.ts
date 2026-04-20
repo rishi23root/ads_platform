@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { NextRequest } from 'next/server';
 import { and, eq, gte, inArray, isNull, lte, min, or, sql } from 'drizzle-orm';
 import { database as db } from '@/db';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/db/schema';
 import type { EndUserRow } from '@/db/schema';
 import { endUserPublicPayload } from '@/lib/enduser-auth';
+import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import {
   getCanonicalDisplayDomain,
@@ -23,13 +25,14 @@ import {
   filterQualifyingExtensionCampaigns,
   isExtensionUserNewForAdBlock,
   type ExtensionCampaignQualifyContext,
-  type ExtensionCampaignRuleFields,
 } from '@/lib/extension-ad-block-qualify';
+import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import {
   getCachedActiveCampaigns,
   setCachedActiveCampaigns,
   EXTENSION_CAMPAIGNS_KEYS,
 } from '@/lib/redis';
+import { computeTargetListMembershipForUser } from '@/lib/target-list-queries';
 
 // ============ Shared campaign row type (used by serve handlers too) ============
 
@@ -51,6 +54,7 @@ export type CampaignSelectRow = {
   redirectId: string | null;
   platformIds: string[] | null;
   countryCodes: string[] | null;
+  targetListId?: string | null;
 };
 
 // ============ Full hydrated campaign payload (used by serve handlers + SSE init redirect build) ============
@@ -69,6 +73,7 @@ export type ExtensionLiveCampaignPayload = {
   endDate: string | null;
   platformIds: string[];
   countryCodes: string[];
+  targetListId: string | null;
   ad?: {
     title: string;
     image: string | null;
@@ -105,21 +110,13 @@ export type ExtensionServeCreativesResult = {
   notifications: ExtensionServeCreativePayload[];
 };
 
-/** SSE `campaign_updated` — only domains list + optional redirect rule patch (no full campaign). */
+/**
+ * SSE `campaign_updated` — refreshed `domains` plus the full qualifying `redirects` list for this user
+ * (same shape as `init.redirects` / `redirects_updated`), so clients replace cached rules in one step.
+ */
 export type ExtensionLiveCampaignUpdatePayload = {
-  /** Refreshed hostnames from all active campaigns (same derivation as `init.domains`). */
   domains: string[];
-  /**
-   * When present, update or remove this campaign's redirect rule in the extension cache.
-   * `null` removes the rule (use `redirectRemoval.domain_regex` to find the cached entry).
-   * Omitted for ads / notification / popup updates so clients do not touch redirect state.
-   */
-  redirect?: ExtensionInitRedirectItem | null;
-  /**
-   * When `redirect` is `null`, identifies which cached redirect rule to drop (match `domain_regex`).
-   * Omitted when the row is already gone (e.g. permanent delete race); clients should rely on `redirects_updated`.
-   */
-  redirectRemoval?: { domain_regex: string };
+  redirects: ExtensionInitRedirectItem[];
 };
 
 // ============ SSE init payload (slimmed) ============
@@ -170,6 +167,7 @@ export const extensionCampaignSelectShape = {
   redirectId: campaigns.redirectId,
   platformIds: campaigns.platformIds,
   countryCodes: campaigns.countryCodes,
+  targetListId: campaigns.targetListId,
 } as const;
 
 // ============ Campaign fetch helpers (also used by extension-serve-handlers) ============
@@ -273,21 +271,22 @@ export function newUserAnchorDate(endUser: EndUserRow, firstEventAt: Date | null
   return firstEventAt.getTime() < start.getTime() ? firstEventAt : start;
 }
 
-// ============ Qualify context for init (no NextRequest) ============
-
 /**
- * Builds an `ExtensionCampaignQualifyContext` using only stored data (no HTTP headers).
- * Geo is resolved from `endUser.country`; live `serve/*` endpoints remain authoritative
- * when CF-IPCountry differs from the stored value.
+ * Builds `ExtensionCampaignQualifyContext` for extension serving and SSE init.
+ * When `request` is omitted, geo uses `endUser.country` only. When set, request headers
+ * (e.g. CF-IPCountry) win over the stored country, matching `POST /api/extension/serve`.
  */
-async function buildQualifyContextForInit(
+export async function buildExtensionCampaignQualifyContext(
   endUser: EndUserRow,
-  campaignIds: string[]
+  campaignIds: string[],
+  targetListIds: string[] = [],
+  request?: NextRequest
 ): Promise<ExtensionCampaignQualifyContext> {
   const userIdentifier = userIdentifierForEndUser(endUser);
-  const [firstEventAt, frequencyCountsRecord] = await Promise.all([
+  const [firstEventAt, frequencyCountsRecord, targetListMembership] = await Promise.all([
     fetchFirstEventCreatedAt(userIdentifier),
     fetchFrequencyCountsForEndUser(userIdentifier, campaignIds),
+    computeTargetListMembershipForUser(targetListIds, endUser),
   ]);
 
   const viewCountByCampaignId = new Map<string, number>();
@@ -297,8 +296,19 @@ async function buildQualifyContextForInit(
 
   const now = new Date();
   const anchor = newUserAnchorDate(endUser, firstEventAt);
-  const storedCountry = endUser.country?.trim().toUpperCase();
-  const endUserGeoCountry = storedCountry && storedCountry.length === 2 ? storedCountry : null;
+
+  let endUserGeoCountry: string | null;
+  if (request) {
+    const fromHeaders = countryCodeFromRequestHeaders(request);
+    if (fromHeaders) endUserGeoCountry = fromHeaders;
+    else {
+      const fromRow = endUser.country?.trim().toUpperCase();
+      endUserGeoCountry = fromRow && fromRow.length === 2 ? fromRow : null;
+    }
+  } else {
+    const storedCountry = endUser.country?.trim().toUpperCase();
+    endUserGeoCountry = storedCountry && storedCountry.length === 2 ? storedCountry : null;
+  }
 
   return {
     now,
@@ -306,31 +316,7 @@ async function buildQualifyContextForInit(
     isNewUser: isExtensionUserNewForAdBlock(anchor),
     endUserGeoCountry,
     viewCountByCampaignId,
-  };
-}
-
-function campaignRowToRuleFields(c: CampaignSelectRow): ExtensionCampaignRuleFields {
-  return {
-    id: c.id,
-    targetAudience: c.targetAudience,
-    frequencyType: c.frequencyType,
-    frequencyCount: c.frequencyCount,
-    timeStart: formatExtensionCampaignScalar(c.timeStart),
-    timeEnd: formatExtensionCampaignScalar(c.timeEnd),
-    status: c.status,
-    startDate:
-      c.startDate instanceof Date
-        ? c.startDate
-        : c.startDate
-          ? new Date(c.startDate)
-          : null,
-    endDate:
-      c.endDate instanceof Date
-        ? c.endDate
-        : c.endDate
-          ? new Date(c.endDate)
-          : null,
-    countryCodes: c.countryCodes,
+    targetListMembership,
   };
 }
 
@@ -411,6 +397,7 @@ function serializeCampaignBase(c: CampaignSelectRow): Omit<
     endDate: extensionCampaignDateToIso(c.endDate),
     platformIds: [...(c.platformIds ?? [])],
     countryCodes: [...(c.countryCodes ?? [])],
+    targetListId: c.targetListId ?? null,
   };
 }
 
@@ -611,8 +598,15 @@ async function buildQualifiedRedirectItemsForUser(
   const redirectRows = allCampaignRows.filter((c) => c.campaignType === 'redirect');
   if (redirectRows.length === 0) return [];
 
-  const ctx = await buildQualifyContextForInit(endUser, redirectRows.map((c) => c.id));
-  const rules = redirectRows.map(campaignRowToRuleFields);
+  const targetListIds = Array.from(
+    new Set(redirectRows.map((c) => c.targetListId).filter((x): x is string => Boolean(x)))
+  );
+  const ctx = await buildExtensionCampaignQualifyContext(
+    endUser,
+    redirectRows.map((c) => c.id),
+    targetListIds
+  );
+  const rules = redirectRows.map(campaignSelectRowToRuleFields);
   const qualifiedRules = filterQualifyingExtensionCampaigns(rules, ctx);
   const qualifiedIds = new Set(qualifiedRules.map((r) => r.id));
   const qualifiedRows = redirectRows.filter((c) => qualifiedIds.has(c.id));
@@ -668,105 +662,13 @@ export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promis
 
 // ============ Campaign update helper (used by SSE live route on `campaign_updated`) ============
 
-async function buildRedirectRemovalHint(
-  row: CampaignSelectRow
-): Promise<{ redirectRemoval: { domain_regex: string } } | Record<string, never>> {
-  if (row.campaignType !== 'redirect' || !row.redirectId) return {};
-  const [hydrated] = await hydrateCampaignPayloads([row]);
-  const r = hydrated.redirect;
-  if (!r) return {};
-  return {
-    redirectRemoval: {
-      domain_regex: redirectSourceToHostnameRegex(r.sourceDomain, r.includeSubdomains),
-    },
-  };
-}
-
-function isCampaignRowActiveInWindow(c: CampaignSelectRow, now: Date): boolean {
-  if (c.status !== 'active') return false;
-  const start =
-    c.startDate instanceof Date ? c.startDate : c.startDate ? new Date(c.startDate) : null;
-  const end = c.endDate instanceof Date ? c.endDate : c.endDate ? new Date(c.endDate) : null;
-  if (start != null && start > now) return false;
-  if (end != null && end < now) return false;
-  return true;
-}
-
-/**
- * When a campaign is created/updated/deleted: push refreshed `domains` and, only for redirect
- * campaigns, a single `ExtensionInitRedirectItem` (or `null` to drop the rule).
- */
+/** Same data as `redirects_updated`: full domain list + full redirect rules for this user. */
 export async function buildCampaignUpdateForExtension(
-  campaignId: string,
   endUser: EndUserRow
 ): Promise<ExtensionLiveCampaignUpdatePayload> {
-  const domains = await buildCampaignUsedDomainsFromDB();
-
-  const [c] = await db
-    .select(extensionCampaignSelectShape)
-    .from(campaigns)
-    .where(eq(campaigns.id, campaignId))
-    .limit(1);
-
-  if (!c) {
-    return { domains, redirect: null };
-  }
-
-  const row = c as CampaignSelectRow;
-
-  if (row.status === 'deleted') {
-    return {
-      domains,
-      redirect: null,
-      ...(await buildRedirectRemovalHint(row)),
-    };
-  }
-
-  const now = new Date();
-  const redirectRelevant = row.campaignType === 'redirect';
-  const redirectOk = redirectRelevant && isCampaignRowActiveInWindow(row, now);
-
-  if (!redirectOk) {
-    if (redirectRelevant) {
-      return {
-        domains,
-        redirect: null,
-        ...(await buildRedirectRemovalHint(row)),
-      };
-    }
-    return { domains };
-  }
-
-  const ctx = await buildQualifyContextForInit(endUser, [row.id]);
-  const qualified = filterQualifyingExtensionCampaigns([campaignRowToRuleFields(row)], ctx);
-  if (qualified.length === 0) {
-    return {
-      domains,
-      redirect: null,
-      ...(await buildRedirectRemovalHint(row)),
-    };
-  }
-
-  const [hydrated] = await hydrateCampaignPayloads([row]);
-  const r = hydrated.redirect;
-  if (!r) {
-    return {
-      domains,
-      redirect: null,
-      ...(await buildRedirectRemovalHint(row)),
-    };
-  }
-
-  return {
-    domains,
-    redirect: {
-      campaignId: row.id,
-      domain_regex: redirectSourceToHostnameRegex(r.sourceDomain, r.includeSubdomains),
-      target_url: r.destinationUrl,
-      date_till: hydrated.endDate,
-      count: ctx.viewCountByCampaignId.get(row.id) ?? 0,
-      frequencyType: row.frequencyType,
-      frequencyCount: row.frequencyCount,
-    },
-  };
+  const [domains, redirects] = await Promise.all([
+    buildCampaignUsedDomainsFromDB(),
+    buildExtensionLiveRedirectsForEndUser(endUser),
+  ]);
+  return { domains, redirects };
 }

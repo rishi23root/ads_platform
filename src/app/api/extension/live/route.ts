@@ -15,15 +15,10 @@ import {
   registerLiveConnectionLease,
   removeLiveConnectionLease,
 } from '@/lib/redis';
+import { sseCommentLine, sseEvent } from '@/lib/sse';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
-
-const encoder = new TextEncoder();
-
-function sseEvent(name: string, data: string): Uint8Array {
-  return encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
-}
 
 function waitForDisconnect(req: NextRequest, streamSignal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -111,7 +106,7 @@ export async function GET(request: NextRequest) {
         controller.enqueue(sseEvent('init', JSON.stringify(init)));
         leaseId = randomUUID();
         await registerLiveConnectionLease(leaseId);
-        const sseCommentPing = encoder.encode(': ping\n\n');
+        const sseCommentPing = sseCommentLine('ping');
         heartbeatTimer = setInterval(() => {
           try {
             controller.enqueue(sseCommentPing);
@@ -147,7 +142,7 @@ export async function GET(request: NextRequest) {
               if (!parsed.type) return;
 
               if (parsed.type === 'campaign_updated' && typeof parsed.campaignId === 'string') {
-                const upd = await buildCampaignUpdateForExtension(parsed.campaignId, endUser);
+                const upd = await buildCampaignUpdateForExtension(endUser);
                 try {
                   controller.enqueue(sseEvent('campaign_updated', JSON.stringify(upd)));
                 } catch {

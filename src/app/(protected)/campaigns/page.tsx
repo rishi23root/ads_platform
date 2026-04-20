@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { database as db } from '@/db';
-import { campaigns as campaignsTable } from '@/db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { campaigns as campaignsTable, targetLists } from '@/db/schema';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
@@ -29,11 +29,24 @@ async function getCampaignsWithDetails(createdByUserId?: string, includeSoftDele
         ? db.select().from(campaignsTable)
         : db.select().from(campaignsTable).where(campaignRowNotSoftDeleted);
   const list = await filtered.orderBy(desc(campaignsTable.createdAt));
+  const targetListIds = [
+    ...new Set(list.map((c) => c.targetListId).filter((id): id is string => Boolean(id))),
+  ];
+  const targetListRows =
+    targetListIds.length > 0
+      ? await db
+          .select({ id: targetLists.id, name: targetLists.name })
+          .from(targetLists)
+          .where(inArray(targetLists.id, targetListIds))
+      : [];
+  const targetListNameById = new Map(targetListRows.map((r) => [r.id, r.name]));
   return list.map((c) => ({
     id: c.id,
     name: c.name,
     campaignType: c.campaignType,
     targetAudience: c.targetAudience,
+    targetListId: c.targetListId ?? null,
+    targetListName: c.targetListId ? targetListNameById.get(c.targetListId) ?? null : null,
     frequencyType: c.frequencyType,
     status: c.status,
     startDate: c.startDate ? c.startDate.toISOString() : null,
