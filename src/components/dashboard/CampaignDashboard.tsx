@@ -56,9 +56,11 @@ interface DashboardData {
 interface CampaignDashboardProps {
   campaign: Campaign;
   isAdmin: boolean;
+  /** Resolved from DB when `campaign.targetListId` is set. */
+  targetListSummary: { id: string; name: string } | null;
 }
 
-export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps) {
+export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: CampaignDashboardProps) {
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -103,11 +105,7 @@ export function CampaignDashboard({ campaign, isAdmin }: CampaignDashboardProps)
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <CampaignHeader campaign={campaign} isAdmin={isAdmin} />
 
-      <CampaignConfigCard
-        campaign={campaign}
-        platformDomains={meta.platformDomains}
-        countryCodes={meta.countryCodes}
-      />
+      <CampaignConfigCard campaign={campaign} targetList={targetListSummary} />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="mb-6">

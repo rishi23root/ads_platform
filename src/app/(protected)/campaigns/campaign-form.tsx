@@ -25,14 +25,22 @@ import { TimeSelect } from '@/components/ui/time-select';
 import { isoOrDateToLocalDatetimeValue } from '@/lib/datetime-local-format';
 import type { CampaignFormInitial, CampaignFormOptionLists } from './campaign-form-types';
 import {
-  campaignAudienceLabel,
   campaignFrequencyFromFormState,
   campaignStatusBadgeVariant,
 } from '@/lib/campaign-display';
 
 type CampaignType = 'ads' | 'popup' | 'notification' | 'redirect';
 type FrequencyType = 'full_day' | 'time_based' | 'only_once' | 'always' | 'specific_count';
-type TargetAudience = 'new_users' | 'all_users';
+
+function initialTargetListId(
+  campaign: CampaignFormInitial | undefined,
+  lists: { id: string; name: string }[]
+): string {
+  if (campaign?.targetListId) return campaign.targetListId;
+  const allUsers = lists.find((l) => l.name === 'All users');
+  if (allUsers) return allUsers.id;
+  return lists[0]?.id ?? '';
+}
 
 /** Deliverable status only; scheduled/expired in DB are normalized in the form UI. */
 type EditableCampaignStatus = 'active' | 'inactive';
@@ -99,13 +107,28 @@ export function CampaignForm({
   adsList,
   notificationsList,
   redirectsList,
+  targetLists,
   mode,
   isAdmin = false,
 }: CampaignFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState(campaign?.name ?? '');
-  const [targetAudience, setTargetAudience] = useState<TargetAudience>((campaign?.targetAudience as TargetAudience) ?? 'all_users');
+
+  const targetListSelectOptions = useMemo(() => {
+    const base = [...targetLists];
+    if (
+      campaign?.targetListId &&
+      !base.some((l) => l.id === campaign.targetListId)
+    ) {
+      base.push({ id: campaign.targetListId, name: 'Unknown list (may have been deleted)' });
+    }
+    return base;
+  }, [targetLists, campaign?.targetListId]);
+
+  const [targetListId, setTargetListId] = useState<string>(() =>
+    initialTargetListId(campaign, targetListSelectOptions)
+  );
   const [campaignType, setCampaignType] = useState<CampaignType>((campaign?.campaignType as CampaignType) ?? 'ads');
   const handleCampaignTypeChange = (v: CampaignType) => {
     setCampaignType(v);
@@ -149,6 +172,11 @@ export function CampaignForm({
       return;
     }
 
+    if (!targetListId?.trim()) {
+      toast.error('Select a target list');
+      return;
+    }
+
     // Validation: at least one content item based on campaign type
     if (campaignType === 'ads' || campaignType === 'popup') {
       if (!adId?.trim()) {
@@ -173,7 +201,8 @@ export function CampaignForm({
       const method = mode === 'create' ? 'POST' : 'PUT';
       const body = {
         name,
-        targetAudience,
+        targetAudience: 'all_users',
+        targetListId: targetListId.trim(),
         campaignType,
         frequencyType,
         frequencyCount: frequencyCount ? parseInt(frequencyCount, 10) : null,
@@ -253,14 +282,25 @@ export function CampaignForm({
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Target audience</Label>
-                      <Select value={targetAudience} onValueChange={(v) => setTargetAudience(v as TargetAudience)}>
-                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all_users">All users</SelectItem>
-                          <SelectItem value="new_users">New users (within 7 days)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Target list</Label>
+                      {targetListSelectOptions.length === 0 ? (
+                        <InfoHint>
+                          No target lists exist yet. Create one under Target lists, then refresh this page.
+                        </InfoHint>
+                      ) : (
+                        <Select value={targetListId || undefined} onValueChange={setTargetListId}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a target list" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {targetListSelectOptions.map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Campaign type</Label>
@@ -548,7 +588,11 @@ export function CampaignForm({
               <Separator />
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
+                <Button
+                  type="submit"
+                  disabled={isLoading || targetListSelectOptions.length === 0 || !targetListId}
+                  className="w-full sm:w-auto"
+                >
                   {isLoading && <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {mode === 'create' ? 'Create campaign' : 'Save changes'}
                 </Button>
@@ -709,9 +753,11 @@ export function CampaignForm({
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Audience
+                  Target list
                 </p>
-                <p className="leading-relaxed">{campaignAudienceLabel(targetAudience)}</p>
+                <p className="leading-relaxed">
+                  {targetListSelectOptions.find((l) => l.id === targetListId)?.name ?? '—'}
+                </p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

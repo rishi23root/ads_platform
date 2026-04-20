@@ -16,6 +16,7 @@ export type CampaignFormInitial = {
   adId: string | null;
   notificationId: string | null;
   redirectId: string | null;
+  targetListId: string | null;
 };
 
 export type CampaignFormOptionLists = {
@@ -42,4 +43,5 @@ export type CampaignFormOptionLists = {
     sourceDomain: string;
     destinationUrl: string;
   }[];
+  targetLists: { id: string; name: string }[];
 };

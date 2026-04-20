@@ -1,3 +1,6 @@
+'use client';
+
+import * as React from 'react';
 import {
   Table,
   TableBody,
@@ -7,6 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { EndUserRowActions } from '@/components/end-user-row-actions';
 import { HumanReadableDate } from '@/components/human-readable-date';
 import { UserIdentityCell } from '@/components/user-identity-cell';
@@ -39,19 +43,49 @@ function daysLeftLabel(formatted: string): string {
   return `${n}\u00a0${n === 1 ? 'day' : 'days'}`;
 }
 
+export type UsersTableSelection = {
+  selectedIds: Set<string>;
+  onToggleRow: (id: string, checked: boolean) => void;
+  onTogglePage: (checked: boolean) => void;
+};
+
 interface UsersTableProps {
   rows: EndUserListRow[];
   isAdmin?: boolean;
+  selection?: UsersTableSelection;
 }
 
-export function UsersTable({ rows, isAdmin = false }: UsersTableProps) {
-  const colCount = 10;
+export function UsersTable({ rows, isAdmin = false, selection }: UsersTableProps) {
+  const colCount = selection ? 11 : 10;
+
+  const pageIds = React.useMemo(() => rows.map((r) => r.id), [rows]);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selection?.selectedIds.has(id));
+  const somePageSelected =
+    pageIds.length > 0 && pageIds.some((id) => selection?.selectedIds.has(id));
+
+  const headerChecked: boolean | 'indeterminate' = allPageSelected
+    ? true
+    : somePageSelected
+      ? 'indeterminate'
+      : false;
 
   return (
     <div className="w-full overflow-x-auto">
       <Table className="w-full">
         <TableHeader>
           <TableRow>
+            {selection ? (
+              <TableHead className={cn(cell, 'w-[1%] pl-3')}>
+                <span className="flex min-h-8 min-w-8 items-center justify-center">
+                  <Checkbox
+                    checked={headerChecked}
+                    onCheckedChange={(v) => selection.onTogglePage(v === true)}
+                    aria-label="Select all users on this page"
+                  />
+                </span>
+              </TableHead>
+            ) : null}
             <TableHead className={cn(cell, 'text-left font-medium')}>User</TableHead>
             <TableHead className={cn(cell, 'font-medium')}>Plan</TableHead>
             <TableHead className={cn(cell, 'font-medium')}>Banned</TableHead>
@@ -90,6 +124,19 @@ export function UsersTable({ rows, isAdmin = false }: UsersTableProps) {
               );
               return (
                 <TableRow key={v.id} className={cn(v.banned && 'bg-destructive/5')}>
+                  {selection ? (
+                    <TableCell className={cn(cell, 'pl-3')}>
+                      <span className="flex min-h-8 min-w-8 items-center justify-center">
+                        <Checkbox
+                          checked={selection.selectedIds.has(v.id)}
+                          onCheckedChange={(checked) =>
+                            selection.onToggleRow(v.id, checked === true)
+                          }
+                          aria-label={`Select user ${v.email ?? v.identifier ?? v.id}`}
+                        />
+                      </span>
+                    </TableCell>
+                  ) : null}
                   <TableCell className={cn(cell, 'min-w-0')}>
                     <UserIdentityCell
                       endUserId={v.id}

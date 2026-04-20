@@ -5,14 +5,9 @@ import {
   getConnectionCount,
   REALTIME_COUNT_CHANNEL,
 } from '@/lib/redis';
+import { sseEvent } from '@/lib/sse';
 
 export const maxDuration = 300;
-
-const encoder = new TextEncoder();
-
-function sseEvent(name: string, data: string): Uint8Array {
-  return encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
-}
 
 /**
  * GET /api/realtime/stream

@@ -1,7 +1,7 @@
 import { getSessionWithRole } from '@/lib/dal';
 import { redirect, notFound } from 'next/navigation';
 import { database as db } from '@/db';
-import { campaigns } from '@/db/schema';
+import { campaigns, targetLists } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { CampaignDashboard } from '@/components/dashboard/CampaignDashboard';
 import type { Metadata } from 'next';
@@ -38,7 +38,19 @@ export default async function CampaignDetailPage({
   const [c] = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
   if (!c) notFound();
 
+  let targetListSummary: { id: string; name: string } | null = null;
+  if (c.targetListId) {
+    const [tl] = await db
+      .select({ id: targetLists.id, name: targetLists.name })
+      .from(targetLists)
+      .where(eq(targetLists.id, c.targetListId))
+      .limit(1);
+    targetListSummary = tl ?? { id: c.targetListId, name: 'Unknown list' };
+  }
+
   const isAdmin = sessionWithRole.role === 'admin';
 
-  return <CampaignDashboard campaign={c} isAdmin={isAdmin} />;
+  return (
+    <CampaignDashboard campaign={c} isAdmin={isAdmin} targetListSummary={targetListSummary} />
+  );
 }

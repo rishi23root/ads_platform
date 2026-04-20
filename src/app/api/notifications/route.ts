@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { notifications } from '@/db/schema';
 import { desc, sql } from 'drizzle-orm';
+import { parseListPagination } from '@/lib/api-pagination';
 import { getSessionWithRole } from '@/lib/dal';
 import { getLinkedCampaignCountByNotificationIdForIds } from '@/lib/campaign-linked-counts';
 import { publishNotificationsUpdated } from '@/lib/redis';
@@ -15,9 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '50', 10)));
-    const offset = (page - 1) * pageSize;
+    const { page, pageSize, offset } = parseListPagination(searchParams);
 
     const [rows, countRow] = await Promise.all([
       db

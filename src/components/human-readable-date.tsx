@@ -6,7 +6,7 @@ import { useDateDisplayPreference } from '@/components/date-display-preference';
 import { cn } from '@/lib/utils';
 
 type HumanReadableDateProps = {
-  date: Date;
+  date: Date | string;
   className?: string;
   /**
    * `relative` — “today at 2:45 PM”, “yesterday at …”, plus `formatRelative` phrasing when close;
@@ -62,11 +62,12 @@ function denseLines(
  * `suppressHydrationWarning`: comparison time differs between server and client for `relative` mode.
  */
 export function HumanReadableDate({
-  date,
+  date: dateInput,
   className,
   mode: modeProp,
   dense = false,
 }: HumanReadableDateProps) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   const { preference } = useDateDisplayPreference();
   const mode: 'relative' | 'medium' =
     modeProp ?? (preference === 'absolute' ? 'medium' : 'relative');

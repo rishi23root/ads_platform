@@ -3,12 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { database as db } from '@/db';
 import { enduserEvents, type EndUserRow } from '@/db/schema';
-import {
-  currentLocalMinutesSinceMidnight,
-  filterQualifyingExtensionCampaigns,
-  isExtensionUserNewForAdBlock,
-  type ExtensionCampaignQualifyContext,
-} from '@/lib/extension-ad-block-qualify';
+import { filterQualifyingExtensionCampaigns } from '@/lib/extension-ad-block-qualify';
 import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import type {
   CampaignSelectRow,
@@ -16,16 +11,14 @@ import type {
   ExtensionServeCreativesResult,
 } from '@/lib/extension-live-init';
 import {
+  buildExtensionCampaignQualifyContext,
   buildServeCreativeBuckets,
   fetchActiveCampaignRowsForExtension,
   fetchExtensionPlatformsList,
-  fetchFirstEventCreatedAt,
-  fetchFrequencyCountsForEndUser,
-  newUserAnchorDate,
 } from '@/lib/extension-live-init';
+import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import { normalizeDomainForMatch, platformIdSetForNormalizedDomain } from '@/lib/domain-utils';
-import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { getCachedPlatformList, setCachedPlatformList } from '@/lib/redis';
 
 export type { ExtensionServeCreativesResult, ExtensionServeCreativePayload };
@@ -53,44 +46,27 @@ export async function logExtensionServeEvents(params: {
   const userAgent = params.request.headers.get('user-agent')?.slice(0, 2000) ?? null;
 
   const rows: (typeof enduserEvents.$inferInsert)[] = [];
-  for (const p of params.ads) {
-    rows.push({
-      userIdentifier,
-      campaignId: p.id,
-      domain: params.domain,
-      type: 'ad',
-      country,
-      userAgent,
-    });
-  }
-  for (const p of params.popups) {
-    rows.push({
-      userIdentifier,
-      campaignId: p.id,
-      domain: params.domain,
-      type: 'popup',
-      country,
-      userAgent,
-    });
-  }
-  for (const p of params.notifications) {
-    rows.push({
-      userIdentifier,
-      campaignId: p.id,
-      domain: params.domain,
-      type: 'notification',
-      country,
-      userAgent,
-    });
+  const buckets: Array<{
+    type: 'ad' | 'popup' | 'notification';
+    items: ExtensionServeCreativePayload[];
+  }> = [
+    { type: 'ad', items: params.ads },
+    { type: 'popup', items: params.popups },
+    { type: 'notification', items: params.notifications },
+  ];
+  for (const { type, items } of buckets) {
+    for (const p of items) {
+      rows.push({
+        userIdentifier,
+        campaignId: p.id,
+        domain: params.domain,
+        type,
+        country,
+        userAgent,
+      });
+    }
   }
   await db.insert(enduserEvents).values(rows);
-}
-
-function endUserGeoCountryFromRequest(request: NextRequest, endUser: EndUserRow): string | null {
-  const fromHeaders = countryCodeFromRequestHeaders(request);
-  if (fromHeaders) return fromHeaders;
-  const fromRow = endUser.country?.trim().toUpperCase();
-  return fromRow && fromRow.length === 2 ? fromRow : null;
 }
 
 function campaignMatchesPlatformIds(
@@ -108,35 +84,6 @@ async function loadPlatformsList(): Promise<{ id: string; domain: string }[]> {
   const fresh = await fetchExtensionPlatformsList();
   await setCachedPlatformList(fresh);
   return fresh;
-}
-
-async function buildQualifyContext(params: {
-  endUser: EndUserRow;
-  request: NextRequest;
-  campaignIds: string[];
-}): Promise<ExtensionCampaignQualifyContext> {
-  const { endUser, request, campaignIds } = params;
-  const userIdentifier = userIdentifierForEndUser(endUser);
-  const [firstEventAt, frequencyCountsRecord] = await Promise.all([
-    fetchFirstEventCreatedAt(userIdentifier),
-    fetchFrequencyCountsForEndUser(userIdentifier, campaignIds),
-  ]);
-
-  const viewCountByCampaignId = new Map<string, number>();
-  for (const [id, n] of Object.entries(frequencyCountsRecord)) {
-    viewCountByCampaignId.set(id, n);
-  }
-
-  const now = new Date();
-  const anchor = newUserAnchorDate(endUser, firstEventAt);
-
-  return {
-    now,
-    currentMinutes: currentLocalMinutesSinceMidnight(now),
-    isNewUser: isExtensionUserNewForAdBlock(anchor),
-    endUserGeoCountry: endUserGeoCountryFromRequest(request, endUser),
-    viewCountByCampaignId,
-  };
 }
 
 export type ExtensionServeCreativeType = 'ads' | 'popup' | 'notification';
@@ -165,11 +112,15 @@ export async function runServeCreatives(params: {
     return { ads: [], popups: [], notifications: [] };
   }
 
-  const ctx = await buildQualifyContext({
-    endUser: params.endUser,
-    request: params.request,
-    campaignIds: domainFiltered.map((c) => c.id),
-  });
+  const targetListIds = Array.from(
+    new Set(domainFiltered.map((c) => c.targetListId).filter((x): x is string => Boolean(x)))
+  );
+  const ctx = await buildExtensionCampaignQualifyContext(
+    params.endUser,
+    domainFiltered.map((c) => c.id),
+    targetListIds,
+    params.request
+  );
 
   const rules = domainFiltered.map(campaignSelectRowToRuleFields);
   const qualifiedRules = filterQualifyingExtensionCampaigns(rules, ctx);

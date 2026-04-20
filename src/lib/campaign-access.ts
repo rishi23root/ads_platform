@@ -24,5 +24,6 @@ export function formatCampaignResponse(c: CampaignRow) {
     adId: c.adId ?? null,
     notificationId: c.notificationId ?? null,
     redirectId: c.redirectId ?? null,
+    targetListId: c.targetListId ?? null,
   };
 }

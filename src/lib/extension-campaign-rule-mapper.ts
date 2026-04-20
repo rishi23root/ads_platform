@@ -23,5 +23,6 @@ export function campaignSelectRowToRuleFields(c: CampaignSelectRow): ExtensionCa
     startDate: toDateOrNull(c.startDate),
     endDate: toDateOrNull(c.endDate),
     countryCodes: c.countryCodes,
+    targetListId: c.targetListId ?? null,
   };
 }

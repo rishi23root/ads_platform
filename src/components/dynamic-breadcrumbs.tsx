@@ -19,15 +19,41 @@ const routeLabels: Record<string, string> = {
   "/ads": "Ads",
   "/notifications": "Notifications",
   "/events": "Events",
+  "/target-lists": "Target lists",
   "/new": "New",
   "/edit": "Edit",
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function DynamicBreadcrumbs() {
   const pathname = usePathname()
+  const [targetListNameById, setTargetListNameById] = React.useState<Record<string, string>>({})
 
   // Split pathname into segments
   const segments = pathname.split("/").filter(Boolean)
+
+  React.useEffect(() => {
+    const segs = pathname.split("/").filter(Boolean)
+    const i = segs.indexOf("target-lists")
+    const id = i >= 0 ? segs[i + 1] : null
+    if (!id || !UUID_RE.test(id)) {
+      return
+    }
+    let cancelled = false
+    void fetch(`/api/target-lists/${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { name?: string } | null) => {
+        if (cancelled || !d || typeof d.name !== "string") return
+        const name = d.name
+        setTargetListNameById((prev) => (prev[id] === name ? prev : { ...prev, [id]: name }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   // Build breadcrumb items
   const breadcrumbItems = [
@@ -43,7 +69,7 @@ export function DynamicBreadcrumbs() {
     currentPath += `/${segment}`
 
     // Check if it's a dynamic route (UUID or ID)
-    const isDynamicRoute = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment) || segment.match(/^\d+$/)
+    const isDynamicRoute = UUID_RE.test(segment) || Boolean(segment.match(/^\d+$/))
 
     let label: string
     if (isDynamicRoute) {
@@ -51,8 +77,15 @@ export function DynamicBreadcrumbs() {
       // Check if previous segment gives context
       if (segments[index - 1]) {
         const parentSegment = segments[index - 1]
-        // Special case: "campaigns" -> "Campaign Details" (singular)
-        if (parentSegment === "campaigns") {
+        if (parentSegment === "target-lists" && UUID_RE.test(segment)) {
+          const name = targetListNameById[segment]
+          const display = name
+            ? name.length > 40
+              ? `${name.slice(0, 39)}…`
+              : name
+            : "…"
+          label = display
+        } else if (parentSegment === "campaigns") {
           label = "Campaign Details"
         } else {
           const parentLabel = routeLabels[`/${parentSegment}`] || parentSegment

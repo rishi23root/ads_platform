@@ -1,5 +1,13 @@
 import { database as db } from '@/db';
-import { platforms, ads, notifications, redirects, campaigns, type Campaign } from '@/db/schema';
+import {
+  platforms,
+  ads,
+  notifications,
+  redirects,
+  campaigns,
+  targetLists as targetListsTable,
+  type Campaign,
+} from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import type { CampaignFormInitial, CampaignFormOptionLists } from './campaign-form-types';
 import { getAllContentLinkedCampaignCounts } from '@/lib/campaign-linked-counts';
@@ -7,7 +15,7 @@ import { getAllContentLinkedCampaignCounts } from '@/lib/campaign-linked-counts'
 export type { CampaignFormInitial, CampaignFormOptionLists };
 
 export async function getCampaignFormOptionLists(): Promise<CampaignFormOptionLists> {
-  const [platformsList, adsRows, notificationsRows, redirectsRows, counts] = await Promise.all([
+  const [platformsList, adsRows, notificationsRows, redirectsRows, targetListsRows, counts] = await Promise.all([
     db.select({ id: platforms.id, name: platforms.name, domain: platforms.domain }).from(platforms).orderBy(platforms.name),
     db
       .select({
@@ -37,6 +45,10 @@ export async function getCampaignFormOptionLists(): Promise<CampaignFormOptionLi
       })
       .from(redirects)
       .orderBy(redirects.name),
+    db
+      .select({ id: targetListsTable.id, name: targetListsTable.name })
+      .from(targetListsTable)
+      .orderBy(targetListsTable.name),
     getAllContentLinkedCampaignCounts(),
   ]);
   const { byAdId, byNotificationId, byRedirectId } = counts;
@@ -52,7 +64,13 @@ export async function getCampaignFormOptionLists(): Promise<CampaignFormOptionLi
     ...r,
     linkedCampaignCount: byRedirectId.get(r.id) ?? 0,
   }));
-  return { platforms: platformsList, adsList, notificationsList, redirectsList };
+  return {
+    platforms: platformsList,
+    adsList,
+    notificationsList,
+    redirectsList,
+    targetLists: targetListsRows,
+  };
 }
 
 export function campaignRowToFormInitial(c: Campaign): CampaignFormInitial {
@@ -73,6 +91,7 @@ export function campaignRowToFormInitial(c: Campaign): CampaignFormInitial {
     adId: c.adId ?? null,
     notificationId: c.notificationId ?? null,
     redirectId: c.redirectId ?? null,
+    targetListId: c.targetListId ?? null,
   };
 }
 

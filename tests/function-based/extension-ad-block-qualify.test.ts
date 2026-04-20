@@ -21,6 +21,7 @@ function baseCampaign(overrides: Partial<ExtensionCampaignRuleFields> = {}): Ext
     startDate: null,
     endDate: null,
     countryCodes: [],
+    targetListId: null,
     ...overrides,
   };
 }
@@ -33,6 +34,7 @@ function baseCtx(overrides: Partial<ExtensionCampaignQualifyContext> = {}): Exte
     isNewUser: true,
     endUserGeoCountry: null,
     viewCountByCampaignId: new Map(),
+    targetListMembership: new Set(),
     ...overrides,
   };
 }
@@ -174,6 +176,25 @@ describe('extension-ad-block-qualify', () => {
       expect(filterQualifyingExtensionCampaigns([c], baseCtx({ endUserGeoCountry: null }))).toHaveLength(0);
       expect(filterQualifyingExtensionCampaigns([c], baseCtx({ endUserGeoCountry: 'US' }))).toHaveLength(1);
       expect(filterQualifyingExtensionCampaigns([c], baseCtx({ endUserGeoCountry: 'CA' }))).toHaveLength(0);
+    });
+  });
+
+  describe('filterQualifyingExtensionCampaigns — target list', () => {
+    it('excludes when targetListId set and user not in membership set', () => {
+      const c = baseCampaign({ id: 'c1', targetListId: 'L1' });
+      expect(filterQualifyingExtensionCampaigns([c], baseCtx({ targetListMembership: new Set() }))).toHaveLength(0);
+    });
+
+    it('includes when targetListId set and user is in membership set', () => {
+      const c = baseCampaign({ id: 'c1', targetListId: 'L1' });
+      expect(
+        filterQualifyingExtensionCampaigns([c], baseCtx({ targetListMembership: new Set(['L1']) }))
+      ).toHaveLength(1);
+    });
+
+    it('ignores target list gate when targetListId is null', () => {
+      const c = baseCampaign({ id: 'c1', targetListId: null });
+      expect(filterQualifyingExtensionCampaigns([c], baseCtx({ targetListMembership: new Set() }))).toHaveLength(1);
     });
   });
 

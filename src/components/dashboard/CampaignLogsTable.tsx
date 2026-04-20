@@ -109,7 +109,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
   }
 
   const pageSize = 25;
-  const colCount = 5;
+  const colCount = 6;
 
   return (
     <section className="space-y-3">
@@ -158,6 +158,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>User identifier</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Domain</TableHead>
               <TableHead>Country</TableHead>
               <TableHead>Type</TableHead>
@@ -202,6 +203,15 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
                         log.endUserUuid ? `/users/${log.endUserUuid}` : null
                       }
                     />
+                  </TableCell>
+                  <TableCell className="text-sm overflow-hidden">
+                    {log.email ? (
+                      <span className="truncate block max-w-[180px]" title={log.email}>
+                        {log.email}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm max-w-[180px]">
                     {log.domain ? (

@@ -14,6 +14,7 @@ import {
   IconTargetArrow,
   IconUserSearch,
   IconRoute,
+  IconListCheck,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -34,9 +35,13 @@ type Role = "user" | "admin"
 
 const overviewItems = [
   { title: "Dashboard", url: "/", icon: IconDashboard },
-  { title: "Campaigns", url: "/campaigns", icon: IconTargetArrow },
   { title: "Users", url: "/users", icon: IconUserSearch },
   { title: "Events", url: "/events", icon: IconChartBar },
+]
+
+const deliveryItems = [
+  { title: "Campaigns", url: "/campaigns", icon: IconTargetArrow },
+  { title: "Target lists", url: "/target-lists", icon: IconListCheck },
 ]
 
 const contentItems = [
@@ -49,6 +54,7 @@ const contentItems = [
 function getNavSections(role: Role) {
   const sections: { label: string; items: typeof overviewItems }[] = [
     { label: "Overview", items: overviewItems },
+    { label: "Delivery", items: deliveryItems },
     { label: "Content", items: contentItems },
   ]
   if (role === "admin") {
