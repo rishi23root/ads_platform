@@ -8,6 +8,7 @@ import { PaymentsFilters } from '@/components/payments-filters';
 import { PaymentsPageLayout } from '@/components/payments-page-layout';
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { KpiCard } from '@/components/dashboard/KpiCard';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
   countPaymentsListQuery,
@@ -142,9 +143,9 @@ export default async function PaymentsPage({
             />
           </div>
         </div>
-        <div className="rounded-md border min-w-0">
+        <DataTableSurface className="min-w-0">
           <AllPaymentsTable rows={rows} />
-        </div>
+        </DataTableSurface>
       </section>
     </PaymentsPageLayout>
   );

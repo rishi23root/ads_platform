@@ -18,7 +18,7 @@ Vitest runs in **Node**. Config: [`vitest.config.ts`](../vitest.config.ts) (load
 |---------|-----------|
 | `pnpm test` / `npm test` | All `*.test.ts` under `tests/` |
 | `pnpm test:unit` | Task-based auth scope only |
-| `pnpm test:extension` | Extension ad-block qualify (function-based) |
+| `pnpm test:extension` | Extension campaign qualify (function-based) |
 | `pnpm test:integration` | All extension integration files under [`user-flow/extension/`](./user-flow/extension/) |
 | `pnpm test:watch` | Vitest watch mode |
 | `pnpm test:extension-log` | Shell: [`docs/test-extension-log.sh`](../docs/test-extension-log.sh) |

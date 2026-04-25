@@ -51,15 +51,21 @@ export default async function EndUserDetailPage({
   const isAdmin = sessionWithRole.role === 'admin';
 
   const { id } = await params;
+  const viewer = {
+    id: sessionWithRole.user.id,
+    role: sessionWithRole.role,
+  } as const;
 
   const [userRows, paymentRows, initialDashboard, analyticsBundle] = await Promise.all([
     db.select().from(endUsers).where(eq(endUsers.id, id)).limit(1),
-    db
-      .select()
-      .from(payments)
-      .where(eq(payments.endUserId, id))
-      .orderBy(desc(payments.paymentDate), desc(payments.createdAt)),
-    getEndUserDashboardSnapshot(id),
+    isAdmin
+      ? db
+          .select()
+          .from(payments)
+          .where(eq(payments.endUserId, id))
+          .orderBy(desc(payments.paymentDate), desc(payments.createdAt))
+      : Promise.resolve([]),
+    getEndUserDashboardSnapshot(id, viewer),
     getEndUserAnalyticsBundle(sessionWithRole.role, sessionWithRole.user.id, id, '7d'),
   ]);
 

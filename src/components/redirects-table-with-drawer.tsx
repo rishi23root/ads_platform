@@ -15,7 +15,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconPlus, IconPencil } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
+import { PageHeader } from '@/components/page-header';
 import { RedirectEditDrawer } from '@/components/redirect-edit-drawer';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Redirect } from '@/db/schema';
 
@@ -67,48 +70,67 @@ export function RedirectsTableWithDrawer({
   return (
     <>
       <div className="flex flex-col gap-6 p-4 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Redirects</h1>
-            <p className="text-sm text-muted-foreground">Define domain-based redirects for campaigns</p>
-          </div>
-          {isAdmin ? (
-            <Button asChild className="shrink-0 self-start sm:self-auto">
-              <Link href="/redirects/new">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Add Redirect
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+        <PageHeader
+          title="URL redirects"
+          description="Send visitors from one link to another. Used by campaigns to rewrite destinations."
+          actions={
+            isAdmin ? (
+              <Button asChild className="shrink-0 self-start sm:self-auto">
+                <Link href="/redirects/new">
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  New URL redirect
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
 
-        <div className="overflow-hidden rounded-lg border border-border/80 bg-card/30 shadow-sm">
-          <Table className="table-fixed">
+        <DataTableSurface>
+          {/*
+            Avoid table-fixed: equal-width columns squeeze Created into Actions.
+            min-w triggers horizontal scroll on narrow viewports instead of overlap.
+          */}
+          <Table className="w-full min-w-[56rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Name</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Source domain</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Subdomains</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Destination</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 text-center font-medium tabular-nums">
+                <TableHead className="h-12 min-w-[8rem] px-4 py-3 font-medium">Name</TableHead>
+                <TableHead className="h-12 min-w-[9rem] px-4 py-3 font-medium">Source domain</TableHead>
+                <TableHead className="h-12 w-24 px-4 py-3 font-medium">Subdomains</TableHead>
+                <TableHead className="h-12 min-w-[12rem] px-4 py-3 font-medium">Destination</TableHead>
+                <TableHead className="h-12 w-24 px-4 py-3 text-center font-medium tabular-nums">
                   Campaigns
                 </TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Created</TableHead>
+                <TableHead className="h-12 min-w-[12rem] whitespace-nowrap px-4 py-3 font-medium">
+                  Created
+                </TableHead>
                 {isAdmin ? (
-                  <TableHead className="h-12 min-w-0 px-4 py-3 text-right font-medium">Actions</TableHead>
+                  <TableHead className="h-12 w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right font-medium">
+                    Actions
+                  </TableHead>
                 ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={colCount}
-                    className="px-4 py-12 text-center text-sm text-muted-foreground"
-                  >
-                    {isAdmin ? 'No redirects yet. Create your first redirect.' : 'No redirects yet.'}
-                  </TableCell>
-                </TableRow>
+                <EmptyTableRow
+                  colSpan={colCount}
+                  title="No URL redirects yet"
+                  description={
+                    isAdmin
+                      ? 'Send visitors from one link to another. Campaigns can rewrite destinations with these rules.'
+                      : 'Your team has not created any URL redirects yet.'
+                  }
+                  action={
+                    isAdmin ? (
+                      <Button asChild size="sm">
+                        <Link href="/redirects/new">
+                          <IconPlus className="mr-2 h-4 w-4" />
+                          Create your first URL redirect
+                        </Link>
+                      </Button>
+                    ) : null
+                  }
+                />
               ) : (
                 rows.map((r) => (
                   <TableRow
@@ -183,14 +205,14 @@ export function RedirectsTableWithDrawer({
                       </div>
                     </TableCell>
                     <TableCell
-                      className="min-w-0 px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
+                      className="min-w-[12rem] whitespace-nowrap px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
                       title="UTC"
                     >
                       {formatDateTimeUtcEnGb(r.createdAt)}
                     </TableCell>
                     {isAdmin ? (
                       <TableCell
-                        className="min-w-0 px-4 py-3 text-right align-middle"
+                        className="w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right align-middle"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex justify-end gap-1">
@@ -228,7 +250,7 @@ export function RedirectsTableWithDrawer({
               )}
             </TableBody>
           </Table>
-        </div>
+        </DataTableSurface>
       </div>
 
       <RedirectEditDrawer

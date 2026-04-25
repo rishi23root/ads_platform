@@ -8,6 +8,8 @@ import { KpiCard } from './KpiCard';
 import { LinkedContentCard } from './LinkedContentCard';
 import { CountryTable } from './CountryTable';
 import { CampaignLogsTable } from './CampaignLogsTable';
+import { CampaignUsersTable } from './CampaignUsersTable';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Campaign } from '@/db/schema';
 
@@ -111,6 +113,7 @@ export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: Camp
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6 mt-0">
@@ -133,7 +136,14 @@ export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: Camp
 
               <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
                 <section className="flex min-h-0 min-w-0 flex-col lg:col-span-2">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card/40 overflow-hidden">
+                  {/*
+                    Mobile: grid rows are `auto` height — fillHeight charts need a minimum block
+                    height or ResponsiveContainer collapses to 0. lg+ restores natural stretch.
+                  */}
+                  <DataTableSurface
+                    variant="embedded"
+                    className="flex min-h-[min(52vh,420px)] flex-1 flex-col overflow-hidden lg:min-h-0"
+                  >
                     <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
                       <ActivitySection
                         chartData={data.chartData}
@@ -142,10 +152,13 @@ export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: Camp
                         showTitle
                       />
                     </div>
-                  </div>
+                  </DataTableSurface>
                 </section>
                 <section className="flex min-h-0 min-w-0 flex-col">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card/40 overflow-hidden">
+                  <DataTableSurface
+                    variant="embedded"
+                    className="flex min-h-[280px] flex-1 flex-col overflow-hidden lg:min-h-0"
+                  >
                     <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
                       <section className="flex min-h-0 flex-1 flex-col gap-3">
                         <div className="shrink-0 space-y-1.5">
@@ -162,13 +175,15 @@ export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: Camp
                         </div>
                       </section>
                     </div>
-                  </div>
+                  </DataTableSurface>
                 </section>
               </div>
 
               <section className="space-y-3">
                 <h2 className="text-sm font-medium text-muted-foreground">By country</h2>
-                <CountryTable data={data.countryDistribution} embedded />
+                <DataTableSurface>
+                  <CountryTable data={data.countryDistribution} embedded />
+                </DataTableSurface>
               </section>
             </>
           ) : null}
@@ -176,6 +191,10 @@ export function CampaignDashboard({ campaign, isAdmin, targetListSummary }: Camp
 
         <TabsContent value="logs" className="mt-0">
           <CampaignLogsTable campaignId={campaign.id} />
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-0">
+          <CampaignUsersTable campaignId={campaign.id} />
         </TabsContent>
       </Tabs>
     </div>

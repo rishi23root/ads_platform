@@ -33,6 +33,14 @@ import {
 
 type Role = "user" | "admin"
 
+// UI label glossary — keep sidebar, breadcrumbs, and PageHeader titles in sync.
+// Internal name (route) -> user-facing label shown in the UI.
+//   /target-lists  -> Audience lists   (Groups of users your campaigns can target)
+//   /platforms     -> Sites & apps     (Websites and apps where your ads can appear)
+//   /redirects     -> URL redirects    (Send visitors from one link to another)
+//   Extension user -> App user         (People using your extension)
+// URLs and route names are intentionally unchanged.
+
 const overviewItems = [
   { title: "Dashboard", url: "/", icon: IconDashboard },
   { title: "Users", url: "/users", icon: IconUserSearch },
@@ -41,14 +49,14 @@ const overviewItems = [
 
 const deliveryItems = [
   { title: "Campaigns", url: "/campaigns", icon: IconTargetArrow },
-  { title: "Target lists", url: "/target-lists", icon: IconListCheck },
+  { title: "Audience lists", url: "/target-lists", icon: IconListCheck },
 ]
 
 const contentItems = [
-  { title: "Platforms", url: "/platforms", icon: IconDeviceDesktop },
+  { title: "Sites & apps", url: "/platforms", icon: IconDeviceDesktop },
   { title: "Ads", url: "/ads", icon: IconAd2 },
   { title: "Notifications", url: "/notifications", icon: IconBell },
-  { title: "Redirects", url: "/redirects", icon: IconRoute },
+  { title: "URL redirects", url: "/redirects", icon: IconRoute },
 ]
 
 function getNavSections(role: Role) {

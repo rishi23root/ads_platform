@@ -7,7 +7,7 @@ import { getLinkedCampaignCountByRedirectId } from '@/lib/campaign-linked-counts
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Redirects',
+  title: 'URL redirects',
 };
 
 export const dynamic = 'force-dynamic';

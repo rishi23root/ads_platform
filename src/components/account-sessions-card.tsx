@@ -18,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { adminPanelCardClassName, dataTableHeadMutedClassName } from '@/lib/admin-ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -71,7 +73,7 @@ function sessionErrorMessage(message: string | undefined) {
 
 function SessionsTableSkeleton() {
   return (
-    <div className="space-y-3 border-t border-border px-6 py-4" aria-hidden>
+    <div className="space-y-3 border-t border-border px-4 py-4 sm:px-6" aria-hidden>
       <div className="flex gap-4">
         <Skeleton className="h-4 flex-1 max-w-[120px] motion-reduce:animate-none" />
         <Skeleton className="hidden h-4 flex-1 max-w-[80px] sm:block motion-reduce:animate-none" />
@@ -174,8 +176,8 @@ export function AccountSessionsCard() {
 
   return (
     <>
-      <Card className="gap-0 overflow-hidden py-0 shadow-sm">
-        <CardHeader className="border-0 pb-3 pt-6">
+      <Card className={cn('gap-0 py-0', adminPanelCardClassName)}>
+        <CardHeader className="border-0 px-4 pb-3 pt-5 sm:px-6 sm:pt-6">
           <div className="flex min-w-0 gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <IconDevices className="size-[18px]" aria-hidden />
@@ -217,11 +219,11 @@ export function AccountSessionsCard() {
             </Button>
           </CardAction>
         </CardHeader>
-        <CardContent className="px-0 pb-6 pt-0">
+        <CardContent className="px-0 pb-5 pt-0 sm:pb-6">
           {busy ? (
             <SessionsTableSkeleton />
           ) : sessions.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 border-t border-border px-6 py-8 text-center">
+            <div className="flex flex-col items-center gap-3 border-t border-border px-4 py-8 text-center sm:px-6">
               <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <IconShieldCheck className="size-5" aria-hidden />
               </div>
@@ -236,23 +238,46 @@ export function AccountSessionsCard() {
               </Button>
             </div>
           ) : (
-            <div className="border-t border-border">
-              <Table>
+            <DataTableSurface className="min-w-0 rounded-none border-x-0 border-b-0 border-t shadow-none">
+              <div className="w-full overflow-x-auto">
+                <Table className="w-full table-auto">
                 <TableHeader>
-                  <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
-                    <TableHead className="h-10 w-[min(40%,280px)] px-6 py-2 font-medium">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead
+                      className={cn(
+                        dataTableHeadMutedClassName,
+                        'h-10 w-[min(40%,280px)] px-4 py-2 sm:px-6',
+                      )}
+                    >
                       Device
                     </TableHead>
-                    <TableHead className="hidden h-10 px-4 py-2 font-medium sm:table-cell">
+                    <TableHead
+                      className={cn(
+                        dataTableHeadMutedClassName,
+                        'hidden h-10 px-4 py-2 sm:table-cell',
+                      )}
+                    >
                       IP address
                     </TableHead>
-                    <TableHead className="h-10 whitespace-nowrap px-4 py-2 font-medium">
+                    <TableHead
+                      className={cn(dataTableHeadMutedClassName, 'h-10 whitespace-nowrap px-4 py-2')}
+                    >
                       Started
                     </TableHead>
-                    <TableHead className="hidden h-10 whitespace-nowrap px-4 py-2 font-medium md:table-cell">
+                    <TableHead
+                      className={cn(
+                        dataTableHeadMutedClassName,
+                        'hidden h-10 whitespace-nowrap px-4 py-2 md:table-cell',
+                      )}
+                    >
                       Expires
                     </TableHead>
-                    <TableHead className="h-10 w-14 px-6 py-2 text-right font-medium">
+                    <TableHead
+                      className={cn(
+                        dataTableHeadMutedClassName,
+                        'h-10 w-14 px-4 py-2 text-right sm:px-6',
+                      )}
+                    >
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
@@ -270,7 +295,7 @@ export function AccountSessionsCard() {
                             'bg-muted/50 hover:bg-muted/60 dark:bg-muted/30 dark:hover:bg-muted/45'
                         )}
                       >
-                        <TableCell className="align-top px-6 py-3">
+                        <TableCell className="align-top px-4 py-3 sm:px-6">
                           <div className="space-y-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="font-medium leading-snug text-foreground">
@@ -304,7 +329,7 @@ export function AccountSessionsCard() {
                         <TableCell className="hidden align-top px-4 py-3 text-sm tabular-nums text-muted-foreground whitespace-nowrap md:table-cell">
                           {formatWhen(row.expiresAt)}
                         </TableCell>
-                        <TableCell className="align-top px-6 py-3 text-right">
+                        <TableCell className="align-top px-4 py-3 text-right sm:px-6">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -331,7 +356,8 @@ export function AccountSessionsCard() {
                   })}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            </DataTableSurface>
           )}
         </CardContent>
       </Card>

@@ -1,6 +1,6 @@
 /**
  * When a campaign uses a target list, audience must be `all_users` (lists carry their own rules).
- * Aligns API with the dashboard form and {@link filterQualifyingExtensionCampaigns} semantics.
+ * Aligns API with the dashboard form and `filterQualifyingExtensionCampaigns` in `extension-campaign-qualify.ts`.
  */
 export function resolveCampaignTargetAudienceForInsert(
   targetAudience: unknown,

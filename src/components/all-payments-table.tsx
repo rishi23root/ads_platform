@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { HumanReadableDate } from '@/components/human-readable-date';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import type { PaymentListRow } from '@/lib/payments-types';
 
 function formatAmount(cents: number, currency: string): string {
@@ -25,7 +26,7 @@ function formatAmount(cents: number, currency: string): string {
 function statusBadgeClass(status: string): string {
   switch (status) {
     case 'completed':
-      return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20';
+      return 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20';
     case 'pending':
       return 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20';
     case 'failed':
@@ -71,14 +72,11 @@ export function AllPaymentsTable({ rows }: AllPaymentsTableProps) {
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={colCount} className="text-center py-12 text-sm text-muted-foreground">
-                <p className="mx-auto max-w-prose leading-relaxed px-4">
-                  No payments match your filters. Try adjusting search or status, or use Clear in the
-                  filters panel.
-                </p>
-              </TableCell>
-            </TableRow>
+            <EmptyTableRow
+              colSpan={colCount}
+              title="No payments match your filters"
+              description="Try changing the search or status, or use Clear in the filters panel."
+            />
           ) : (
             rows.map((p) => {
               const desc = p.description ?? '';
@@ -91,7 +89,7 @@ export function AllPaymentsTable({ rows }: AllPaymentsTableProps) {
                   <TableCell className="text-sm min-w-0">
                     <Link
                       href={`/users/${p.endUserId}`}
-                      className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
+                      className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
                     >
                       {p.endUserName?.trim() || p.endUserEmail || 'Anonymous'}
                     </Link>

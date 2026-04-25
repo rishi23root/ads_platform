@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -53,7 +54,7 @@ export function TargetListsTable({
       const res = await fetch(`/api/target-lists/${deleteId}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Delete failed');
-      toast.success('Target list deleted');
+      toast.success('Audience list deleted');
       setDeleteId(null);
       router.refresh();
     } catch (e) {
@@ -64,10 +65,10 @@ export function TargetListsTable({
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-        No target lists yet.{' '}
+        No audience lists yet.{' '}
         {isAdmin ? (
           <Link href="/target-lists/new" className="text-primary underline-offset-4 hover:underline">
-            Create one
+            Create your first audience list
           </Link>
         ) : null}
         .
@@ -77,7 +78,7 @@ export function TargetListsTable({
 
   return (
     <>
-      <div className="rounded-md border">
+      <DataTableSurface variant="delivery">
         <Table>
           <TableHeader>
             <TableRow>
@@ -163,20 +164,20 @@ export function TargetListsTable({
                 </TableCell>
               </TableRow>
             ))}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
+      </DataTableSurface>
 
       <AlertDialog open={deleteId != null} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete target list?</AlertDialogTitle>
+            <AlertDialogTitle>Delete audience list?</AlertDialogTitle>
             <AlertDialogDescription>
               {rowToDelete ? (
                 <>
                   Delete &quot;{rowToDelete.name}&quot;? {rowToDelete.campaignsUsing} campaign
                   {rowToDelete.campaignsUsing === 1 ? '' : 's'} currently reference this list; their
-                  target list will be cleared (audience falls back to the campaign&apos;s other rules).
+                  audience list will be cleared (the campaign&apos;s other rules still apply).
                 </>
               ) : null}
             </AlertDialogDescription>

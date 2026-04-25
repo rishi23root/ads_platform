@@ -218,7 +218,7 @@ export function LinkedCampaigns({
             )}
           >
             {type === 'platform'
-              ? 'No campaigns include this platform in their target list yet.'
+              ? 'No campaigns include this site or app yet.'
               : 'Not linked to any campaigns.'}
           </p>
         </ListStateWrapper>
@@ -332,5 +332,41 @@ export function LinkedCampaigns({
         {list}
       </div>
     </DrawerContentReveal>
+  );
+}
+
+interface LinkedCampaignsSectionProps {
+  type: LinkedCampaignsProps['type'];
+  entityId: string;
+  /** Heading shown above the card. Defaults to "Linked campaigns". */
+  heading?: string;
+  /** When true, campaign links go to `/campaigns/[id]/edit`. */
+  editLinks?: boolean;
+}
+
+/**
+ * Standard drawer-body section that shows linked campaigns inside a bordered
+ * card. Used across ad / notification / redirect / platform drawers so the
+ * layout stays consistent and we avoid repeating the same boilerplate in each.
+ */
+export function LinkedCampaignsSection({
+  type,
+  entityId,
+  heading = 'Linked campaigns',
+  editLinks = false,
+}: LinkedCampaignsSectionProps) {
+  const headingId = `${type}-campaigns-heading-${entityId}`;
+  return (
+    <section className="min-w-0 space-y-3" aria-labelledby={headingId}>
+      <h3
+        id={headingId}
+        className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {heading}
+      </h3>
+      <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
+        <LinkedCampaigns type={type} entityId={entityId} embedded editLinks={editLinks} />
+      </div>
+    </section>
   );
 }

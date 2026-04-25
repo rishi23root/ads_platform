@@ -13,6 +13,7 @@ import { DateDisplayToggleButton } from '@/components/date-display-toggle-button
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { ExportCsvButton } from '@/components/export-csv-button';
 import { AddEndUserDialog } from '@/components/add-end-user-dialog';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getCountryName } from '@/lib/countries';
 import {
@@ -96,6 +97,7 @@ export default async function UsersPage({
 
   return (
     <UsersPageLayout
+      primaryAction={isAdmin ? <AddEndUserDialog /> : undefined}
       filterContent={
         <UsersFilters
           q={filters.q}
@@ -115,7 +117,7 @@ export default async function UsersPage({
           <div className="min-w-0 flex-1 space-y-3">
             <h2 className="text-base font-semibold flex items-center gap-2">
               <IconUsers className="h-5 w-5" />
-              Extension users ({totalCount.toLocaleString()})
+              App users ({totalCount.toLocaleString()})
             </h2>
             <UsersEmailSearch />
           </div>
@@ -137,13 +139,12 @@ export default async function UsersPage({
               ariaLabel="Refresh users"
               tooltip="Reload users with current filters"
             />
-            {isAdmin && <AddEndUserDialog />}
           </div>
         </div>
         <UsersActiveFilterChips chips={filterChips} />
-        <div className="rounded-md border">
+        <DataTableSurface>
           <UsersPageTableSection rows={usersList} isAdmin={isAdmin} />
-        </div>
+        </DataTableSurface>
       </section>
     </UsersPageLayout>
   );

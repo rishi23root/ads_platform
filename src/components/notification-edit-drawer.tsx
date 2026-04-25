@@ -10,7 +10,7 @@ import {
 } from '@/components/crud-resource-drawer';
 import { IconLoader2, IconPencil } from '@tabler/icons-react';
 import { NotificationForm } from '@/app/(protected)/notifications/notification-form';
-import { LinkedCampaigns } from '@/components/linked-campaigns';
+import { LinkedCampaignsSection } from '@/components/linked-campaigns';
 import { cn, formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Notification } from '@/db/schema';
 
@@ -22,8 +22,6 @@ interface NotificationEditDrawerProps {
   initialMode?: 'view' | 'edit';
   /** When false, view mode has no Edit control. Use only when `session.role === 'admin'`. Default true */
   showEditAction?: boolean;
-  /** Hide Linked campaigns when opened from a campaign detail view. Default false */
-  hideLinkedCampaigns?: boolean;
 }
 
 const detailRow =
@@ -39,13 +37,11 @@ function NotificationEditDrawerContent({
   notificationId,
   initialMode,
   showEditAction = true,
-  hideLinkedCampaigns = false,
 }: {
   notification?: Notification | null;
   notificationId?: string;
   initialMode: 'view' | 'edit';
   showEditAction?: boolean;
-  hideLinkedCampaigns?: boolean;
 }) {
   const router = useRouter();
   const [fetchedNotification, setFetchedNotification] = useState<Notification | null>(null);
@@ -199,19 +195,7 @@ function NotificationEditDrawerContent({
                   </dl>
                 </div>
               </section>
-              {!hideLinkedCampaigns ? (
-                <section className="min-w-0 space-y-3" aria-labelledby="notification-campaigns-heading">
-                  <h3
-                    id="notification-campaigns-heading"
-                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
-                    Linked campaigns
-                  </h3>
-                  <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
-                    <LinkedCampaigns type="notification" entityId={resolvedNotification.id} embedded />
-                  </div>
-                </section>
-              ) : null}
+              <LinkedCampaignsSection type="notification" entityId={resolvedNotification.id} />
             </div>
           ) : (
             <NotificationForm
@@ -234,7 +218,6 @@ export function NotificationEditDrawer({
   notificationId,
   initialMode = 'view',
   showEditAction = true,
-  hideLinkedCampaigns = false,
 }: NotificationEditDrawerProps) {
   return (
     <CrudResourceDrawerRoot open={open} onOpenChange={onOpenChange} direction="right">
@@ -245,7 +228,6 @@ export function NotificationEditDrawer({
           notificationId={notificationId}
           initialMode={initialMode}
           showEditAction={showEditAction}
-          hideLinkedCampaigns={hideLinkedCampaigns}
         />
       ) : null}
     </CrudResourceDrawerRoot>

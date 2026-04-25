@@ -89,7 +89,7 @@ Campaign analytics and payments attach to **end users**, not to Better Auth `use
 
 ## Extension integration (v2)
 
-Legacy `POST /api/extension/ad-block` is **removed**. Clients use **SSE + focused HTTP** endpoints. The sequence below is the intended mental model for new engineers and API researchers.
+**Current surface:** `GET /api/extension/live` (SSE), `POST /api/extension/serve`, and `POST /api/extension/events` (see the contract). The pre-v2 combined `POST /api/extension/ad-block` response is **removed** — do not call it. The sequence below is the intended mental model for new engineers and API researchers.
 
 ```mermaid
 sequenceDiagram

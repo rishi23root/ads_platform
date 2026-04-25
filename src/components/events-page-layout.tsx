@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { EventsSummaryPanel } from '@/components/events-summary-panel';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { CloseFilterPanelContext } from '@/components/filter-panel-context';
 import { cn } from '@/lib/utils';
@@ -22,55 +23,53 @@ export function EventsPageLayout({
 
   return (
     <CloseFilterPanelContext.Provider value={closeFilterPanel}>
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       {/* No gap between header and panels: flex gap would add space even when both panels are collapsed (0fr). */}
       <div className="flex flex-col">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold">Events</h1>
-            <p className="mt-1 text-sm text-muted-foreground leading-snug">
-              Extension events across all campaigns — newest first.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant={showFilters ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setShowFilters((open) => {
-                  const next = !open;
-                  if (next) setShowStatus(false);
-                  return next;
-                });
-              }}
-              className="min-h-9 gap-2"
-              aria-expanded={showFilters}
-              aria-controls="events-filters-panel"
-            >
-              <IconFilter className="h-4 w-4" aria-hidden />
-              {showFilters ? 'Hide filters' : 'Filter'}
-            </Button>
-            <Button
-              type="button"
-              variant={showStatus ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setShowStatus((open) => {
-                  const next = !open;
-                  if (next) setShowFilters(false);
-                  return next;
-                });
-              }}
-              className="min-h-9 gap-2"
-              aria-expanded={showStatus}
-              aria-controls="events-status-panel"
-            >
-              <IconChartBar className="h-4 w-4" aria-hidden />
-              {showStatus ? 'Hide summary' : 'Summary'}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="Events"
+          description="Activity from your extension across all campaigns — newest first."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant={showFilters ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setShowFilters((open) => {
+                    const next = !open;
+                    if (next) setShowStatus(false);
+                    return next;
+                  });
+                }}
+                className="min-h-9 gap-2"
+                aria-expanded={showFilters}
+                aria-controls="events-filters-panel"
+              >
+                <IconFilter className="h-4 w-4" aria-hidden />
+                {showFilters ? 'Hide filters' : 'Filter'}
+              </Button>
+              <Button
+                type="button"
+                variant={showStatus ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setShowStatus((open) => {
+                    const next = !open;
+                    if (next) setShowFilters(false);
+                    return next;
+                  });
+                }}
+                className="min-h-9 gap-2"
+                aria-expanded={showStatus}
+                aria-controls="events-status-panel"
+              >
+                <IconChartBar className="h-4 w-4" aria-hidden />
+                {showStatus ? 'Hide summary' : 'Summary'}
+              </Button>
+            </>
+          }
+        />
 
         <div
           id="events-filters-panel"

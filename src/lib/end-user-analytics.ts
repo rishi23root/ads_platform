@@ -48,12 +48,24 @@ function endUserTimeWindow(userIdentifier: string, start: Date, end: Date): SQL 
 
 export async function getEndUserEventSummary(
   role: 'user' | 'admin',
-  dashboardUserId: string,
+  _dashboardUserId: string,
   userIdentifier: string,
   start: Date,
   end: Date
 ): Promise<EndUserEventSummary> {
   const window = endUserTimeWindow(userIdentifier, start, end);
+  if (role !== 'admin') {
+    return {
+      total: 0,
+      visit: 0,
+      ad: 0,
+      popup: 0,
+      notification: 0,
+      redirect: 0,
+      served: 0,
+    };
+  }
+
   const base = db
     .select({
       total: sql<number>`count(*)::int`,
@@ -64,9 +76,6 @@ export async function getEndUserEventSummary(
       redirect: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'redirect' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
-
-  void role;
-  void dashboardUserId;
 
   const rows = await base.where(window);
   const row = rows[0];
@@ -87,11 +96,14 @@ export async function getEndUserEventSummary(
 
 export async function getEndUserDailySeries(
   role: 'user' | 'admin',
-  dashboardUserId: string,
+  _dashboardUserId: string,
   userIdentifier: string,
   start: Date,
   end: Date
 ): Promise<EndUserDailySeriesRow[]> {
+  if (role !== 'admin') {
+    return [];
+  }
   const window = endUserTimeWindow(userIdentifier, start, end);
   const utcDay = sql`( ${enduserEvents.createdAt} AT TIME ZONE 'UTC' )::date`;
 
@@ -105,9 +117,6 @@ export async function getEndUserDailySeries(
       redirect: sql<number>`coalesce(sum(case when ${enduserEvents.type} = 'redirect' then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
-
-  void role;
-  void dashboardUserId;
 
   const rows = await base.where(window).groupBy(utcDay);
 
@@ -142,12 +151,15 @@ export async function getEndUserDailySeries(
 
 export async function getEndUserTopDomains(
   role: 'user' | 'admin',
-  dashboardUserId: string,
+  _dashboardUserId: string,
   userIdentifier: string,
   start: Date,
   end: Date,
   limit = 10
 ): Promise<EndUserDomainRow[]> {
+  if (role !== 'admin') {
+    return [];
+  }
   const window = endUserTimeWindow(userIdentifier, start, end);
   const domainCol = sql<string>`coalesce(nullif(trim(${enduserEvents.domain}), ''), '(unknown)')`;
 
@@ -164,9 +176,6 @@ export async function getEndUserTopDomains(
       serves: sql<number>`coalesce(sum(case when ${enduserEvents.type} in ('ad','popup','notification','redirect') then 1 else 0 end), 0)::int`,
     })
     .from(enduserEvents);
-
-  void role;
-  void dashboardUserId;
 
   const rows = await base
     .where(domainWhere)

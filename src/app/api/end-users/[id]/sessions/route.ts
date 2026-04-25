@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { desc, eq } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, enduserSessions } from '@/db/schema';
-import { getSessionWithRole } from '@/lib/dal';
+import { requireApiSession } from '@/lib/dal';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +10,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id: endUserId } = await context.params;
     const [user] = await db.select({ id: endUsers.id }).from(endUsers).where(eq(endUsers.id, endUserId)).limit(1);
@@ -52,13 +50,8 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id: endUserId } = await context.params;
     const [user] = await db.select({ id: endUsers.id }).from(endUsers).where(eq(endUsers.id, endUserId)).limit(1);

@@ -1,20 +1,11 @@
-import { CopyableIdCell } from '@/components/copyable-id-cell';
 import { EventsFilters } from '@/components/events-filters';
 import { EventsActiveFilterChips } from '@/components/events-visual-filters';
 import { EventsPageLayout } from '@/components/events-page-layout';
+import { ExtensionEventsLogTable } from '@/components/extension-events-log-table';
 import { DateDisplayToggleButton } from '@/components/date-display-toggle-button';
 import { ExportEventsCsvButton } from '@/components/export-events-csv-button';
-import { HumanReadableDate } from '@/components/human-readable-date';
 import { RefreshDataButton } from '@/components/refresh-data-button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getSessionWithRole } from '@/lib/dal';
 import {
@@ -23,7 +14,6 @@ import {
   listEventsPageWithCount,
   parseEventsDashboardFilters,
 } from '@/lib/events-dashboard';
-import { getCountryName } from '@/lib/countries';
 import { IconChartBar } from '@tabler/icons-react';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
@@ -35,15 +25,6 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 25;
-
-const typeColors: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  ad: 'default',
-  notification: 'secondary',
-  popup: 'outline',
-  request: 'secondary',
-  redirect: 'outline',
-  visit: 'secondary',
-};
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -118,136 +99,12 @@ export default async function EventsPage({ searchParams }: { searchParams: Searc
           </div>
         </div>
         <EventsActiveFilterChips chips={filterChips} />
-        <div className="rounded-md border min-w-0">
-          <div className="w-full overflow-x-auto">
-            <Table className="w-full table-auto">
-              <colgroup>
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: '80px' }} />
-                <col style={{ width: 'minmax(120px, 1fr)' }} />
-                <col style={{ width: '90px' }} />
-                <col style={{ width: '170px' }} />
-              </colgroup>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    User identifier
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Email
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Plan
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Campaign
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Domain
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Country
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    User agent
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Type
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-normal">
-                    Timestamp
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                      No events match the current filters. Extension activity will appear here.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  pageRows.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="py-2 overflow-hidden">
-                        <CopyableIdCell
-                          value={log.userIdentifier}
-                          truncateLength={12}
-                          copyLabel="User identifier copied to clipboard"
-                          href={
-                            log.endUserUuid ? `/users/${log.endUserUuid}` : undefined
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm">
-                        {log.email ? (
-                          <span className="truncate block max-w-[180px]" title={log.email}>
-                            {log.email}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm">
-                        {log.plan ? (
-                          <Badge variant="outline" className="font-normal capitalize">
-                            {log.plan}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        {log.campaignId ? (
-                          <CopyableIdCell
-                            value={log.campaignId}
-                            href={`/campaigns/${log.campaignId}`}
-                            truncateLength={8}
-                            copyLabel="Campaign ID copied to clipboard"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        <span className="truncate block" title={log.domain ?? ''}>
-                          {log.domain}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        {log.country ? (
-                          <span title={getCountryName(log.country)} className="uppercase text-sm">
-                            {log.country}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm text-muted-foreground max-w-[220px]">
-                        <span
-                          className="line-clamp-2 font-mono text-xs"
-                          title={log.userAgent ?? undefined}
-                        >
-                          {log.userAgent ?? '—'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        <Badge variant={typeColors[log.type] || 'secondary'}>{log.type}</Badge>
-                      </TableCell>
-                      <TableCell className="py-2 text-sm text-muted-foreground min-w-0">
-                        <HumanReadableDate date={new Date(log.createdAt)} />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        <DataTableSurface className="min-w-0">
+          <ExtensionEventsLogTable
+            rows={pageRows}
+            emptyMessage="No events match the current filters. Activity from your users will appear here."
+          />
+        </DataTableSurface>
       </section>
     </EventsPageLayout>
   );

@@ -28,8 +28,8 @@ export function TopDomainsChart({ data }: TopDomainsChartProps) {
       <div className="flex h-full min-h-[200px] flex-1 flex-col items-center justify-center gap-3 px-2 py-4 text-center sm:px-4">
         <p className="text-sm font-medium text-foreground">No domain data in this range</p>
         <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-          When the extension records impressions for this campaign, the breakdown by site will
-          appear here for the same time range as Activity.
+          Once this campaign starts getting impressions, the breakdown by site appears here for
+          the same time range as Activity.
         </p>
       </div>
     );

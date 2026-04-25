@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, payments } from '@/db/schema';
-import { getSessionWithRole } from '@/lib/dal';
+import { requireApiSession } from '@/lib/dal';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +22,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     let raw: unknown;
@@ -53,42 +49,44 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (p.description !== undefined) updates.description = p.description;
     if (p.paymentDate !== undefined) updates.paymentDate = new Date(p.paymentDate);
 
-    const [updated] = await db
-      .update(payments)
-      .set(updates)
-      .where(eq(payments.id, id))
-      .returning();
+    // Atomic: payment update + optional end-user endDate update land together.
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(payments)
+        .set(updates)
+        .where(eq(payments.id, id))
+        .returning();
+
+      if (!row) return null;
+
+      if (p.endDate !== undefined) {
+        await tx
+          .update(endUsers)
+          .set({
+            endDate: p.endDate ? new Date(p.endDate) : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(endUsers.id, row.endUserId));
+      }
+
+      return row;
+    });
 
     if (!updated) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (p.endDate !== undefined) {
-      await db
-        .update(endUsers)
-        .set({
-          endDate: p.endDate ? new Date(p.endDate) : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(endUsers.id, updated.endUserId));
-    }
-
     return NextResponse.json({ payment: updated });
   } catch (error) {
-    console.error('[api/payments/[id] PATCH]', error);
+    logger.error('[api/payments/[id] PATCH] failed', error);
     return NextResponse.json({ error: 'Failed to update payment' }, { status: 500 });
   }
 }
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     const deleted = await db.delete(payments).where(eq(payments.id, id)).returning({ id: payments.id });
@@ -97,7 +95,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[api/payments/[id] DELETE]', error);
+    logger.error('[api/payments/[id] DELETE] failed', error);
     return NextResponse.json({ error: 'Failed to delete payment' }, { status: 500 });
   }
 }

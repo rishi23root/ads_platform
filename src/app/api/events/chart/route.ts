@@ -3,7 +3,7 @@ import { database as db } from '@/db';
 import { enduserEvents } from '@/db/schema';
 import { and, eq, gte, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
-import { DASHBOARD_SERVED_EVENT_TYPES } from '@/lib/events-dashboard';
+import { DASHBOARD_SERVED_EVENT_TYPES, eventsAccessScopeForRole } from '@/lib/events-dashboard';
 import { getStartDate, fillMissingDays } from '@/lib/date-range';
 import type { ExtensionEventChartRow } from '@/lib/extension-events-chart';
 
@@ -48,6 +48,11 @@ export async function GET(request: NextRequest) {
         eq(enduserEvents.type, 'visit')
       )
     );
+    const access = eventsAccessScopeForRole(
+      sessionWithRole.role,
+      sessionWithRole.user.id
+    );
+    const chartWhere = access ? and(scopeWhere, access) : scopeWhere;
 
     const base = db
       .select({
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
       })
       .from(enduserEvents);
 
-    const rows = await base.where(scopeWhere).groupBy(utcDay);
+    const rows = await base.where(chartWhere).groupBy(utcDay);
 
     const dataByDate = new Map<
       string,

@@ -4,6 +4,7 @@ import { database as db } from '@/db';
 import { user } from '@/db/schema';
 import { CreateUserDialog } from '@/components/create-user-dialog';
 import { MembersTable } from '@/components/members-table';
+import { PageHeader } from '@/components/page-header';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -30,14 +31,12 @@ export default async function MembersPage() {
     .orderBy(user.createdAt);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Members</h1>
-          <p className="text-muted-foreground">Manage dashboard members and roles</p>
-        </div>
-        <CreateUserDialog />
-      </div>
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Members"
+        description="People who can sign in to this admin dashboard and their roles."
+        actions={<CreateUserDialog />}
+      />
 
       <MembersTable members={members} currentUserId={sessionWithRole.user.id} />
     </div>

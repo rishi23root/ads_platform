@@ -27,6 +27,19 @@ export function normalizeDomainForMatch(domain: string): string {
 }
 
 /**
+ * Normalize `sourceDomain` for redirect storage / regex: hostname only; strip `www.`
+ * when `includeSubdomains` is true so the pattern anchors to the root (e.g. `ndtv.com`
+ * instead of `www.ndtv.com`).
+ */
+export function normalizeDomainForRedirectStorage(
+  sourceDomain: string,
+  includeSubdomains: boolean
+): string {
+  const host = normalizeDomainForMatch(sourceDomain);
+  return includeSubdomains && host.startsWith('www.') ? host.slice(4) : host;
+}
+
+/**
  * Get canonical display form (strip www. prefix for cleaner display).
  */
 export function getCanonicalDisplayDomain(hostname: string): string {
@@ -69,7 +82,10 @@ export function redirectSourceMatchesVisit(
   includeSubdomains: boolean
 ): boolean {
   const host = normalizeDomainForMatch(visitDomain);
-  const source = normalizeDomainForMatch(sourceDomain);
+  let source = normalizeDomainForMatch(sourceDomain);
+  if (includeSubdomains && source.startsWith('www.')) {
+    source = source.slice(4);
+  }
   if (host === source) return true;
   if (!includeSubdomains) return false;
   return host.endsWith(`.${source}`);
@@ -91,7 +107,10 @@ export function redirectSourceToHostnameRegex(
   sourceDomain: string,
   includeSubdomains: boolean
 ): string {
-  const source = normalizeDomainForMatch(sourceDomain);
+  let source = normalizeDomainForMatch(sourceDomain);
+  if (includeSubdomains && source.startsWith('www.')) {
+    source = source.slice(4);
+  }
   const esc = escapeRegExpChars(source);
   if (!includeSubdomains) return `^${esc}$`;
   return `^(?:.+\\.)?${esc}$`;

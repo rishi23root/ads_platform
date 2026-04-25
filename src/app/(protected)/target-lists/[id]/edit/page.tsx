@@ -14,10 +14,10 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const s = await getSessionWithRole();
-  if (!s || s.role !== 'admin') return { title: 'Edit target list' };
+  if (!s || s.role !== 'admin') return { title: 'Edit audience list' };
   const { id } = await params;
   const [row] = await db.select({ name: targetLists.name }).from(targetLists).where(eq(targetLists.id, id)).limit(1);
-  return { title: row ? `Edit · ${row.name}` : 'Edit target list' };
+  return { title: row ? `Edit · ${row.name}` : 'Edit audience list' };
 }
 
 export default async function EditTargetListPage({ params }: PageProps) {
@@ -45,7 +45,7 @@ export default async function EditTargetListPage({ params }: PageProps) {
           className="inline-flex w-fit items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-safe:transition-colors"
         >
           <IconArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-          Target lists
+          Audience lists
         </Link>
         <span className="hidden text-muted-foreground sm:inline" aria-hidden>
           ·
@@ -58,7 +58,7 @@ export default async function EditTargetListPage({ params }: PageProps) {
         </Link>
       </div>
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Edit target list</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Edit audience list</h1>
         <p className="max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground">
           Update filters and members. Saving publishes updates to redirect campaigns that use this
           list.

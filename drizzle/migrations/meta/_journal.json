@@ -43,6 +43,20 @@
       "when": 1775211051363,
       "tag": "0005_target_list_excluded_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775211051364,
+      "tag": "0006_hotpath_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775211051365,
+      "tag": "0007_normalize_redirect_source_domains",
+      "breakpoints": true
     }
   ]
 }

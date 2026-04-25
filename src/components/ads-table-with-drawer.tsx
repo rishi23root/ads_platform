@@ -15,11 +15,25 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconPlus, IconPencil } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
+import { PageHeader } from '@/components/page-header';
 import { AdEditDrawer } from '@/components/ad-edit-drawer';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Ad } from '@/db/schema';
 
 export type AdListRow = Ad & { linkedCampaignCount: number };
+
+/** Keeps list rows readable: data URIs only show the metadata prefix in the cell (full value in tooltip). */
+function targetUrlCellLabel(url: string): string {
+  const u = url.trim();
+  if (u.startsWith('data:')) {
+    const comma = u.indexOf(',');
+    if (comma > 0) return `${u.slice(0, comma)},…`;
+    return 'data:…';
+  }
+  return u;
+}
 
 interface AdsTableWithDrawerProps {
   ads: AdListRow[];
@@ -63,35 +77,37 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
   return (
     <>
       <div className="flex flex-col gap-6 p-4 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Ads</h1>
-            <p className="text-sm text-muted-foreground">Manage your ad content library</p>
-          </div>
-          {isAdmin ? (
-            <Button asChild className="shrink-0 self-start sm:self-auto">
-              <Link href="/ads/new">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Add Ad
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+        <PageHeader
+          title="Ads"
+          description="Ad images and links your campaigns can show."
+          actions={
+            isAdmin ? (
+              <Button asChild className="shrink-0 self-start sm:self-auto">
+                <Link href="/ads/new">
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  New ad
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
 
-        <div className="overflow-hidden rounded-lg border border-border/80 bg-card/30 shadow-sm">
-          <Table className="table-fixed">
+        <DataTableSurface>
+          <Table className="w-full min-w-[52rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-12 min-w-0 w-[34%] px-4 py-3 font-medium">Name</TableHead>
-                <TableHead className="h-12 min-w-0 w-[20%] px-4 py-3 font-medium">
+                <TableHead className="h-12 min-w-[10rem] px-4 py-3 font-medium">Name</TableHead>
+                <TableHead className="h-12 max-w-[14rem] min-w-0 px-4 py-3 font-medium">
                   Target URL
                 </TableHead>
-                <TableHead className="h-12 min-w-0 w-[8%] px-4 py-3 text-center font-medium tabular-nums">
+                <TableHead className="h-12 w-24 px-4 py-3 text-center font-medium tabular-nums">
                   Campaigns
                 </TableHead>
-                <TableHead className="h-12 min-w-0 w-[26%] px-4 py-3 font-medium">Created</TableHead>
+                <TableHead className="h-12 min-w-[12rem] whitespace-nowrap px-4 py-3 font-medium">
+                  Created
+                </TableHead>
                 {isAdmin ? (
-                  <TableHead className="h-12 min-w-0 w-[12%] px-4 py-3 text-right font-medium">
+                  <TableHead className="h-12 w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right font-medium">
                     Actions
                   </TableHead>
                 ) : null}
@@ -99,14 +115,25 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
             </TableHeader>
             <TableBody>
               {ads.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={colCount}
-                    className="px-4 py-12 text-center text-sm text-muted-foreground"
-                  >
-                    {isAdmin ? 'No ads found. Create your first ad.' : 'No ads found.'}
-                  </TableCell>
-                </TableRow>
+                <EmptyTableRow
+                  colSpan={colCount}
+                  title="No ads yet"
+                  description={
+                    isAdmin
+                      ? 'Ads are the images or links your campaigns show to users.'
+                      : 'Your team has not created any ads yet.'
+                  }
+                  action={
+                    isAdmin ? (
+                      <Button asChild size="sm">
+                        <Link href="/ads/new">
+                          <IconPlus className="mr-2 h-4 w-4" />
+                          Create your first ad
+                        </Link>
+                      </Button>
+                    ) : null
+                  }
+                />
               ) : (
                 ads.map((ad) => (
                   <TableRow
@@ -133,7 +160,7 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    <TableCell className="min-w-0 overflow-hidden px-4 py-3 align-middle">
+                    <TableCell className="max-w-[14rem] min-w-0 overflow-hidden px-4 py-3 align-middle">
                       {ad.targetUrl ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -141,13 +168,13 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
                               href={ad.targetUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-block max-w-full cursor-pointer truncate text-primary underline-offset-4 hover:underline"
+                              className="block max-w-full cursor-pointer truncate font-mono text-xs leading-snug text-primary underline-offset-4 hover:underline"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {ad.targetUrl}
+                              {targetUrlCellLabel(ad.targetUrl)}
                             </a>
                           </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-sm break-all">
+                          <TooltipContent side="bottom" className="max-w-md break-all text-xs">
                             {ad.targetUrl}
                           </TooltipContent>
                         </Tooltip>
@@ -170,14 +197,14 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
                       </div>
                     </TableCell>
                     <TableCell
-                      className="min-w-0 px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
+                      className="min-w-[12rem] whitespace-nowrap px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
                       title="UTC"
                     >
                       {formatDateTimeUtcEnGb(ad.createdAt)}
                     </TableCell>
                     {isAdmin ? (
                       <TableCell
-                        className="min-w-0 px-4 py-3 text-right align-middle"
+                        className="w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right align-middle"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex justify-end gap-1">
@@ -215,7 +242,7 @@ export function AdsTableWithDrawer({ ads, initialEditId, isAdmin }: AdsTableWith
               )}
             </TableBody>
           </Table>
-        </div>
+        </DataTableSurface>
       </div>
 
       <AdEditDrawer

@@ -1,6 +1,6 @@
 /**
  * SSE (`/api/extension/live`): verify HTTP stream connection metadata and `init` payload
- * after extension login. Uses `user.id` from the `init` event (same as login `user.id`).
+ * after extension login. Uses flat `identifier` from `init` (matches login/device identifier).
  *
  * Run (dev server + DB env required): `pnpm test:sse-live`
  * Or: `EXTENSION_INTEGRATION=1 vitest run tests/user-flow/extension/extension-sse-live-connection.integration.test.ts --no-file-parallelism`
@@ -39,7 +39,7 @@ describe.skipIf(!BASE)('SSE extension live: connection + init data (login → st
     expect(res.status).toBe(401);
   });
 
-  it('connects with text/event-stream, first event init, user id matches login', async () => {
+  it('connects with text/event-stream, first event init, identifier matches login', async () => {
     const { token, endUserId, userIdentifier } = await registerOrLoginExtensionEndUser(
       BASE!,
       email,
@@ -55,20 +55,19 @@ describe.skipIf(!BASE)('SSE extension live: connection + init data (login → st
     expect(meta.connectionKeepAlive).toBe(true);
     expect(meta.eventName).toBe('init');
 
-    const init = JSON.parse(meta.data) as {
-      user?: { id?: string; identifier?: string; email?: string | null };
-      domains?: unknown;
-      redirects?: unknown;
-    };
+    const init = JSON.parse(meta.data) as Record<string, unknown>;
 
-    expect(init.user?.id).toBe(endUserId);
-    expect(init.user?.identifier).toBe(userIdentifier);
+    expect(init.identifier).toBe(userIdentifier);
+    expect(init.user).toBeUndefined();
+    for (const leaked of ['email', 'plan', 'banned', 'country', 'startDate', 'endDate', 'id', 'name']) {
+      expect(init).not.toHaveProperty(leaked);
+    }
     expect(Array.isArray(init.domains)).toBe(true);
     expect(Array.isArray(init.redirects)).toBe(true);
     // platforms, campaigns, and frequencyCounts are no longer in init
-    expect((init as Record<string, unknown>).platforms).toBeUndefined();
-    expect((init as Record<string, unknown>).campaigns).toBeUndefined();
-    expect((init as Record<string, unknown>).frequencyCounts).toBeUndefined();
+    expect(init.platforms).toBeUndefined();
+    expect(init.campaigns).toBeUndefined();
+    expect(init.frequencyCounts).toBeUndefined();
 
     if (process.env.SSE_LIVE_VERBOSE === '1') {
       console.info('[SSE live test] connection headers:', {
@@ -77,10 +76,9 @@ describe.skipIf(!BASE)('SSE extension live: connection + init data (login → st
         cacheControl: meta.cacheControl,
         connectionKeepAlive: meta.connectionKeepAlive,
       });
-      console.info('[SSE live test] init user (id + identifier from stream):', {
-        id: init.user?.id,
-        identifier: init.user?.identifier,
-        email: init.user?.email,
+      console.info('[SSE live test] init (endUserId from login vs identifier on stream):', {
+        endUserId,
+        identifier: init.identifier,
       });
     }
   });

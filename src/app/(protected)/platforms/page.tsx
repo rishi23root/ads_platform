@@ -7,7 +7,7 @@ import { PlatformsTableWithDrawer } from '@/components/platforms-table-with-draw
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Platforms',
+  title: 'Sites & apps',
 };
 
 export const dynamic = 'force-dynamic';

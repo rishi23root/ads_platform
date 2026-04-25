@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { RecentCampaignsTable } from '@/components/recent-campaigns-table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -67,7 +68,7 @@ export default async function DashboardPage() {
 
   const extensionUsersPromise = db.select({ count: sql<number>`count(*)` }).from(endUsers);
 
-  const [campaignCounts, impressionsCount, extensionUsersCount, recentCampaigns, paymentSummary] =
+  const [campaignCounts, impressionsCount, extensionUsersCount, recentCampaignsRaw, paymentSummary] =
     await Promise.all([
       campaignCountsPromise,
       impressionsCountPromise,
@@ -75,6 +76,32 @@ export default async function DashboardPage() {
       recentCampaignsPromise,
       isAdmin ? getPaymentsSummary() : Promise.resolve(null),
     ]);
+
+  const recentCampaignIds = recentCampaignsRaw.map((c) => c.id);
+  const impressionByCampaign = new Map<string, number>();
+  if (recentCampaignIds.length > 0) {
+    const perCampaignRows = await db
+      .select({
+        campaignId: enduserEvents.campaignId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(enduserEvents)
+      .where(
+        and(
+          inArray(enduserEvents.campaignId, recentCampaignIds),
+          inArray(enduserEvents.type, DASHBOARD_SERVED_EVENT_TYPES)
+        )
+      )
+      .groupBy(enduserEvents.campaignId);
+    for (const row of perCampaignRows) {
+      if (row.campaignId) impressionByCampaign.set(row.campaignId, Number(row.count));
+    }
+  }
+
+  const recentCampaigns = recentCampaignsRaw.map((c) => ({
+    ...c,
+    impressions: impressionByCampaign.get(c.id) ?? 0,
+  }));
 
   const activeCampaigns = Number(campaignCounts[0]?.active || 0);
   const totalCampaigns = Number(campaignCounts[0]?.total || 0);
@@ -113,8 +140,8 @@ export default async function DashboardPage() {
       <ChartAreaInteractiveDynamic />
 
       <section className="relative z-10 isolate">
-        <div className="rounded-xl border border-border bg-card/40 shadow-none">
-          <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <DataTableSurface variant="embedded" className="flex flex-col">
+          <div className="flex flex-col gap-2 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0 space-y-1">
               <h2 className="text-lg font-semibold">Recent campaigns</h2>
               <p className="text-sm text-muted-foreground">
@@ -136,7 +163,7 @@ export default async function DashboardPage() {
             </div>
           </div>
           <RecentCampaignsTable campaigns={recentCampaigns} isAdmin={isAdmin} />
-        </div>
+        </DataTableSurface>
       </section>
     </div>
   );

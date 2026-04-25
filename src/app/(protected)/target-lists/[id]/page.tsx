@@ -6,10 +6,13 @@ import { database as db } from '@/db';
 import { targetLists } from '@/db/schema';
 import { Badge } from '@/components/ui/badge';
 import { HumanReadableDate } from '@/components/human-readable-date';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { TargetListMembersTable } from '@/components/target-list-members-table';
 import { TargetListDetailAdminActions } from '@/components/target-list-detail-admin-actions';
 import { TargetListLinkedCampaigns } from '@/components/target-list-linked-campaigns';
+import { ExportTargetListMembersCsvButton } from '@/components/export-target-list-members-csv-button';
+import { RefreshDataButton } from '@/components/refresh-data-button';
 import { fetchCampaignsForTargetList } from '@/lib/target-list-queries';
 import {
   isTargetListFilterEmpty,
@@ -49,10 +52,10 @@ function filterBadges(f: TargetListFilterJson): string[] {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const s = await getSessionWithRole();
-  if (!s) return { title: 'Target list' };
+  if (!s) return { title: 'Audience list' };
   const { id } = await params;
   const [row] = await db.select({ name: targetLists.name }).from(targetLists).where(eq(targetLists.id, id)).limit(1);
-  return { title: row ? row.name : 'Target list' };
+  return { title: row ? row.name : 'Audience list' };
 }
 
 export default async function TargetListDetailPage({ params, searchParams }: PageProps) {
@@ -98,17 +101,17 @@ export default async function TargetListDetailPage({ params, searchParams }: Pag
 
   const tabDefs: { key: TargetListMemberTabSource; label: string }[] = [
     { key: 'all', label: 'All' },
-    { key: 'explicit', label: 'Explicit' },
     { key: 'filter', label: 'Filter' },
+    { key: 'explicit', label: 'Explicit' },
     { key: 'excluded', label: 'Excluded' },
   ];
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      {/* ── Overview card ── */}
-      <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+      {/* ── Overview card (same embedded surface as campaign / dashboard panels) ── */}
+      <DataTableSurface variant="embedded" className="shadow-sm">
         {/* Title bar */}
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
           <h1 className="min-w-0 text-pretty text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
             {row.name}
           </h1>
@@ -136,7 +139,7 @@ export default async function TargetListDetailPage({ params, searchParams }: Pag
               ).map(({ label, value }) => (
                 <div
                   key={label}
-                  className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/30 px-3 py-3"
+                  className="flex flex-col gap-0.5 rounded-xl border border-border bg-card/40 px-3 py-3 shadow-none"
                 >
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {label}
@@ -213,14 +216,14 @@ export default async function TargetListDetailPage({ params, searchParams }: Pag
           {/* Right: connected campaigns */}
           <TargetListLinkedCampaigns
             campaigns={linkedCampaigns}
-            className="border-t border-border/60 lg:border-l lg:border-t-0"
+            className="border-t border-border lg:border-l lg:border-t-0"
           />
         </div>
-      </div>
+      </DataTableSurface>
 
       {/* ── Tabs ── */}
       <nav
-        className="flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-muted/40 p-1"
+        className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-muted/40 p-1"
         aria-label="Member segments"
       >
         {tabDefs.map((t) => {
@@ -260,19 +263,35 @@ export default async function TargetListDetailPage({ params, searchParams }: Pag
         })}
       </nav>
 
-      {totalForSource > 0 ? (
-        <TablePagination
-          mode="link"
-          page={page}
-          totalPages={totalPages}
-          totalCount={totalForSource}
-          pageSize={pageSize}
-          basePath={`/target-lists/${id}`}
-          filterParams={{ source }}
-        />
-      ) : null}
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
+          <h2 className="text-base font-semibold tabular-nums">
+            Members ({totalForSource.toLocaleString('en-US')})
+          </h2>
+          <div className="shrink-0 flex flex-wrap items-center gap-2">
+            {totalForSource > 0 ? (
+              <TablePagination
+                mode="link"
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalForSource}
+                pageSize={pageSize}
+                basePath={`/target-lists/${id}`}
+                filterParams={{ source }}
+              />
+            ) : null}
+            {isAdmin && totalForSource > 0 ? (
+              <ExportTargetListMembersCsvButton listId={id} source={source} />
+            ) : null}
+            <RefreshDataButton
+              ariaLabel="Refresh audience members"
+              tooltip="Reload members for this tab"
+            />
+          </div>
+        </div>
 
-      <TargetListMembersTable listId={id} source={source} rows={members} isAdmin={isAdmin} />
+        <TargetListMembersTable listId={id} source={source} rows={members} isAdmin={isAdmin} />
+      </section>
     </div>
   );
 }

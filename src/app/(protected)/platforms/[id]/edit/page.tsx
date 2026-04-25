@@ -3,7 +3,7 @@ import { getSessionWithRole } from '@/lib/dal';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Edit platform',
+  title: 'Edit site or app',
 };
 
 type PageProps = {

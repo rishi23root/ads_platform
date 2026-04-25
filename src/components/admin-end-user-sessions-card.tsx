@@ -34,6 +34,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { dataTableHeadMutedClassName } from '@/lib/admin-ui';
+import { cn } from '@/lib/utils';
 import { parseUserAgent } from '@/lib/ua-parser';
 
 type SessionRow = {
@@ -72,8 +74,6 @@ interface AdminEndUserSessionsCardProps {
   onSessionStatusChange?: (status: AdminEndUserSessionsCardSessionStatus) => void;
 }
 
-const headClass = 'text-muted-foreground text-xs font-normal';
-
 export const AdminEndUserSessionsCard = forwardRef<
   AdminEndUserSessionsCardHandle,
   AdminEndUserSessionsCardProps
@@ -99,14 +99,14 @@ export const AdminEndUserSessionsCard = forwardRef<
     try {
       const res = await fetch(`/api/end-users/${userId}/sessions`);
       if (!res.ok) {
-        toast.error('Could not load extension session');
+        toast.error('Could not load sign-in session');
         setSessions([]);
         return;
       }
       const data = (await res.json()) as { sessions?: SessionRow[] };
       setSessions(Array.isArray(data.sessions) ? data.sessions : []);
     } catch {
-      toast.error('Could not load extension session');
+      toast.error('Could not load sign-in session');
       setSessions([]);
     } finally {
       setLoading(false);
@@ -197,7 +197,7 @@ export const AdminEndUserSessionsCard = forwardRef<
           : 'rounded-lg bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground'
       }
     >
-      No session yet. Sessions appear after the extension calls provision or login.
+      No session yet. A session appears after the user signs in from the extension.
     </div>
   ) : (
     <div className={`min-w-0 ${embedded ? bodyScrollClass : bodyScrollClass}`}>
@@ -205,14 +205,26 @@ export const AdminEndUserSessionsCard = forwardRef<
         <Table className="w-full table-auto">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className={`${headClass} w-[min(40%,280px)]`}>Device</TableHead>
-              <TableHead className={`${headClass} hidden sm:table-cell`}>IP</TableHead>
-              <TableHead className={`${headClass} whitespace-nowrap`}>Started</TableHead>
-              <TableHead className={`${headClass} hidden whitespace-nowrap md:table-cell`}>
+              <TableHead
+                className={cn(dataTableHeadMutedClassName, 'w-[min(40%,280px)]')}
+              >
+                Device
+              </TableHead>
+              <TableHead className={cn(dataTableHeadMutedClassName, 'hidden sm:table-cell')}>
+                IP
+              </TableHead>
+              <TableHead className={cn(dataTableHeadMutedClassName, 'whitespace-nowrap')}>
+                Started
+              </TableHead>
+              <TableHead
+                className={cn(dataTableHeadMutedClassName, 'hidden whitespace-nowrap md:table-cell')}
+              >
                 Expires
               </TableHead>
               {allowRevoke ? (
-                <TableHead className={`${headClass} w-14 text-right`}>
+                <TableHead
+                  className={cn(dataTableHeadMutedClassName, 'w-14 text-right')}
+                >
                   <span className="sr-only">Actions</span>
                 </TableHead>
               ) : null}
@@ -302,17 +314,17 @@ export const AdminEndUserSessionsCard = forwardRef<
           bodyInner
         )
       ) : (
-        <section aria-label="Extension session for this user" className="space-y-2">
+        <section aria-label="Sign-in session for this app user" className="space-y-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div className="min-w-0">
               <h2 className="text-base font-semibold flex items-center gap-2">
                 <IconDevices className="h-5 w-5 shrink-0" aria-hidden />
                 <span className="truncate">
-                  Extension session ({loading ? '…' : sessions.length.toLocaleString()})
+                  Sign-in session ({loading ? '…' : sessions.length.toLocaleString()})
                 </span>
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                One bearer session at a time. Revoking ends access until the user signs in again.{' '}
+                One active session at a time. Revoking ends access until the user signs in again.{' '}
                 <span className="text-foreground/80">{summary}.</span>
               </p>
             </div>
@@ -330,7 +342,7 @@ export const AdminEndUserSessionsCard = forwardRef<
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke this session?</AlertDialogTitle>
             <AlertDialogDescription>
-              The user will need to sign in or provision again from the extension.
+              The user will need to sign in again from the extension.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

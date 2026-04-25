@@ -51,7 +51,7 @@
 - **Impact**: Schema-driven types, type-safe queries
 
 ### 4. Authentication (staff + extension)
-- **Decision**: **Better Auth** for dashboard staff (email/password, session cookies via `/api/auth`). Extension **end users** use **Bearer tokens** stored in `enduser_sessions` (see `src/lib/enduser-auth.ts`); ad-block and other extension APIs validate `Authorization: Bearer …`.
+- **Decision**: **Better Auth** for dashboard staff (email/password, session cookies via `/api/auth`). Extension **end users** use **Bearer tokens** stored in `enduser_sessions` (see `src/lib/enduser-auth.ts`); `serve`, `live`, `events`, and `auth` routes validate `Authorization: Bearer …` where required.
 - **Rationale**: Clear split between internal admins and anonymous/provisioned extension customers; Better Auth owns staff sessions and plugins (e.g. admin roles).
 - **Implementation**: `better-auth` + Drizzle adapter; `bcryptjs` for end-user passwords; session lifetime configurable (`freshAge` in `src/lib/auth.ts`, end-user session days via `ENDUSER_SESSION_DAYS`). Cryptographic helpers used by Better Auth may pull `jose` transitively—no separate JWT stack in app code for staff.
 
@@ -128,6 +128,7 @@ export function ClientComponent({ data }) {
 
 ### Extension API
 - **Routes** (under `/api/extension/`): `auth/register`, `auth/login`, `auth/logout`, `auth/me`, `live` (SSE), `serve`, `events` (Bearer required where enforced)
+- **Campaign qualification** (schedule, audience, frequency, geo, target lists): shared helpers in `src/lib/extension-campaign-qualify.ts`, consumed by serve and live paths (not a separate HTTP surface).
 - **Auth**: Registration/login returns a token; clients send `Authorization: Bearer <token>` for protected extension handlers
 - **Redis**: Used for realtime fan-out and optional lease bookkeeping on `GET /api/extension/live` when `REDIS_URL` is set
 

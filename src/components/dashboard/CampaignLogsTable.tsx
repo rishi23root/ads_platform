@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -21,10 +22,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { EndUserIdCell } from '@/components/enduser-id-cell';
-import { IconRefresh } from '@tabler/icons-react';
+import { IconExternalLink, IconRefresh } from '@tabler/icons-react';
+import { dataTableHeadMutedClassName } from '@/lib/admin-ui';
 import { getCountryName } from '@/lib/countries';
 
 interface LogEntry {
@@ -42,6 +45,11 @@ interface LogEntry {
 
 interface CampaignLogsTableProps {
   campaignId: string;
+}
+
+function eventsDeepLinkForCampaign(campaignId: string): string {
+  const q = new URLSearchParams({ campaignId });
+  return `/events?${q.toString()}`;
 }
 
 function isWithinInteractiveControl(target: EventTarget | null): boolean {
@@ -114,17 +122,16 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h2 className="text-base font-semibold">
-            Campaign Logs ({loading ? '…' : totalCount.toLocaleString()})
+        <div className="min-w-0 space-y-1">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Campaign logs ({loading ? '…' : totalCount.toLocaleString()})
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Extension events for this campaign. Paginated for performance. Select a row for full
-            detail.
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Activity from your users for this campaign. Select a row to see the full details.
           </p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!loading && (totalPages > 0 || totalCount > 0) && (
               <TablePagination
                 mode="button"
@@ -150,19 +157,39 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             >
               <IconRefresh className="h-4 w-4" />
             </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="h-9 w-9 min-h-9 min-w-9"
+                  asChild
+                >
+                  <Link
+                    href={eventsDeepLinkForCampaign(campaignId)}
+                    aria-label="View in Events"
+                  >
+                    <IconExternalLink className="h-4 w-4" aria-hidden />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Opens Events with this campaign pre-selected
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
-      <div className="rounded-md border">
+      <DataTableSurface>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>User identifier</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Domain</TableHead>
-              <TableHead>Country</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Time</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>App user</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>Email</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>Domain</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>Country</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>Type</TableHead>
+              <TableHead className={dataTableHeadMutedClassName}>Time</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,7 +202,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             ) : logs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={colCount} className="text-center py-12 text-muted-foreground text-sm">
-                  No logs yet. Extension events will appear here.
+                  No activity yet. Events from your users will appear here.
                 </TableCell>
               </TableRow>
             ) : (
@@ -247,7 +274,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableSurface>
 
       <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <SheetContent side="right" className="flex w-full flex-col sm:max-w-md overflow-y-auto">
@@ -262,7 +289,7 @@ export function CampaignLogsTable({ campaignId }: CampaignLogsTableProps) {
               <div className="mt-6 flex flex-col gap-4 px-4 pb-6 text-sm">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-                    End user
+                    App user
                   </p>
                   <EndUserIdCell
                     userIdentifier={detail.userIdentifier}

@@ -31,13 +31,18 @@ integration('extension v2 HTTP (live SSE, serve, events)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('SSE first frame is event init with domains and redirects (no platforms/campaigns/frequencyCounts)', async () => {
-    const { token } = await registerOrLoginExtensionEndUser(BASE!, email, password);
+  it('SSE first frame is event init with identifier, domains, redirects (no user profile / platforms / campaigns)', async () => {
+    const { token, userIdentifier } = await registerOrLoginExtensionEndUser(BASE!, email, password);
     const frame = await fetchExtensionLiveFirstSseEvent(BASE!, token);
     expect(frame.ok).toBe(true);
     expect(frame.eventName).toBe('init');
     const payload = JSON.parse(frame.data) as Record<string, unknown>;
-    expect(payload.user).toBeTruthy();
+    expect(payload.identifier).toBe(userIdentifier);
+    expect(typeof payload.identifier).toBe('string');
+    expect(payload.user).toBeUndefined();
+    for (const leaked of ['email', 'plan', 'banned', 'country', 'startDate', 'endDate', 'id', 'name']) {
+      expect(payload).not.toHaveProperty(leaked);
+    }
     expect(Array.isArray(payload.domains)).toBe(true);
     expect(Array.isArray(payload.redirects)).toBe(true);
     expect(payload.platforms).toBeUndefined();

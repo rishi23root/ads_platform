@@ -22,8 +22,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { adminPanelCardClassName } from '@/lib/admin-ui';
 import { authClient } from '@/lib/auth-client';
+import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 const MIN_PASSWORD_LEN = 8;
 
@@ -177,8 +179,8 @@ export function AccountPasswordForm() {
   };
 
   return (
-    <Card className="gap-0 overflow-hidden py-0 shadow-sm">
-      <CardHeader className="border-0 pb-3 pt-6">
+    <Card className={cn('gap-0 py-0', adminPanelCardClassName)}>
+      <CardHeader className="border-0 px-4 pb-3 pt-5 sm:px-6 sm:pt-6">
         <div className="flex min-w-0 gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <IconLock className="size-[18px]" aria-hidden />
@@ -192,7 +194,7 @@ export function AccountPasswordForm() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="border-t border-border px-6 pb-6 pt-5">
+      <CardContent className="border-t border-border px-4 pb-5 pt-5 sm:px-6 sm:pb-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
           <div className="space-y-4">
             <div className="space-y-3">

@@ -7,18 +7,13 @@ import { and, eq, gt } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, enduserSessions } from '@/db/schema';
 import type { EndUserRow, EnduserSessionRow } from '@/db/schema';
+import { env } from '@/lib/config/env';
 
 const BCRYPT_ROUNDS = 10;
 
-function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  if (raw === undefined || raw === '') return fallback;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-/** Session lifetime in days (env override). */
+/** Session lifetime in days (env override). Validated via central env schema. */
 export function enduserSessionExpiresDays(): number {
-  return parsePositiveInt(process.env.ENDUSER_SESSION_DAYS, 30);
+  return env.ENDUSER_SESSION_DAYS;
 }
 
 export function hashEnduserPassword(plain: string): string {

@@ -23,8 +23,8 @@ export function CampaignHeader({ campaign, isAdmin = false }: CampaignHeaderProp
           className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground leading-relaxed"
           role="status"
         >
-          <span className="font-medium">This campaign was deleted.</span> It no longer serves in the
-          extension. Event logs and analytics below are preserved.
+          <span className="font-medium">This campaign was deleted.</span> It isn&apos;t being
+          delivered anymore. Activity logs and analytics below are kept for reference.
         </div>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between gap-y-3">

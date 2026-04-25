@@ -14,7 +14,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { IconPlus, IconPencil } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
+import { PageHeader } from '@/components/page-header';
 import { PlatformEditDrawer } from '@/components/platform-edit-drawer';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Platform } from '@/db/schema';
 
@@ -69,39 +72,39 @@ export function PlatformsTableWithDrawer({
   return (
     <>
       <div className="flex flex-col gap-6 p-4 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Platforms</h1>
-            <p className="text-sm text-muted-foreground">Manage your advertising platforms</p>
-          </div>
-          {isAdmin ? (
-            <Button asChild className="shrink-0 self-start sm:self-auto">
-              <Link href="/platforms/new">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Add Platform
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+        <PageHeader
+          title="Sites & apps"
+          description="Websites and apps where your ads can appear."
+          actions={
+            isAdmin ? (
+              <Button asChild className="shrink-0 self-start sm:self-auto">
+                <Link href="/platforms/new">
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  New site or app
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
 
-        <div className="overflow-hidden rounded-lg border border-border/80 bg-card/30 shadow-sm">
-          <Table className="table-fixed">
+        <DataTableSurface>
+          <Table className="w-full min-w-[44rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-1/5 min-w-0 px-4 py-3 text-left align-middle font-medium">
+                <TableHead className="min-w-[10rem] px-4 py-3 text-left align-middle font-medium">
                   Name
                 </TableHead>
-                <TableHead className="w-1/5 min-w-0 px-4 py-3 text-left align-middle font-medium">
+                <TableHead className="min-w-[12rem] px-4 py-3 text-left align-middle font-medium">
                   Domain
                 </TableHead>
-                <TableHead className="w-1/5 min-w-0 px-4 py-3 text-center align-middle font-medium tabular-nums">
+                <TableHead className="w-24 px-4 py-3 text-center align-middle font-medium tabular-nums">
                   Campaigns
                 </TableHead>
-                <TableHead className="w-1/5 min-w-0 px-4 py-3 text-left align-middle font-medium">
+                <TableHead className="min-w-[12rem] whitespace-nowrap px-4 py-3 text-left align-middle font-medium">
                   Created
                 </TableHead>
                 {isAdmin ? (
-                  <TableHead className="w-1/5 min-w-0 px-4 py-3 text-right align-middle font-medium">
+                  <TableHead className="w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right align-middle font-medium">
                     Actions
                   </TableHead>
                 ) : null}
@@ -109,16 +112,25 @@ export function PlatformsTableWithDrawer({
             </TableHeader>
             <TableBody>
               {platforms.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={colCount}
-                    className="px-4 py-12 text-center text-sm text-muted-foreground"
-                  >
-                    {isAdmin
-                      ? 'No platforms found. Create your first platform.'
-                      : 'No platforms found.'}
-                  </TableCell>
-                </TableRow>
+                <EmptyTableRow
+                  colSpan={colCount}
+                  title="No sites or apps yet"
+                  description={
+                    isAdmin
+                      ? 'Register the websites and apps where your campaigns can run.'
+                      : 'Your team has not registered any sites or apps yet.'
+                  }
+                  action={
+                    isAdmin ? (
+                      <Button asChild size="sm">
+                        <Link href="/platforms/new">
+                          <IconPlus className="mr-2 h-4 w-4" />
+                          Add your first site or app
+                        </Link>
+                      </Button>
+                    ) : null
+                  }
+                />
               ) : (
                 platforms.map((platform) => (
                   <TableRow
@@ -155,14 +167,14 @@ export function PlatformsTableWithDrawer({
                       </div>
                     </TableCell>
                     <TableCell
-                      className="min-w-0 px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
+                      className="min-w-[12rem] whitespace-nowrap px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
                       title="UTC"
                     >
                       {formatDateTimeUtcEnGb(platform.createdAt)}
                     </TableCell>
                     {isAdmin ? (
                       <TableCell
-                        className="min-w-0 px-4 py-3 text-right align-middle"
+                        className="w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right align-middle"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex justify-end gap-1">
@@ -200,7 +212,7 @@ export function PlatformsTableWithDrawer({
               )}
             </TableBody>
           </Table>
-        </div>
+        </DataTableSurface>
       </div>
 
       <PlatformEditDrawer

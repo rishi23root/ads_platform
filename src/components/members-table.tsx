@@ -11,6 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -80,7 +82,7 @@ export function MembersTable({ members, currentUserId }: MembersTableProps) {
 
   return (
     <>
-      <div className="rounded-md border">
+      <DataTableSurface>
         <Table>
           <TableHeader>
             <TableRow>
@@ -94,11 +96,11 @@ export function MembersTable({ members, currentUserId }: MembersTableProps) {
           </TableHeader>
           <TableBody>
             {members.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No members yet.
-                </TableCell>
-              </TableRow>
+              <EmptyTableRow
+                colSpan={6}
+                title="No members yet"
+                description="Invite teammates to give them access to this admin dashboard."
+              />
             ) : (
               members.map((u) => (
                 <TableRow
@@ -149,9 +151,9 @@ export function MembersTable({ members, currentUserId }: MembersTableProps) {
                 </TableRow>
               ))
             )}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
+      </DataTableSurface>
       <EditUserDrawer user={editingUser} open={editOpen} onOpenChange={setEditOpen} />
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

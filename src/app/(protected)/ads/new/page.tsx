@@ -15,9 +15,9 @@ export default async function NewAdPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">New Ad</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New ad</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Create ad content and destination details for campaign delivery.
+          Create an ad image, copy, and destination link that campaigns can show.
         </p>
       </header>
       <Card className="w-full overflow-hidden">

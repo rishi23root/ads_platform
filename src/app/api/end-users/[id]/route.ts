@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, payments } from '@/db/schema';
-import { getSessionWithRole } from '@/lib/dal';
+import { requireApiSession } from '@/lib/dal';
 import { endUserPublicPayload, hashEnduserPassword } from '@/lib/enduser-auth';
 
 export const dynamic = 'force-dynamic';
@@ -38,10 +38,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
     const { id } = await context.params;
     const [user] = await db.select().from(endUsers).where(eq(endUsers.id, id)).limit(1);
     if (!user) {
@@ -65,13 +63,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     const [existing] = await db.select().from(endUsers).where(eq(endUsers.id, id)).limit(1);
@@ -154,13 +147,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     const deleted = await db.delete(endUsers).where(eq(endUsers.id, id)).returning({ id: endUsers.id });

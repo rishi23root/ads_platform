@@ -17,12 +17,23 @@ import {
   backfillEndUserCountryIfEmpty,
   countryCodeFromRequestHeaders,
 } from '@/lib/enduser-request-country';
+import {
+  clientIpFromRequest,
+  consumeRateLimit,
+  maskEmailForLog,
+  rateLimitResponse,
+} from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
+/** Login rate limit: 10 attempts per IP per minute. Strict enough to slow brute force, generous
+ * enough that a legitimate client flapping through retries isn't blocked. */
+const LOGIN_RATE = { name: 'ext-login', limit: 10, windowSec: 60 } as const;
+
 function logAuthFailure(message: string, meta?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'development') {
-    console.warn(`[api/extension/auth/login] ${message}`, meta ?? '');
+    logger.debug(`[api/extension/auth/login] ${message}`, meta);
   }
 }
 
@@ -52,6 +63,10 @@ const loginSchema = z.union([loginWithEmailSchema, loginAnonymousSchema]);
  */
 export async function POST(request: NextRequest) {
   try {
+    const ip = clientIpFromRequest(request);
+    const rl = await consumeRateLimit(ip, LOGIN_RATE);
+    if (!rl.allowed) return rateLimitResponse(rl);
+
     let raw: unknown;
     try {
       raw = await request.json();
@@ -121,13 +136,13 @@ export async function POST(request: NextRequest) {
 
     if (!row?.passwordHash) {
       logAuthFailure('401: no end user with this email, or user has no password (e.g. anonymous-only)', {
-        email,
+        email: maskEmailForLog(email),
       });
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     if (!verifyEnduserPassword(body.password, row.passwordHash)) {
-      logAuthFailure('401: password did not verify', { email });
+      logAuthFailure('401: password did not verify', { email: maskEmailForLog(email) });
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
@@ -162,7 +177,7 @@ export async function POST(request: NextRequest) {
       ...(identifierReplaced ? { identifierReplaced: true } : {}),
     });
   } catch (error) {
-    console.error('[api/extension/auth/login]', error);
+    logger.error('[api/extension/auth/login] failed', error);
     return NextResponse.json({ error: 'Failed to sign in' }, { status: 500 });
   }
 }

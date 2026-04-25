@@ -12,7 +12,6 @@ import {
   redirects,
 } from '@/db/schema';
 import type { EndUserRow } from '@/db/schema';
-import { endUserPublicPayload } from '@/lib/enduser-auth';
 import { countryCodeFromRequestHeaders } from '@/lib/enduser-request-country';
 import { userIdentifierForEndUser } from '@/lib/enduser-merge';
 import {
@@ -23,13 +22,15 @@ import { formatExtensionCampaignScalar } from '@/lib/extension-campaign-scalars'
 import {
   currentLocalMinutesSinceMidnight,
   filterQualifyingExtensionCampaigns,
-  isExtensionUserNewForAdBlock,
+  isExtensionUserNew,
   type ExtensionCampaignQualifyContext,
-} from '@/lib/extension-ad-block-qualify';
+} from '@/lib/extension-campaign-qualify';
 import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import {
   getCachedActiveCampaigns,
   setCachedActiveCampaigns,
+  getCachedCampaignDomains,
+  setCachedCampaignDomains,
   EXTENSION_CAMPAIGNS_KEYS,
 } from '@/lib/redis';
 import { computeTargetListMembershipForUser } from '@/lib/target-list-queries';
@@ -134,8 +135,14 @@ export type ExtensionInitRedirectItem = {
   frequencyCount: number | null;
 };
 
+/**
+ * SSE `init` event body. Intentionally omits profile fields (email, plan, dates, etc.): those are
+ * available from `GET /api/extension/auth/me` for the popup/auth flow. Only the public extension
+ * `identifier` is included here for correlation with telemetry and local state.
+ */
 export type ExtensionLiveInitPayload = {
-  user: ReturnType<typeof endUserPublicPayload> | null;
+  /** Same as `end_users.identifier` when connected as an end user; null if no user context. */
+  identifier: string | null;
   /**
    * Canonical hostnames derived from platforms referenced by active campaigns.
    * The extension uses this to decide when to call `serve` for ads, popups, and notifications.
@@ -313,7 +320,7 @@ export async function buildExtensionCampaignQualifyContext(
   return {
     now,
     currentMinutes: currentLocalMinutesSinceMidnight(now),
-    isNewUser: isExtensionUserNewForAdBlock(anchor),
+    isNewUser: isExtensionUserNew(anchor),
     endUserGeoCountry,
     viewCountByCampaignId,
     targetListMembership,
@@ -360,14 +367,22 @@ export function buildCampaignUsedDomains(
 /**
  * Fetches active campaign rows + all platforms from DB/cache, then derives campaign-used domains.
  * Exported for use by the SSE `platforms_updated` handler in the live route.
+ *
+ * The result is itself cached with a short TTL so that SSE fan-out to many subscribers
+ * doesn't recompute it N times per admin edit.
  */
 export async function buildCampaignUsedDomainsFromDB(): Promise<string[]> {
+  const cached = await getCachedCampaignDomains();
+  if (cached) return cached;
+
   const now = new Date();
   const [campaignRows, allPlatforms] = await Promise.all([
     fetchActiveCampaignRowsForExtension(now),
     fetchExtensionPlatformsList(),
   ]);
-  return buildCampaignUsedDomains(campaignRows, allPlatforms);
+  const domains = buildCampaignUsedDomains(campaignRows, allPlatforms);
+  await setCachedCampaignDomains(domains);
+  return domains;
 }
 
 // ============ Campaign payload hydration (used by serve handlers + SSE init) ============
@@ -623,7 +638,13 @@ async function buildQualifiedRedirectItemsForUser(
       date_till: c.endDate,
       count: ctx.viewCountByCampaignId.get(c.id) ?? 0,
       frequencyType: c.frequencyType,
-      frequencyCount: c.frequencyCount,
+      // Per EXTENSION_CLIENT_CONTRACT.md: frequencyCount is meaningful only for
+      // frequencyType === 'specific_count'. For every other type the cap is
+      // either unbounded ('always' / 'full_day' / 'time_based') or implicit
+      // ('only_once' → hard-coded 1), so the extension should see `null` to
+      // avoid confusing stale DB values (e.g. after switching away from
+      // 'specific_count').
+      frequencyCount: c.frequencyType === 'specific_count' ? c.frequencyCount : null,
     });
   }
   return redirectItems;
@@ -648,13 +669,14 @@ export async function buildExtensionLiveInit(endUser: EndUserRow | null): Promis
   const domains = buildCampaignUsedDomains(allCampaignRows, allPlatforms);
 
   if (!endUser) {
-    return { user: null, domains, redirects: [] };
+    return { identifier: null, domains, redirects: [] };
   }
 
   const redirectItems = await buildQualifiedRedirectItemsForUser(endUser, allCampaignRows);
 
+  // SSE `init` exposes only `identifier` here — not email/plan/dates (see `ExtensionLiveInitPayload`).
   return {
-    user: endUserPublicPayload(endUser),
+    identifier: userIdentifierForEndUser(endUser),
     domains,
     redirects: redirectItems,
   };

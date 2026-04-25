@@ -25,8 +25,8 @@ describe('end events campaign owner access', () => {
     expect(endEventsRequiresCampaignOwnerJoin('admin')).toBe(false);
   });
 
-  it('does not require campaign join for user (workspace-wide event reads)', () => {
-    expect(endEventsRequiresCampaignOwnerJoin('user')).toBe(false);
+  it('requires campaign scope for user (own campaigns only via eventsAccessScopeForRole)', () => {
+    expect(endEventsRequiresCampaignOwnerJoin('user')).toBe(true);
   });
 
   it('exposes INNER JOIN condition for non-admin queries', () => {
@@ -71,7 +71,7 @@ describe('getAccessibleCampaignById', () => {
     expect(result).toBeNull();
   });
 
-  it('returns the row for non-admin when campaign exists but createdBy is someone else', async () => {
+  it('returns null for non-admin when campaign exists but createdBy is someone else (IDOR guard)', async () => {
     const row = {
       id: '550e8400-e29b-41d4-a716-446655440000',
       createdBy: 'other-user',
@@ -85,7 +85,7 @@ describe('getAccessibleCampaignById', () => {
     } as NonNullable<SessionWithRole>;
 
     const result = await getAccessibleCampaignById(session, row.id);
-    expect(result).toEqual(row);
+    expect(result).toBeNull();
   });
 
   it('returns the row for admin when the DB returns a match', async () => {

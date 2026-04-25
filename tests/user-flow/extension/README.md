@@ -1,14 +1,15 @@
 # Extension user-flow tests
 
-Integration tests for the **extension** surface: register/login, domains, ad-block, campaign frequency caps, and event typing in the database.
+Integration tests for the **extension** v2 surface: `live` (SSE), `serve`, `events`, register/login, campaign frequency caps, and event typing in the database. Legacy `GET /api/extension/domains` and `POST /api/extension/ad-block` are removed; the old `extension-user-flow` suite was removed.
 
 ## Files
 
 | File | What it validates |
 |------|-------------------|
-| `extension-user-flow.integration.test.ts` | HTTP: `POST` register/login, `GET` domains, `POST` ad-block with bearer token; asserts status codes, token shape, JSON arrays. |
-| `extension-event-types-frequency.integration.test.ts` | Creates campaigns, fires many ad-block requests, asserts per-campaign caps and `enduser_events` row types/counts via Drizzle + live DB. |
+| `extension-event-types-frequency.integration.test.ts` | Creates campaigns, uses v2 `serve` / `events` flows, asserts per-campaign caps and `enduser_events` row types/counts via Drizzle + live DB. |
 | `extension-multi-user-frequency-load.integration.test.ts` | 10 users × 15 requests per campaign type (`ads`, `popup`, `notification`, `redirect`), asserts per-user `specific_count` cap and DB event rows; runs types sequentially. |
+| `extension-sse-live-connection.integration.test.ts` | SSE `GET /api/extension/live` first event shape and stream behavior. |
+| `extension-auth-anonymous-merge.integration.test.ts` | Extension auth + anonymous user merge behavior (opt-in). |
 | `extension-v2-http.integration.test.ts` | v2: `GET /live` (first SSE `init`), `POST /serve`, `POST /events` validation and auth. |
 
 ## Prerequisites
@@ -30,7 +31,7 @@ pnpm test:integration
 Single file:
 
 ```bash
-EXTENSION_INTEGRATION=1 pnpm vitest run tests/user-flow/extension/extension-user-flow.integration.test.ts
+EXTENSION_INTEGRATION=1 pnpm vitest run tests/user-flow/extension/extension-v2-http.integration.test.ts
 ```
 
 Multi-user frequency load only (long-running):
@@ -60,27 +61,15 @@ pnpm test:integration -- --reporter=verbose
 
 [`docs/test-extension-log.sh`](../../../docs/test-extension-log.sh) — curl-style flow with `jq` (documented separately).
 
-## Flow (HTTP suite)
+## Flow (v2 HTTP + SSE smoke)
 
-```mermaid
-sequenceDiagram
-  participant T as Vitest
-  participant API as Next API
-  T->>API: POST register
-  API-->>T: 201 token user
-  T->>API: POST login
-  API-->>T: 200 token
-  T->>API: GET domains
-  API-->>T: domains array
-  T->>API: POST ad-block Bearer token
-  API-->>T: ads notifications arrays
-```
+- Register or login, open `GET /api/extension/live` (SSE) for `init` + domains/redirects, then `POST /api/extension/serve` and `POST /api/extension/events` as in `extension-v2-http.integration.test.ts`.
 
 ## Flow (frequency + DB suite)
 
 ```mermaid
 flowchart TD
-  setup[Create user campaigns in DB] --> loop[Many ad-block requests]
+  setup[Create user campaigns in DB] --> loop[Many serve or events requests]
   loop --> count[Count enduser_events rows]
   count --> cap[Assert cap at specific_count]
   cap --> types[Assert ad vs notification typing]

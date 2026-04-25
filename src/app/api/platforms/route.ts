@@ -4,18 +4,25 @@ import { platforms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { normalizeDomain } from '@/lib/domain-utils';
+import { parsePagination } from '@/lib/pagination';
 import { queryRedirectConflictForPlatform } from '@/lib/redirect-platform-conflict-queries';
 import { publishPlatformsUpdated } from '@/lib/redis';
 
 // GET all platforms
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const sessionWithRole = await getSessionWithRole();
     if (!sessionWithRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const allPlatforms = await db.select().from(platforms).orderBy(platforms.createdAt);
+    const { limit, offset } = parsePagination(request);
+    const allPlatforms = await db
+      .select()
+      .from(platforms)
+      .orderBy(platforms.createdAt)
+      .limit(limit)
+      .offset(offset);
     return NextResponse.json(allPlatforms);
   } catch (error) {
     console.error('Error fetching platforms:', error);

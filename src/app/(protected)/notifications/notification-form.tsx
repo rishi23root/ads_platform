@@ -58,7 +58,7 @@ export function NotificationForm({ notification, mode, onSuccess, onCancel }: No
         router.refresh();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save notification');
+      toast.error(error instanceof Error ? error.message : 'Could not save this notification. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -9,6 +9,11 @@ import {
   publishRealtimeNotification,
   publishRedirectsUpdated,
 } from '@/lib/redis';
+// NOTE: `publishCampaignUpdated` already causes every SSE-connected extension to rebuild
+// its cached `{ domains, redirects }` state (see `buildCampaignUpdateForExtension`), so
+// we do NOT additionally fire `redirects_updated` on a campaign update — that would
+// duplicate the same refresh. `publishRedirectsUpdated` is still used on permanent delete
+// where no campaign row remains to hang the update off.
 import { ensureCampaignStatusDeletedEnumReady } from '@/lib/db/run-migrate';
 import { resolveCampaignTargetAudienceForUpdate } from '@/lib/campaign-api-target-payload';
 
@@ -215,6 +220,9 @@ export async function PUT(
       }
     }
 
+    // Single event per UI update action. The `campaign_updated` payload
+    // already contains the fresh `{ domains, redirects }` for this user,
+    // so redirect-type campaigns do NOT need an extra `redirects_updated`.
     await publishCampaignUpdated(id);
 
     const campaign = await getCampaignWithRelations(id);
@@ -251,11 +259,11 @@ export async function DELETE(
     }
 
     if (isPermanentDeleteQuery(request)) {
-      await publishCampaignUpdated(id);
       await db.transaction(async (tx) => {
         await tx.delete(enduserEvents).where(eq(enduserEvents.campaignId, id));
         await tx.delete(campaigns).where(eq(campaigns.id, id));
       });
+      await publishCampaignUpdated(id);
       await publishRedirectsUpdated();
       return NextResponse.json({ success: true, permanent: true });
     }
@@ -266,11 +274,11 @@ export async function DELETE(
 
     const now = new Date();
     await ensureCampaignStatusDeletedEnumReady();
-    await publishCampaignUpdated(id);
     await db
       .update(campaigns)
       .set({ status: 'deleted', updatedAt: now })
       .where(eq(campaigns.id, id));
+    await publishCampaignUpdated(id);
     return NextResponse.json({ success: true, softDeleted: true });
   } catch (error) {
     console.error('Error deleting campaign:', error);

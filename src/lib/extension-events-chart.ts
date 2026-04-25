@@ -113,6 +113,39 @@ export function extensionEventChartAllZeros(rows: ExtensionEventChartRow[]): boo
   return rows.every((d) => extensionEventRowTotal(d) === 0);
 }
 
+/** Y-axis tick labels for extension event charts (compact k/M for large values). */
+export function formatExtensionChartYAxisTick(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `${Math.round(n / 1_000)}k`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(Math.round(n));
+}
+
+/**
+ * Integer Y ticks that hug the data (~3% headroom, ≤5 steps).
+ * Uses 1/2/5-style steps so ticks stay legible with Recharts (see YAxis interval).
+ */
+export function niceExtensionChartYAxisTicks(max: number): number[] {
+  if (!Number.isFinite(max) || max <= 0) return [0];
+  const ceil = Math.ceil(max * 1.03);
+  const candidates = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
+  let step = 1;
+  for (const c of candidates) {
+    if (Math.ceil(ceil / c) <= 5) {
+      step = c;
+      break;
+    }
+  }
+  if (step === 1 && ceil > 50000) step = Math.ceil(ceil / 5 / 1000) * 1000;
+  const top = Math.ceil(ceil / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  return ticks;
+}
+
 export function formatExtensionChartTooltipDate(label: unknown, fallbackIsoDate: string): string {
   if (label == null) return fallbackIsoDate;
   const d = new Date(String(label));

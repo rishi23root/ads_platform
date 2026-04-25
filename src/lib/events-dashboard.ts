@@ -2,7 +2,18 @@ import 'server-only';
 
 import { database as db } from '@/db';
 import { campaigns, endUsers, enduserEvents } from '@/db/schema';
-import { and, desc, eq, gte, ilike, inArray, lte, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { getQueryParam } from '@/lib/url-search-params';
 import { escapeCsvCell, escapeIlikePattern } from '@/lib/utils';
 
@@ -65,10 +76,30 @@ export function endEventsOwnedCampaignJoin(userId: string) {
   return and(eq(campaigns.id, enduserEvents.campaignId), eq(campaigns.createdBy, userId));
 }
 
-/** Reserved for future roles that should only see events on campaigns they own. */
+/**
+ * Non-admins only see `enduser_events` rows tied to campaigns they created
+ * (filters out unrelated campaigns and unscoped rows with no `campaign_id`).
+ */
 export function endEventsRequiresCampaignOwnerJoin(role: 'user' | 'admin'): boolean {
-  void role;
-  return false;
+  return role === 'user';
+}
+
+/** When `admin`, no extra filter. When `user`, only events for campaigns `createdBy` this staff user. */
+export function eventsAccessScopeForRole(
+  role: 'user' | 'admin',
+  userId: string
+): SQL | undefined {
+  if (role === 'admin') return undefined;
+  return and(
+    isNotNull(enduserEvents.campaignId),
+    inArray(
+      enduserEvents.campaignId,
+      db
+        .select({ id: campaigns.id })
+        .from(campaigns)
+        .where(eq(campaigns.createdBy, userId))
+    )
+  );
 }
 
 async function uuidToUserIdentifier(uuid: string): Promise<string | undefined> {
@@ -139,8 +170,14 @@ function buildFilterConditions(filters: EventsDashboardFilters): SQL[] {
   return conditions;
 }
 
-function filterWhereClause(filters: EventsDashboardFilters): SQL | undefined {
+function filterWhereClause(
+  filters: EventsDashboardFilters,
+  role: 'user' | 'admin',
+  userId: string
+): SQL | undefined {
   const filtersList = buildFilterConditions(filters);
+  const scope = eventsAccessScopeForRole(role, userId);
+  if (scope) filtersList.push(scope);
   return filtersList.length ? and(...filtersList) : undefined;
 }
 
@@ -171,7 +208,7 @@ export async function aggregateEventStats(
       visit: 0,
     };
   }
-  const fw = filterWhereClause(f);
+  const fw = filterWhereClause(f, role, userId);
   const base = db
     .select({
       total: sql<number>`count(*)::int`,
@@ -184,8 +221,6 @@ export async function aggregateEventStats(
     })
     .from(enduserEvents);
 
-  void role;
-  void userId;
   const rows = fw ? await base.where(fw) : await base;
   return rows[0] as EventStatsRow | undefined;
 }
@@ -197,10 +232,8 @@ export async function countEvents(
 ): Promise<number> {
   const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
   if (impossible) return 0;
-  const fw = filterWhereClause(f);
+  const fw = filterWhereClause(f, role, userId);
   const base = db.select({ count: sql<number>`count(*)::int` }).from(enduserEvents);
-  void role;
-  void userId;
   const rows = fw ? await base.where(fw) : await base;
   return Number(rows[0]?.count ?? 0);
 }
@@ -242,13 +275,11 @@ export async function listEventsPage(
 ): Promise<EventLogRow[]> {
   const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
   if (impossible) return [];
-  const fw = filterWhereClause(f);
+  const fw = filterWhereClause(f, role, userId);
   const base = db
     .select(eventLogSelect)
     .from(enduserEvents)
     .leftJoin(endUsers, eq(endUsers.identifier, enduserEvents.userIdentifier));
-  void role;
-  void userId;
   const filtered = fw ? base.where(fw) : base;
   return (await filtered
     .orderBy(desc(enduserEvents.createdAt))
@@ -269,9 +300,7 @@ export async function listEventsPageWithCount(
   const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
   if (impossible) return { rows: [], totalCount: 0 };
 
-  const fw = filterWhereClause(f);
-  void role;
-  void userId;
+  const fw = filterWhereClause(f, role, userId);
 
   const base = db
     .select({
@@ -302,13 +331,11 @@ export async function listEventsForExport(
 ): Promise<EventLogRow[]> {
   const { filters: f, impossible } = await resolveEventsDashboardFilters(filters);
   if (impossible) return [];
-  const fw = filterWhereClause(f);
+  const fw = filterWhereClause(f, role, userId);
   const base = db
     .select(eventLogSelect)
     .from(enduserEvents)
     .leftJoin(endUsers, eq(endUsers.identifier, enduserEvents.userIdentifier));
-  void role;
-  void userId;
   const filtered = fw ? base.where(fw) : base;
   return (await filtered.orderBy(desc(enduserEvents.createdAt))) as EventLogRow[];
 }

@@ -2,7 +2,7 @@
 
 # Simulate extension POST /api/extension/serve calls using a real extension user session.
 # Requires: EXTENSION_EMAIL, EXTENSION_PASSWORD (same account you'd use in the extension).
-# Uses public GET /api/extension/domains for a hostname (not admin /api/platforms).
+# Test domain: example.com (in production, hostnames come from SSE init.domains, not a domains HTTP route).
 #
 # Target host: BASE_URL if set, else BETTER_AUTH_BASE_URL or BETTER_AUTH_URL (same as app auth).
 
@@ -15,7 +15,7 @@ if [ -z "$BASE_URL" ]; then
 fi
 
 echo "=========================================="
-echo "Extension Ad Block Test Script"
+echo "Extension v2 serve test script"
 echo "=========================================="
 echo "Base URL: $BASE_URL"
 echo ""

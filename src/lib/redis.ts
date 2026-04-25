@@ -1,6 +1,7 @@
 import { createClient } from 'redis';
+import { logger } from '@/lib/logger';
+import { env } from '@/lib/config/env';
 
-const REDIS_URL = process.env.REDIS_URL;
 const REALTIME_CHANNEL = 'realtime:notifications';
 /** @deprecated Legacy string counter; removed on reset. Active count uses REALTIME_LEASES_KEY. */
 const REALTIME_COUNT_KEY = 'realtime:connections';
@@ -9,11 +10,16 @@ const REALTIME_LEASES_KEY = 'realtime:connections:leases';
 /** If no heartbeat refresh in this window, the lease is dropped (crashed server / lost TCP). */
 const REALTIME_LEASE_MAX_STALE_MS = 120_000;
 
-/** Interval for `/api/extension/live` to refresh the Redis lease while the stream stays open. */
-export const REALTIME_LIVE_LEASE_HEARTBEAT_MS = 40_000;
+/**
+ * Interval for `/api/extension/live` to send an SSE keep-alive comment and refresh the Redis lease.
+ *
+ * Default 15 s — many reverse proxies (ALB/Cloudflare/Nginx) idle-close at 30–60 s; a 15 s
+ * heartbeat stays comfortably under the tightest default. Override with `REALTIME_LIVE_HEARTBEAT_MS`.
+ */
+export const REALTIME_LIVE_LEASE_HEARTBEAT_MS = env.REALTIME_LIVE_HEARTBEAT_MS;
 const REALTIME_COUNT_CHANNEL = 'realtime:connection_count';
 
-/** JSON list of `{ id, domain }` for platforms; used by extension ad-block hot path */
+/** JSON list of `{ id, domain }` for platforms; used by extension serve/live hot path */
 const EXTENSION_PLATFORMS_KEY = 'extension:platforms:list';
 const EXTENSION_PLATFORMS_TTL_SEC = 60;
 
@@ -21,6 +27,14 @@ const EXTENSION_PLATFORMS_TTL_SEC = 60;
 const EXTENSION_CAMPAIGNS_KEY_ALL = 'extension:campaigns:active:all';
 const EXTENSION_CAMPAIGNS_KEY_REDIRECTS = 'extension:campaigns:active:redirects';
 const EXTENSION_CAMPAIGNS_TTL_SEC = 20;
+
+/**
+ * Shared domains list cache — the campaign-referenced canonical domains emitted in SSE `init.domains`
+ * and `platforms_updated` / `campaign_updated` payloads. TTL is intentionally short: fan-out to many
+ * SSE subscribers is the problem, not coherency.
+ */
+const EXTENSION_DOMAINS_KEY = 'extension:campaigns:domains';
+const EXTENSION_DOMAINS_TTL_SEC = 5;
 
 export const EXTENSION_CAMPAIGNS_KEYS = {
   all: EXTENSION_CAMPAIGNS_KEY_ALL,
@@ -32,7 +46,8 @@ export { REALTIME_CHANNEL, REALTIME_COUNT_CHANNEL };
 export type CachedPlatformRow = { id: string; domain: string };
 
 function getRedisUrl(): string | undefined {
-  return REDIS_URL && REDIS_URL.trim() !== '' ? REDIS_URL : undefined;
+  const url = env.REDIS_URL;
+  return url && url.trim() !== '' ? url : undefined;
 }
 
 type RedisClient = Awaited<ReturnType<typeof createClient>>;
@@ -54,13 +69,13 @@ export async function getRedisClient(): Promise<RedisClient | null> {
   _clientPromise = (async () => {
     try {
       const client = createClient({ url }).on('error', (err) =>
-        console.error('[redis]', err)
+        logger.error('[redis] client error', err)
       );
       await client.connect();
       _client = client;
       return client;
     } catch (err) {
-      console.error('[redis] Failed to connect:', err);
+      logger.error('[redis] failed to connect', err);
       _clientPromise = null;
       return null;
     }
@@ -79,7 +94,7 @@ export async function createRedisClient(): Promise<RedisClient | null> {
   if (!url) return null;
 
   const client = createClient({ url }).on('error', (err) =>
-    console.error('[redis]', err)
+    logger.error('[redis] dedicated client error', err)
   );
   await client.connect();
   return client;
@@ -110,7 +125,7 @@ export async function invalidatePlatformListCache(): Promise<void> {
 }
 
 /**
- * Read active platforms from short-lived cache (extension ad-block).
+ * Read active platforms from short-lived cache (extension serve/live).
  * Returns null on miss or if Redis unavailable.
  */
 export async function getCachedPlatformList(): Promise<CachedPlatformRow[] | null> {
@@ -144,11 +159,14 @@ export async function setCachedPlatformList(rows: CachedPlatformRow[]): Promise<
 
 /**
  * Publish a platforms_updated event so extension SSE subscribers can refresh their domains.
- * Clears the platform-list cache so the next ad-block request reloads from DB.
+ * Clears the platform-list cache so the next serve/live request reloads from DB.
  * No-op if Redis is not configured (cache helpers no-op too).
  */
 export async function publishPlatformsUpdated(): Promise<void> {
-  await invalidatePlatformListCache();
+  await Promise.all([
+    invalidatePlatformListCache(),
+    invalidateActiveCampaignCache(),
+  ]);
   await publishRealtimeNotification(JSON.stringify({ type: 'platforms_updated' }));
 }
 
@@ -193,7 +211,39 @@ export async function invalidateActiveCampaignCache(): Promise<void> {
     await client.del([
       EXTENSION_CAMPAIGNS_KEY_ALL,
       EXTENSION_CAMPAIGNS_KEY_REDIRECTS,
+      EXTENSION_DOMAINS_KEY,
     ]);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Shared cache for the campaign-used canonical domain list. This is user-agnostic,
+ * so SSE fan-out for `platforms_updated` / `campaign_updated` can reuse one DB read
+ * across every connected extension stream during the TTL window.
+ */
+export async function getCachedCampaignDomains(): Promise<string[] | null> {
+  const client = await getRedisClient();
+  if (!client) return null;
+  try {
+    const raw = await client.get(EXTENSION_DOMAINS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((d): d is string => typeof d === 'string');
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedCampaignDomains(domains: string[]): Promise<void> {
+  const client = await getRedisClient();
+  if (!client) return;
+  try {
+    await client.set(EXTENSION_DOMAINS_KEY, JSON.stringify(domains), {
+      EX: EXTENSION_DOMAINS_TTL_SEC,
+    });
   } catch {
     /* ignore */
   }
@@ -212,18 +262,12 @@ export async function publishCampaignUpdated(campaignId: string): Promise<void> 
 
 /** Admin changed redirect rows — extension SSE should refresh cached redirect rules. */
 export async function publishRedirectsUpdated(): Promise<void> {
-  await publishRealtimeNotification(JSON.stringify({ type: 'redirects_updated' }));
+  await Promise.all([
+    invalidateActiveCampaignCache(),
+    publishRealtimeNotification(JSON.stringify({ type: 'redirects_updated' })),
+  ]);
 }
 
-/** Admin changed ad creative rows — informational for extension cache. */
-export async function publishAdsUpdated(): Promise<void> {
-  await publishRealtimeNotification(JSON.stringify({ type: 'ads_updated' }));
-}
-
-/** Admin changed notification creative rows — informational for extension cache. */
-export async function publishNotificationsUpdated(): Promise<void> {
-  await publishRealtimeNotification(JSON.stringify({ type: 'notifications_updated' }));
-}
 
 /**
  * Publish the current connection count to REALTIME_COUNT_CHANNEL so dashboard SSE subscribers get updates.

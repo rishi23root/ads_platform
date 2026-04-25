@@ -26,4 +26,21 @@ describe('redirectSourceToHostnameRegex', () => {
       );
     }
   });
+
+  describe('ndtv.com includeSubdomains=true verification', () => {
+    const re = () => new RegExp(redirectSourceToHostnameRegex('ndtv.com', true), 'i');
+
+    it('matches www.ndtv.com', () => expect(re().test('www.ndtv.com')).toBe(true));
+    it('matches ndtv.com', () => expect(re().test('ndtv.com')).toBe(true));
+    it('matches m.ndtv.com', () => expect(re().test('m.ndtv.com')).toBe(true));
+    it('rejects evil.com', () => expect(re().test('evil.com')).toBe(false));
+  });
+
+  describe('www.ndtv.com source + includeSubdomains=true (root-anchored regex)', () => {
+    const re = () => new RegExp(redirectSourceToHostnameRegex('www.ndtv.com', true), 'i');
+
+    it('matches www.ndtv.com', () => expect(re().test('www.ndtv.com')).toBe(true));
+    it('matches ndtv.com', () => expect(re().test('ndtv.com')).toBe(true));
+    it('matches m.ndtv.com', () => expect(re().test('m.ndtv.com')).toBe(true));
+  });
 });

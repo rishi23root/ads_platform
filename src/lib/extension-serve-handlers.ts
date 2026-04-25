@@ -3,7 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { database as db } from '@/db';
 import { enduserEvents, type EndUserRow } from '@/db/schema';
-import { filterQualifyingExtensionCampaigns } from '@/lib/extension-ad-block-qualify';
+import { filterQualifyingExtensionCampaigns } from '@/lib/extension-campaign-qualify';
 import { campaignSelectRowToRuleFields } from '@/lib/extension-campaign-rule-mapper';
 import type {
   CampaignSelectRow,

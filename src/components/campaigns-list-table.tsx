@@ -21,11 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconPencil, IconSearch, IconX } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
 import {
   campaignAudienceLabel,
+  campaignFrequencyTypeDisplayName,
   campaignScheduleBrief,
   campaignScheduleTableTextColorClass,
   campaignStatusBadgeVariant,
@@ -77,10 +80,10 @@ function isWithinInteractiveControl(target: EventTarget | null): boolean {
 }
 
 function audienceHint(targetListName: string | null, audience: string): string {
-  if (targetListName) return `Target list: ${targetListName}`;
+  if (targetListName) return `Audience list: ${targetListName}`;
   return audience === 'new_users'
-    ? 'Target audience: new users (within 7 days)'
-    : 'Target audience: all users';
+    ? 'Audience: new users (within 7 days)'
+    : 'Audience: all users';
 }
 
 export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTableProps) {
@@ -202,7 +205,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
         </div>
       </div>
 
-      <div className="relative z-0 rounded-md border bg-background">
+      <DataTableSurface variant="delivery" className="relative z-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -211,24 +214,48 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
               <TableHead>Status</TableHead>
               <TableHead className="min-w-[9rem]">Schedule</TableHead>
               <TableHead>Frequency</TableHead>
-              <TableHead className="min-w-[10rem]">Target list</TableHead>
+              <TableHead className="min-w-[10rem]">Audience list</TableHead>
               <TableHead>Targets</TableHead>
               {isAdmin && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {campaigns.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={colCount} className="py-8 text-center text-muted-foreground">
-                  No campaigns yet. {isAdmin && 'Create your first campaign.'}
-                </TableCell>
-              </TableRow>
+              <EmptyTableRow
+                colSpan={colCount}
+                title="No campaigns yet"
+                description={
+                  isAdmin
+                    ? 'A campaign decides what to show, who sees it, and when.'
+                    : 'Your team has not created any campaigns yet.'
+                }
+                action={
+                  isAdmin ? (
+                    <Button asChild size="sm">
+                      <Link href="/campaigns/new">Create your first campaign</Link>
+                    </Button>
+                  ) : null
+                }
+              />
             ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={colCount} className="py-8 text-center text-muted-foreground">
-                  No campaigns match your filters.
-                </TableCell>
-              </TableRow>
+              <EmptyTableRow
+                colSpan={colCount}
+                title="No campaigns match your filters"
+                description="Try changing the search, type, or status."
+                action={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearch('');
+                      setTypeFilter('all');
+                      setStatusFilter('all');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
+              />
             ) : (
               filtered.map((c) => {
                 const schedulePastEndWhileActive = isCampaignActiveButScheduleEnded(
@@ -289,7 +316,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                       {campaignScheduleBrief(c.startDate, c.endDate)}
                     </TableCell>
                     <TableCell className="text-sm capitalize">
-                      {c.frequencyType.replace(/_/g, ' ')}
+                      {campaignFrequencyTypeDisplayName(c.frequencyType)}
                     </TableCell>
                     <TableCell className="max-w-[14rem]">
                       {c.targetListId ? (
@@ -304,7 +331,7 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                             </Link>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="max-w-xs">
-                            Target list: {c.targetListName ?? 'Unknown list'} — open list
+                            Audience list: {c.targetListName ?? 'Unknown list'} — open list
                           </TooltipContent>
                         </Tooltip>
                       ) : (
@@ -357,9 +384,9 @@ export function CampaignsListTable({ campaigns, isAdmin }: CampaignsListTablePro
                 );
               })
             )}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
+      </DataTableSurface>
     </div>
   );
 }

@@ -75,10 +75,10 @@ export function EndUserRowActions({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete extension user?</AlertDialogTitle>
+            <AlertDialogTitle>Delete app user?</AlertDialogTitle>
             <AlertDialogDescription className="leading-relaxed">
-              This removes <span className="font-medium text-foreground">{deleteLabel}</span> and
-              their session, payments, and related rows. This cannot be undone.
+              This removes <span className="font-medium text-foreground">{deleteLabel}</span>{' '}
+              along with their sign-in session, payments, and related data. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">

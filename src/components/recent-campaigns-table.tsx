@@ -20,6 +20,8 @@ import {
   campaignStatusBadgeVariant,
   isCampaignActiveButScheduleEnded,
 } from '@/lib/campaign-display';
+import { dataTableHeadMutedClassName } from '@/lib/admin-ui';
+import { cn } from '@/lib/utils';
 
 export interface RecentCampaignRow {
   id: string;
@@ -28,6 +30,7 @@ export interface RecentCampaignRow {
   status: string;
   startDate: Date | string | null;
   endDate: Date | string | null;
+  impressions: number;
 }
 
 interface RecentCampaignsTableProps {
@@ -63,33 +66,32 @@ export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTabl
       <Table className="w-full table-auto">
         <TableHeader>
           <TableRow>
-            <TableHead className="text-muted-foreground text-xs font-normal">
-              Name
+            <TableHead className={dataTableHeadMutedClassName}>Name</TableHead>
+            <TableHead className={dataTableHeadMutedClassName}>Type</TableHead>
+            <TableHead className={dataTableHeadMutedClassName}>Status</TableHead>
+            <TableHead className={dataTableHeadMutedClassName}>Schedule</TableHead>
+            <TableHead
+              className={cn(dataTableHeadMutedClassName, 'text-right tabular-nums')}
+            >
+              Impressions
             </TableHead>
-            <TableHead className="text-muted-foreground text-xs font-normal">
-              Type
-            </TableHead>
-            <TableHead className="text-muted-foreground text-xs font-normal">
-              Status
-            </TableHead>
-            <TableHead className="text-muted-foreground text-xs font-normal">
-              Schedule
-            </TableHead>
-            <TableHead className="text-right text-muted-foreground text-xs font-normal">
-              Actions
-            </TableHead>
+            {isAdmin && (
+              <TableHead className={cn(dataTableHeadMutedClassName, 'text-right')}>
+                Actions
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
           {campaigns.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={isAdmin ? 6 : 5}
                 className="py-8 text-center text-muted-foreground"
               >
                 No campaigns yet.
                 {isAdmin
-                  ? ' Create one to start serving ads and notifications through the extension.'
+                  ? ' Create your first campaign to start delivering ads and notifications.'
                   : ' Campaigns created by your team will appear here.'}
               </TableCell>
             </TableRow>
@@ -144,17 +146,20 @@ export function RecentCampaignsTable({ campaigns, isAdmin }: RecentCampaignsTabl
                   >
                     {scheduleLabel}
                   </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <div className="flex justify-end gap-1">
-                      {isAdmin && (
+                  <TableCell className="py-2 text-right tabular-nums text-sm text-muted-foreground">
+                    {c.impressions.toLocaleString()}
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell className="py-2 text-right">
+                      <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" asChild>
                           <Link href={`/campaigns/${c.id}/edit`} aria-label="Edit campaign">
                             <IconPencil className="h-4 w-4" />
                           </Link>
                         </Button>
-                      )}
-                    </div>
-                  </TableCell>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })

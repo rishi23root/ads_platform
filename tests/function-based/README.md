@@ -8,7 +8,7 @@ Pure functions, URL/env resolution, and parsing logic. **No** live HTTP or datab
 |------|-------------------|
 | `extension-user-subscription.test.ts` | Subscription date helpers in `@/lib/extension-user-subscription` (trial/paid windows, env `DEFAULT_PAID_SUBSCRIPTION_DAYS`). |
 | `extension-test-base-url.test.ts` | `extensionIntegrationBaseUrl()` in [`../support/extension-test-base-url.ts`](../support/extension-test-base-url.ts) — env precedence, trailing slashes, empty when integration flag off. |
-| `extension-ad-block-qualify.test.ts` | Campaign qualification helpers in `@/lib/extension-ad-block-qualify` (schedule, audience, frequency, time, country, parsing). |
+| `extension-campaign-qualify.test.ts` | Campaign qualification helpers in `@/lib/extension-campaign-qualify` (schedule, audience, frequency, time, country, parsing). |
 | `end-users-dashboard-filters.test.ts` | Filter parsing and chip labels for end-user dashboard (`@/lib/end-users-dashboard` with mocked `@/db`). |
 
 ## How to run
@@ -20,7 +20,7 @@ pnpm vitest run tests/function-based/
 Single file:
 
 ```bash
-pnpm vitest run tests/function-based/extension-ad-block-qualify.test.ts
+pnpm vitest run tests/function-based/extension-campaign-qualify.test.ts
 ```
 
 Same as `pnpm test:extension` for the qualify suite only.

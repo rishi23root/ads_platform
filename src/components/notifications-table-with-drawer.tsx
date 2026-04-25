@@ -15,7 +15,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconPlus, IconPencil } from '@tabler/icons-react';
 import { DeleteButton } from '@/components/delete-button';
+import { PageHeader } from '@/components/page-header';
 import { NotificationEditDrawer } from '@/components/notification-edit-drawer';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Notification } from '@/db/schema';
 
@@ -67,49 +70,62 @@ export function NotificationsTableWithDrawer({
   return (
     <>
       <div className="flex flex-col gap-6 p-4 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-            <p className="text-sm text-muted-foreground">Manage global system notifications</p>
-          </div>
-          {isAdmin ? (
-            <Button asChild className="shrink-0 self-start sm:self-auto">
-              <Link href="/notifications/new">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Add Notification
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+        <PageHeader
+          title="Notifications"
+          description="In-app messages your campaigns can deliver to users."
+          actions={
+            isAdmin ? (
+              <Button asChild className="shrink-0 self-start sm:self-auto">
+                <Link href="/notifications/new">
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  New notification
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
 
-        <div className="overflow-hidden rounded-lg border border-border/80 bg-card/30 shadow-sm">
-          <Table className="table-fixed">
+        <DataTableSurface>
+          <Table className="w-full min-w-[56rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Title</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Message</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">CTA Link</TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 text-center font-medium tabular-nums">
+                <TableHead className="h-12 min-w-[8rem] px-4 py-3 font-medium">Title</TableHead>
+                <TableHead className="h-12 min-w-[12rem] px-4 py-3 font-medium">Message</TableHead>
+                <TableHead className="h-12 min-w-[10rem] px-4 py-3 font-medium">CTA Link</TableHead>
+                <TableHead className="h-12 w-24 px-4 py-3 text-center font-medium tabular-nums">
                   Campaigns
                 </TableHead>
-                <TableHead className="h-12 min-w-0 px-4 py-3 font-medium">Created</TableHead>
+                <TableHead className="h-12 min-w-[12rem] whitespace-nowrap px-4 py-3 font-medium">
+                  Created
+                </TableHead>
                 {isAdmin ? (
-                  <TableHead className="h-12 min-w-0 px-4 py-3 text-right font-medium">Actions</TableHead>
+                  <TableHead className="h-12 w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right font-medium">
+                    Actions
+                  </TableHead>
                 ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {notifications.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={colCount}
-                    className="px-4 py-12 text-center text-sm text-muted-foreground"
-                  >
-                    {isAdmin
-                      ? 'No notifications found. Create your first notification.'
-                      : 'No notifications found.'}
-                  </TableCell>
-                </TableRow>
+                <EmptyTableRow
+                  colSpan={colCount}
+                  title="No notifications yet"
+                  description={
+                    isAdmin
+                      ? 'In-app messages your campaigns can deliver to users.'
+                      : 'Your team has not created any notifications yet.'
+                  }
+                  action={
+                    isAdmin ? (
+                      <Button asChild size="sm">
+                        <Link href="/notifications/new">
+                          <IconPlus className="mr-2 h-4 w-4" />
+                          Create your first notification
+                        </Link>
+                      </Button>
+                    ) : null
+                  }
+                />
               ) : (
                 notifications.map((notification) => (
                   <TableRow
@@ -185,14 +201,14 @@ export function NotificationsTableWithDrawer({
                       </div>
                     </TableCell>
                     <TableCell
-                      className="min-w-0 px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
+                      className="min-w-[12rem] whitespace-nowrap px-4 py-3 align-middle text-sm tabular-nums text-muted-foreground"
                       title="UTC"
                     >
                       {formatDateTimeUtcEnGb(notification.createdAt)}
                     </TableCell>
                     {isAdmin ? (
                       <TableCell
-                        className="min-w-0 px-4 py-3 text-right align-middle"
+                        className="w-28 min-w-[7rem] whitespace-nowrap px-3 py-3 text-right align-middle"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex justify-end gap-1">
@@ -230,7 +246,7 @@ export function NotificationsTableWithDrawer({
               )}
             </TableBody>
           </Table>
-        </div>
+        </DataTableSurface>
       </div>
 
       <NotificationEditDrawer

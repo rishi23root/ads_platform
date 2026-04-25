@@ -4,7 +4,6 @@ import { notifications } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { getLinkedCampaignCountForNotificationId } from '@/lib/campaign-linked-counts';
-import { publishNotificationsUpdated } from '@/lib/redis';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -74,7 +73,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
 
-    await publishNotificationsUpdated();
     return NextResponse.json(updatedNotification);
   } catch (error) {
     console.error('Error updating notification:', error);
@@ -114,7 +112,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
 
-    await publishNotificationsUpdated();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting notification:', error);

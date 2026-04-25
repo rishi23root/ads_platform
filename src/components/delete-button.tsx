@@ -61,7 +61,7 @@ const entityLabels = {
 
 const campaignDualDialogCopy = {
   title: 'Remove or permanently delete campaign?',
-  permanentSuccess: 'Campaign and all related extension events were permanently removed.',
+    permanentSuccess: 'Campaign and all related activity were permanently removed.',
   permanentError: 'Failed to permanently delete campaign',
 } as const;
 
@@ -209,8 +209,8 @@ function CampaignAdminDeleteButton({
               <IconAlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
               <p className="min-w-0 leading-relaxed">
                 <span className="font-medium text-foreground">Already removed from delivery.</span>{' '}
-                Soft-remove is not available. Use permanent delete only if you want to erase this campaign and its
-                extension events.
+                You can only permanently delete it now, which also erases this campaign&apos;s
+                activity history.
               </p>
             </div>
           )}
@@ -236,8 +236,8 @@ function CampaignAdminDeleteButton({
                       Remove from delivery
                     </h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      Soft-delete stops the extension from serving this campaign. The record and event history stay in
-                      the database for reporting.
+                      Stops delivering this campaign to users. The campaign and its activity
+                      history stay here for reporting.
                     </p>
                   </div>
                   <Button
@@ -280,9 +280,9 @@ function CampaignAdminDeleteButton({
                       Permanently delete
                     </h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      Deletes the campaign row and{' '}
-                      <span className="font-medium text-foreground">all extension events</span> linked to it. This
-                      cannot be undone.
+                      Deletes the campaign and{' '}
+                      <span className="font-medium text-foreground">all activity</span> linked to
+                      it. This cannot be undone.
                     </p>
                   </div>
                   <Button

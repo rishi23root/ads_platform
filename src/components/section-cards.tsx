@@ -51,12 +51,15 @@ export function SectionCards({
       )}
     >
       {extraCard}
-      <Card className="border-border bg-card/40 py-4 shadow-none">
+      <Card
+        className="app-rise-in border-border bg-card/40 py-4 shadow-none"
+        style={{ animationDelay: '0ms' }}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Active campaigns</CardTitle>
           <Badge
             variant="outline"
-            className="bg-green-500/10 text-green-600 dark:text-green-400"
+            className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           >
             <IconTrendingUp className="size-3" />
             {activePercentage}%
@@ -69,7 +72,10 @@ export function SectionCards({
           </p>
         </CardContent>
       </Card>
-      <Card className="border-border bg-card/40 py-4 shadow-none">
+      <Card
+        className="app-rise-in border-border bg-card/40 py-4 shadow-none"
+        style={{ animationDelay: '60ms' }}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Campaign impressions</CardTitle>
           <IconEye className="h-4 w-4 text-muted-foreground" aria-hidden />
@@ -81,9 +87,12 @@ export function SectionCards({
           </p>
         </CardContent>
       </Card>
-      <Card className="border-border bg-card/40 py-4 shadow-none">
+      <Card
+        className="app-rise-in border-border bg-card/40 py-4 shadow-none"
+        style={{ animationDelay: '120ms' }}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Extension users</CardTitle>
+          <CardTitle className="text-sm font-medium">App users</CardTitle>
           <IconUsers className="h-4 w-4 text-muted-foreground" aria-hidden />
         </CardHeader>
         <CardContent>
@@ -91,12 +100,15 @@ export function SectionCards({
           <p className="text-xs leading-relaxed text-muted-foreground">
             {liveUsers !== undefined
               ? `${liveUsers} live right now`
-              : extensionUsersCaption ?? 'All extension registered accounts'}
+              : extensionUsersCaption ?? 'All registered app user accounts'}
           </p>
         </CardContent>
       </Card>
       {paymentsThisMonth ? (
-        <Card className="border-border bg-card/40 py-4 shadow-none">
+        <Card
+          className="app-rise-in border-border bg-card/40 py-4 shadow-none"
+          style={{ animationDelay: '180ms' }}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Payments this month</CardTitle>
             {paymentsThisMonth.changePercent != null ? (
@@ -105,7 +117,7 @@ export function SectionCards({
                 className={cn(
                   'tabular-nums',
                   paymentsThisMonth.changePercent >= 0
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                     : 'bg-red-500/10 text-red-600 dark:text-red-400'
                 )}
               >

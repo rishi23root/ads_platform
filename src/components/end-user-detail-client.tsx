@@ -48,6 +48,7 @@ import {
 } from "@/components/end-user-analytics-section"
 import { EndUserEventsTimeline } from "@/components/end-user-events-timeline"
 import type { EndUserDashboardSnapshot } from "@/lib/end-user-dashboard-types"
+import { adminPanelCardClassName, dataTableHeadMutedClassName } from "@/lib/admin-ui"
 import { getCountryName } from "@/lib/countries"
 import { cn } from "@/lib/utils"
 import {
@@ -69,44 +70,23 @@ import {
 import { toast } from "sonner"
 import type { PaymentRow } from "@/db/schema"
 import { isoOrDateToLocalDatetimeValue, localDatetimeToIso } from "@/lib/datetime-local-format"
+import { END_USER_DISPLAY_LOCALE } from "@/lib/end-user-detail-formatting"
+import { UserDetailKpiStrip } from "@/components/user-detail-kpi-strip"
 
-export type EndUserDetailInitialUser = {
-  id: string
-  email: string | null
-  identifier: string | null
-  name: string | null
-  plan: string
-  banned: boolean
-  country: string | null
-  startDate: string
-  endDate: string | null
-  createdAt: string
-  updatedAt: string
-}
+import type {
+  EndUserApiRow,
+  EndUserDetailInitialUser,
+  EndUserPaymentListItem,
+} from "@/components/end-user-detail-types"
 
-export type EndUserPaymentListItem = {
-  id: string
-  endUserId: string
-  amount: number
-  currency: string
-  status: string
-  description: string | null
-  paymentDate: string
-  createdAt: string
-}
+export type { EndUserApiRow, EndUserDetailInitialUser, EndUserPaymentListItem } from "@/components/end-user-detail-types"
 
-export type EndUserApiRow = {
-  id: string
-  email: string | null
-  identifier: string | null
-  name: string | null
-  plan: string
-  banned: boolean
-  country: string | null
-  startDate: Date | string
-  endDate: Date | string | null
-  createdAt: Date | string
-  updatedAt: Date | string
+/** Normalizes API date fields; invalid values yield "" (avoid Invalid Date.toISOString RangeError). */
+function apiDateFieldToIso(value: Date | string | number | null | undefined): string {
+  if (value == null || value === "") return ""
+  const d =
+    value instanceof Date ? value : new Date(value as string | number)
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString()
 }
 
 function mapApiUserToInitial(u: EndUserApiRow): EndUserDetailInitialUser {
@@ -118,17 +98,10 @@ function mapApiUserToInitial(u: EndUserApiRow): EndUserDetailInitialUser {
     plan: String(u.plan),
     banned: Boolean(u.banned),
     country: u.country,
-    startDate:
-      typeof u.startDate === "string" ? u.startDate : new Date(u.startDate).toISOString(),
-    endDate: u.endDate
-      ? typeof u.endDate === "string"
-        ? u.endDate
-        : new Date(u.endDate).toISOString()
-      : null,
-    createdAt:
-      typeof u.createdAt === "string" ? u.createdAt : new Date(u.createdAt).toISOString(),
-    updatedAt:
-      typeof u.updatedAt === "string" ? u.updatedAt : new Date(u.updatedAt).toISOString(),
+    startDate: apiDateFieldToIso(u.startDate) || "",
+    endDate: u.endDate ? apiDateFieldToIso(u.endDate) || null : null,
+    createdAt: apiDateFieldToIso(u.createdAt) || "",
+    updatedAt: apiDateFieldToIso(u.updatedAt) || "",
   }
 }
 
@@ -145,27 +118,6 @@ function paymentsToRows(items: EndUserPaymentListItem[]): PaymentRow[] {
   }))
 }
 
-const DISPLAY_LOCALE = "en-US"
-
-function formatWhen(iso: string | null) {
-  if (!iso) return "—"
-  try {
-    return new Date(iso).toLocaleString(DISPLAY_LOCALE, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    })
-  } catch {
-    return "—"
-  }
-}
-
-function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat(DISPLAY_LOCALE, {
-    style: "currency",
-    currency: currency || "USD",
-    minimumFractionDigits: 2,
-  }).format(cents / 100)
-}
 
 type TabKey = "overview" | "events" | "manage"
 
@@ -226,7 +178,7 @@ export function EndUserDetailClient({
       user.name?.trim() ||
       user.email ||
       user.identifier ||
-      "Extension user",
+      "App user",
     [user.email, user.name, user.identifier],
   )
 
@@ -303,7 +255,7 @@ export function EndUserDetailClient({
 
       const emailTrim = email.trim().toLowerCase()
       if (emailTrim === "" && !user.identifier) {
-        toast.error("Email is required unless this user has an identifier (anonymous).")
+        toast.error("Email is required unless this app user is anonymous (signed in by device).")
         setSaving(false)
         return
       }
@@ -355,7 +307,7 @@ export function EndUserDetailClient({
   }
 
   const onDeleteUser = async () => {
-    if (!confirm("Delete this extension user? Session, payments, and linked rows will be removed.")) {
+    if (!confirm("Delete this app user? Their sign-in session, payments, and related data will also be removed.")) {
       return
     }
     setDeleting(true)
@@ -435,7 +387,7 @@ export function EndUserDetailClient({
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
               <div>
-                <CardTitle>Edit extension user</CardTitle>
+                <CardTitle>Edit app user</CardTitle>
                 <CardDescription>Update profile, subscription window, and password.</CardDescription>
               </div>
               <Button
@@ -452,7 +404,7 @@ export function EndUserDetailClient({
             <CardContent>
               <form onSubmit={onSave} className="grid w-full gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="end-user-identifier">Identifier</Label>
+                  <Label htmlFor="end-user-identifier">App user ID</Label>
                   <Input
                     id="end-user-identifier"
                     readOnly
@@ -462,7 +414,7 @@ export function EndUserDetailClient({
                     aria-readonly
                   />
                   <p className="text-xs text-muted-foreground">
-                    Stable external id from the extension.
+                    Unique ID from the extension. Stays the same across sessions.
                   </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -500,7 +452,7 @@ export function EndUserDetailClient({
                       <div className="space-y-0.5">
                         <Label htmlFor="end-user-banned" className="text-base">Banned</Label>
                         <p className="text-xs text-muted-foreground">
-                          Banned users cannot use extension Bearer sessions.
+                          Banned users can&apos;t sign in or use the extension.
                         </p>
                       </div>
                       <Switch id="end-user-banned" checked={banned} onCheckedChange={setBanned} disabled={saving} />
@@ -508,7 +460,7 @@ export function EndUserDetailClient({
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="country">Country (ISO2)</Label>
+                  <Label htmlFor="country">Country code</Label>
                   <Input
                     id="country"
                     placeholder="e.g. US"
@@ -645,46 +597,6 @@ export function EndUserDetailClient({
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- *  Lifetime KPI strip — above tabs, full width
- * ──────────────────────────────────────────────────────────────────────────── */
-
-function UserDetailKpiStrip({
-  user,
-  dashboard,
-}: {
-  user: EndUserDetailInitialUser
-  dashboard: EndUserDashboardSnapshot
-}) {
-  const { payments, events } = dashboard
-
-  const paymentsLabel =
-    payments.completedCount > 0
-      ? `${formatMoney(payments.completedSumAmount, payments.currency)} · ${payments.completedCount} paid`
-      : "No completed payments"
-
-  const overviewCreated = useMemo(
-    () => new Date(user.createdAt).toLocaleString(DISPLAY_LOCALE, { dateStyle: "medium", timeStyle: "short" }),
-    [user.createdAt],
-  )
-
-  return (
-    <section aria-label="User overview metrics" className="mt-6 w-full min-w-0">
-      <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-5">
-        <KpiStat label="Lifetime events" value={events.total.toLocaleString(DISPLAY_LOCALE)} />
-        <KpiStat
-          label="First activity"
-          value={formatWhen(events.firstAt)}
-          hint={events.total === 0 ? "No telemetry yet" : undefined}
-        />
-        <KpiStat label="Last activity" value={formatWhen(events.lastAt)} />
-        <KpiStat label="Payments" value={paymentsLabel} />
-        <KpiStat label="Member since" value={overviewCreated} />
-      </div>
-    </section>
-  )
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
  *  Overview bento grid — chart + profile + domains + campaigns
  * ──────────────────────────────────────────────────────────────────────────── */
 
@@ -706,13 +618,13 @@ function OverviewBentoGrid({
   const { events } = dashboard
 
   const overviewStart = useMemo(
-    () => new Date(user.startDate).toLocaleString(DISPLAY_LOCALE, { dateStyle: "medium", timeStyle: "short" }),
+    () => new Date(user.startDate).toLocaleString(END_USER_DISPLAY_LOCALE, { dateStyle: "medium", timeStyle: "short" }),
     [user.startDate],
   )
   const overviewEnd = useMemo(
     () =>
       user.endDate
-        ? new Date(user.endDate).toLocaleString(DISPLAY_LOCALE, { dateStyle: "medium", timeStyle: "short" })
+        ? new Date(user.endDate).toLocaleString(END_USER_DISPLAY_LOCALE, { dateStyle: "medium", timeStyle: "short" })
         : null,
     [user.endDate],
   )
@@ -724,14 +636,12 @@ function OverviewBentoGrid({
     [onTopDomainsChange],
   )
 
-  const thMuted = "text-muted-foreground text-xs font-normal"
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Row 1: 70/30 split (7fr / 3fr); both cards stretch to the same row height */}
-      <div className="grid min-h-[20rem] gap-3 lg:grid-cols-[7fr_3fr] lg:items-stretch">
+      {/* Row 1: 70/30 split — shorter chart stack on mobile; fixed row height on lg+ for bento */}
+      <div className="grid gap-3 min-h-[13rem] sm:min-h-[16rem] lg:min-h-[20rem] lg:grid-cols-[7fr_3fr] lg:items-stretch">
         {/* Chart card — 70% */}
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/40 shadow-none">
+        <div className={cn("flex min-h-0 flex-col", adminPanelCardClassName)}>
           <EndUserAnalyticsSection
             endUserId={user.id}
             embedded
@@ -742,13 +652,18 @@ function OverviewBentoGrid({
         </div>
 
         {/* Profile card — 30%, full height of row */}
-        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-card/40 px-4 pb-4 pt-4 shadow-none">
+        <div
+          className={cn(
+            "flex min-h-0 flex-col px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4",
+            adminPanelCardClassName,
+          )}
+        >
           <h3 className="text-sm font-medium flex items-center gap-2 text-foreground shrink-0">
             <IconUser className="h-4 w-4 text-muted-foreground" aria-hidden />
             Profile &amp; access
           </h3>
           <dl className="mt-3 flex min-h-0 flex-1 flex-col gap-3 text-sm">
-            <ProfileRow label="Identifier" value={user.identifier} mono />
+            <ProfileRow label="App user ID" value={user.identifier} mono />
             <ProfileRow label="Name" value={user.name?.trim()} />
             <ProfileRow label="Email" value={user.email} />
             <div className="grid grid-cols-[minmax(5.5rem,7.5rem)_minmax(0,1fr)] items-center gap-x-3">
@@ -780,10 +695,13 @@ function OverviewBentoGrid({
         </div>
       </div>
 
-      {/* Row 2: Campaigns (3/5) + Top domains (2/5) — card shell + stretch for bento */}
+      {/* Row 2: Campaigns (3/5) + Top domains (2/5) — equal height on lg+ (taller column sets row height) */}
       <div className="grid gap-3 lg:grid-cols-5 lg:items-stretch">
         <section
-          className="lg:col-span-3 flex min-h-[280px] flex-col rounded-xl border border-border bg-card/40 px-4 pb-3 pt-3 shadow-none lg:h-full lg:min-h-[min(320px,40vh)]"
+          className={cn(
+            "flex h-full min-h-0 flex-col px-3 pb-2.5 pt-2.5 sm:px-4 sm:pb-3 sm:pt-3 lg:col-span-3",
+            adminPanelCardClassName,
+          )}
           aria-labelledby="user-campaigns-heading"
         >
           <h3
@@ -798,10 +716,10 @@ function OverviewBentoGrid({
               ? `Top ${Math.min(20, dashboard.campaigns.length)} by event volume (${events.distinctCampaignsWithEvents} distinct).`
               : "No campaign-linked events yet."}
           </p>
-          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+          <div className="mt-2 flex min-h-0 flex-1 flex-col max-lg:flex-none sm:mt-3">
             {dashboard.campaigns.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center rounded-lg bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                No rows to show.
+              <div className="flex flex-1 items-center justify-center rounded-lg bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground lg:min-h-[8rem] lg:py-8">
+                Nothing to show yet.
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-auto">
@@ -809,9 +727,18 @@ function OverviewBentoGrid({
                   <Table className="w-full table-auto">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className={thMuted}>Campaign</TableHead>
-                        <TableHead className={`${thMuted} text-right tabular-nums`}>Events</TableHead>
-                        <TableHead className={`${thMuted} w-16 text-right`}>
+                        <TableHead className={dataTableHeadMutedClassName}>Campaign</TableHead>
+                        <TableHead
+                          className={cn(
+                            dataTableHeadMutedClassName,
+                            "text-right tabular-nums",
+                          )}
+                        >
+                          Events
+                        </TableHead>
+                        <TableHead
+                          className={cn(dataTableHeadMutedClassName, "w-16 text-right")}
+                        >
                           <span className="sr-only">Open</span>
                         </TableHead>
                       </TableRow>
@@ -821,12 +748,12 @@ function OverviewBentoGrid({
                         <TableRow key={row.campaignId}>
                           <TableCell className="py-2 font-medium text-sm">{row.campaignName}</TableCell>
                           <TableCell className="py-2 text-right tabular-nums text-sm">
-                            {row.eventCount.toLocaleString(DISPLAY_LOCALE)}
+                            {row.eventCount.toLocaleString(END_USER_DISPLAY_LOCALE)}
                           </TableCell>
                           <TableCell className="py-2 text-right">
                             <Link
                               href={`/campaigns/${row.campaignId}`}
-                              className="text-sm text-primary underline-offset-4 hover:underline"
+                              className="text-sm text-foreground underline-offset-4 hover:underline"
                             >
                               View
                             </Link>
@@ -841,8 +768,11 @@ function OverviewBentoGrid({
           </div>
         </section>
 
-               <section
-          className="lg:col-span-2 flex min-h-[280px] flex-col rounded-xl border border-border bg-card/40 px-4 pb-3 pt-3 shadow-none lg:h-full lg:min-h-[min(320px,40vh)]"
+        <section
+          className={cn(
+            "flex h-full min-h-0 flex-col px-3 pb-2.5 pt-2.5 sm:px-4 sm:pb-3 sm:pt-3 lg:col-span-2",
+            adminPanelCardClassName,
+          )}
           aria-labelledby="user-top-domains-heading"
         >
           <h3
@@ -855,15 +785,15 @@ function OverviewBentoGrid({
           <p className="mt-1 text-xs text-muted-foreground leading-snug">
             Most visited &amp; served domains in current chart range.
           </p>
-          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+          <div className="mt-2 flex min-h-0 flex-1 flex-col max-lg:flex-none sm:mt-3">
             {topDomains === null ? (
-              <div className="flex flex-1 flex-col justify-center space-y-2 rounded-lg bg-muted/10 p-4">
+              <div className="flex min-h-[7rem] flex-1 flex-col justify-center space-y-2 rounded-lg bg-muted/10 p-3 sm:min-h-[8rem] sm:p-4">
                 <Skeleton className="h-8 w-full rounded-md" />
                 <Skeleton className="h-8 w-full rounded-md" />
                 <Skeleton className="h-8 w-full rounded-md" />
               </div>
             ) : topDomains.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center rounded-lg bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+              <div className="flex flex-1 items-center justify-center rounded-lg bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground lg:min-h-[8rem] lg:py-8">
                 No domain data in this range.
               </div>
             ) : (
@@ -872,9 +802,23 @@ function OverviewBentoGrid({
                   <Table className="w-full table-auto">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className={thMuted}>Domain</TableHead>
-                        <TableHead className={`${thMuted} text-right tabular-nums`}>Visits</TableHead>
-                        <TableHead className={`${thMuted} text-right tabular-nums`}>Served</TableHead>
+                        <TableHead className={dataTableHeadMutedClassName}>Domain</TableHead>
+                        <TableHead
+                          className={cn(
+                            dataTableHeadMutedClassName,
+                            "text-right tabular-nums",
+                          )}
+                        >
+                          Visits
+                        </TableHead>
+                        <TableHead
+                          className={cn(
+                            dataTableHeadMutedClassName,
+                            "text-right tabular-nums",
+                          )}
+                        >
+                          Served
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -993,7 +937,7 @@ function ManageTabContent({
                 <span className="truncate">Payment records ({paymentTotal.toLocaleString()})</span>
               </CardTitle>
               <CardDescription className="text-xs leading-snug">
-                Manual payment entries for this extension user.
+                Manual payment entries for this app user.
               </CardDescription>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -1042,10 +986,10 @@ function ManageTabContent({
             <div className="min-w-0 flex-1 space-y-1.5">
               <CardTitle className="flex items-center gap-2 text-base font-semibold leading-none">
                 <IconDevices className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate">Extension session</span>
+                <span className="truncate">Sign-in session</span>
               </CardTitle>
               <CardDescription className="text-xs leading-snug">
-                One bearer session at a time. Revoking ends access until the user signs in again.
+                One active session at a time. Revoking ends access until the user signs in again.
               </CardDescription>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -1075,7 +1019,7 @@ function ManageTabContent({
                   size="icon-sm"
                   className="shrink-0 text-muted-foreground"
                   aria-expanded={sessionsOpen}
-                  aria-label={sessionsOpen ? "Collapse extension session" : "Expand extension session"}
+                  aria-label={sessionsOpen ? "Collapse sign-in session" : "Expand sign-in session"}
                 >
                   <IconChevronDown
                     className={cn(
@@ -1110,20 +1054,6 @@ function ManageTabContent({
 /* ────────────────────────────────────────────────────────────────────────────
  *  Shared sub-components
  * ──────────────────────────────────────────────────────────────────────────── */
-
-function KpiStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card/40 px-3 py-3 shadow-none sm:px-4">
-      <p className="text-xs font-medium leading-snug text-muted-foreground">{label}</p>
-      <p className="mt-1 min-w-0 break-words text-lg font-bold tabular-nums leading-tight text-balance text-foreground sm:text-xl">
-        {value}
-      </p>
-      {hint ? (
-        <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p>
-      ) : null}
-    </div>
-  )
-}
 
 function ProfileRow({
   label,
@@ -1163,10 +1093,9 @@ function ProfileEventCountriesRow({
   if (countries.length === 0) {
     return (
       <div className={cn("min-w-0 rounded-lg bg-muted/25 px-3 py-3", className)}>
-        <p className="text-xs font-medium text-muted-foreground">Countries (from extension events)</p>
+        <p className="text-xs font-medium text-muted-foreground">Countries (from user activity)</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          No country recorded on events yet. The extension stores an ISO2 code on each event when
-          available.
+          No country recorded yet. We save a country code on each event when it&apos;s available.
         </p>
       </div>
     )
@@ -1174,7 +1103,7 @@ function ProfileEventCountriesRow({
 
   return (
     <div className={cn("min-w-0 rounded-lg bg-muted/25 px-3 py-3", className)}>
-      <p className="text-xs font-medium text-muted-foreground">Countries (from extension events)</p>
+      <p className="text-xs font-medium text-muted-foreground">Countries (from user activity)</p>
       <ul className="mt-2 flex flex-col gap-3" role="list">
         {countries.map(({ code, eventCount }) => {
           const name = getCountryName(code)
@@ -1191,7 +1120,7 @@ function ProfileEventCountriesRow({
                   </Badge>
                 ) : null}
                 <span className="text-xs tabular-nums text-muted-foreground">
-                  {eventCount.toLocaleString(DISPLAY_LOCALE)} events
+                  {eventCount.toLocaleString(END_USER_DISPLAY_LOCALE)} events
                 </span>
               </div>
             </li>
