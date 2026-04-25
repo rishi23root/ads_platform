@@ -133,6 +133,12 @@ export type ExtensionInitRedirectItem = {
   count: number;
   frequencyType: string;
   frequencyCount: number | null;
+  /**
+   * Daily time-of-day window when `frequencyType === 'time_based'`. `null` for other types
+   * (stale values cleared like `frequencyCount` for non-`specific_count`).
+   */
+  timeStart: string | null;
+  timeEnd: string | null;
 };
 
 /**
@@ -645,6 +651,8 @@ async function buildQualifiedRedirectItemsForUser(
       // avoid confusing stale DB values (e.g. after switching away from
       // 'specific_count').
       frequencyCount: c.frequencyType === 'specific_count' ? c.frequencyCount : null,
+      timeStart: c.frequencyType === 'time_based' ? c.timeStart : null,
+      timeEnd: c.frequencyType === 'time_based' ? c.timeEnd : null,
     });
   }
   return redirectItems;

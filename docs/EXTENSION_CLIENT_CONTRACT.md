@@ -6,6 +6,10 @@ This document describes every API the browser extension must interact with. It i
 
 Append-only revision history. Newest session first.
 
+### 2026-04-25 — SSE redirect items: time window for `time_based`
+
+- **Additive — `init.redirects` / `redirects_updated` / `campaign_updated` redirect items.** Each item now includes **`timeStart`** and **`timeEnd`** (strings or `null`). When `frequencyType === "time_based"`, use the same daily window semantics as the server (minutes since midnight; overnight when the start time is later in the day than the end time, e.g. 22:00–06:00). For any other `frequencyType`, both are `null` (stale values are not sent). The extension can enforce or double-check the window locally. See [Redirect rules (SSE only)](#redirect-rules-sse-only).
+
 ### 2026-04-21 — Hardening pass: Content-Type, rate limits, CORS, SSE heartbeat
 
 - **Additive — `415 Unsupported Media Type`.** `POST /api/extension/serve` and `POST /api/extension/events` now require `Content-Type: application/json`. A missing or wrong header returns `415 { "error": "Content-Type must be application/json" }` instead of the old `400 { "error": "Invalid JSON" }`. The extension already sends the correct header; no client change needed.
@@ -136,8 +140,10 @@ Sent as soon as the connection is established. Shape:
       "target_url": "https://example.com/landing",
       "date_till": "2026-12-31T23:59:59.000Z",  // null = no end date
       "count": 3,          // this user's prior event count for this campaign
-      "frequencyType": "specific_count",   // "always" | "only_once" | "specific_count" | "time_based"
-      "frequencyCount": 10  // null unless frequencyType === "specific_count"
+      "frequencyType": "specific_count",   // "always" | "only_once" | "specific_count" | "time_based" | "full_day"
+      "frequencyCount": 10,  // null unless frequencyType === "specific_count"
+      "timeStart": null,   // null unless frequencyType === "time_based" (daily window start, e.g. "09:00:00")
+      "timeEnd": null      // null unless frequencyType === "time_based" (daily window end; if start > end, window spans midnight)
     }
   ]
 }
@@ -194,7 +200,7 @@ Response `200`:
 
 The server writes one **`enduser_events` row per creative returned** (`type`: `ad`, `popup`, or `notification`) using the request domain and campaign id, so the dashboard reflects serves without relying on the extension to report them. Optional `type` in the request body only affects which buckets are populated; empty buckets are `[]`.
 
-**Targeting and caps are server-only:** Do not expect `targetAudience`, `platformIds`, `countryCodes`, `frequencyType`, schedule fields, or similar on each item — only qualifying rows are returned. **Redirects** are not in this response; they are delivered over SSE (`init.redirects`, `redirects_updated`, etc.) and still include per-rule cap metadata (`frequencyType`, `frequencyCount`, `count`) because the client applies those rules without calling `serve` on each navigation.
+**Targeting and caps are server-only:** Do not expect `targetAudience`, `platformIds`, `countryCodes`, `frequencyType`, schedule fields, or similar on each item — only qualifying rows are returned. **Redirects** are not in this response; they are delivered over SSE (`init.redirects`, `redirects_updated`, etc.) and still include per-rule cap metadata (`frequencyType`, `frequencyCount`, `count`, and for `time_based` also `timeStart` / `timeEnd`) because the client applies those rules without calling `serve` on each navigation.
 
 ```jsonc
 {
@@ -244,6 +250,10 @@ You may still use `POST /api/extension/events` with `type: "notification"` for c
 ## Redirect rules (SSE only)
 
 Qualifying redirect rows are **only** on the live stream: `init.redirects`, the full list again on `redirects_updated`, and optional single-rule patches on `campaign_updated`. There is **no** dedicated HTTP route for redirect rules—only these SSE payloads. Unlike `POST /api/extension/serve`, each redirect item includes **`frequencyType`**, **`frequencyCount`**, and **`count`** so the extension can enforce caps locally while matching the hostname without a round-trip.
+
+When `frequencyType === "time_based"`, items also include **`timeStart`** and **`timeEnd`**: time-of-day strings in the same form the server uses (see campaign `time_start` / `time_end` in the dashboard), typically `HH:MM` or `HH:MM:SS`. Parse each to *minutes since local midnight* (0–1440) and test inclusion in \[`timeStart`, `timeEnd`\]. If `timeStart` ≤ `timeEnd`, the window is same calendar day; if `timeStart` \> `timeEnd`, the window is overnight (in-window when current minutes ≥ `timeStart` **or** ≤ `timeEnd`). For any other `frequencyType`, `timeStart` and `timeEnd` are `null`. Use the same rules as the server’s `passesTimeBasedWindow` / `parseCampaignTimeToMinutes` logic (see `src/lib/extension-campaign-qualify.ts` in this repo) so behavior stays aligned.
+
+**Note:** The server also pre-filters `time_based` campaigns by *its* clock when building the list; the extension can still use `timeStart` / `timeEnd` to enforce or re-check the window on the user’s side when a rule is present.
 
 Match the visited hostname locally with `new RegExp(domain_regex, 'i')` and navigate immediately when matched. Do **not** wait for a server round-trip before navigating.
 
