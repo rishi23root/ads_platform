@@ -97,9 +97,9 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
     },
     {
       id: "delivery-live",
-      name: "Live",
+      name: "Delivery Live",
       shortcut: ["d", "l"],
-      keywords: "live connections sse extension realtime sessions online heartbeat",
+      keywords: "delivery live connections sse extension realtime sessions online heartbeat",
       section: "Delivery",
       icon: <IconBroadcast className="size-4" />,
       perform: () => router.push("/delivery/live"),
