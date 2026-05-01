@@ -33,12 +33,18 @@ const envSchema = z.object({
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 30))
     .pipe(z.number().int().positive().max(3650)),
-  // SSE heartbeat cadence (ms). Lower values keep idle proxies alive; higher values reduce chatter.
+  // SSE heartbeat cadence (ms). Default 1 min — lower values help strict proxies; higher values reduce traffic.
   REALTIME_LIVE_HEARTBEAT_MS: z
     .string()
     .optional()
-    .transform((val) => (val ? parseInt(val, 10) : 15_000))
+    .transform((val) => (val ? parseInt(val, 10) : 60_000))
     .pipe(z.number().int().positive().max(600_000)),
+  /** Drop extension `/api/extension/live` Redis lease if no heartbeat in this window (ms). Default 5 min. */
+  REALTIME_LEASE_MAX_STALE_MS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 300_000))
+    .pipe(z.number().int().positive().min(30_000).max(3_600_000)),
 });
 
 type Env = z.infer<typeof envSchema>;

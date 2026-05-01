@@ -9,6 +9,7 @@ import {
 } from '@/lib/extension-live-init';
 import {
   createRedisClient,
+  formatLiveLeaseMember,
   REALTIME_CHANNEL,
   REALTIME_LIVE_LEASE_HEARTBEAT_MS,
   refreshLiveConnectionLease,
@@ -62,7 +63,8 @@ export async function GET(request: NextRequest) {
       const redisMain: RedisClientNonNull | null = await createRedisClient();
       let subscriber: Awaited<ReturnType<RedisClientNonNull['duplicate']>> | null = null;
       let finished = false;
-      let leaseId: string | null = null;
+      /** Composite Redis lease member `${endUserId}|${leaseId}` */
+      let leaseMember: string | null = null;
       let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
       const cleanup = async () => {
@@ -89,13 +91,13 @@ export async function GET(request: NextRequest) {
         } catch {
           /* ignore */
         }
-        if (leaseId != null) {
+        if (leaseMember != null) {
           try {
-            await removeLiveConnectionLease(leaseId);
+            await removeLiveConnectionLease(leaseMember);
           } catch {
             /* ignore */
           }
-          leaseId = null;
+          leaseMember = null;
         }
         try {
           controller.close();
@@ -120,8 +122,9 @@ export async function GET(request: NextRequest) {
         logger.debug('[api/extension/live] open', { endUserId });
         const init = await buildExtensionLiveInit(endUser);
         if (!safeEnqueue(sseEvent('init', JSON.stringify(init)))) return;
-        leaseId = randomUUID();
-        await registerLiveConnectionLease(leaseId);
+        const tabLeaseId = randomUUID();
+        leaseMember = formatLiveLeaseMember(endUserId, tabLeaseId);
+        await registerLiveConnectionLease(leaseMember);
 
         const sseCommentPing = sseCommentLine('ping');
         heartbeatTimer = setInterval(() => {
@@ -132,8 +135,8 @@ export async function GET(request: NextRequest) {
             }
             return;
           }
-          if (leaseId != null) {
-            void refreshLiveConnectionLease(leaseId);
+          if (leaseMember != null) {
+            void refreshLiveConnectionLease(leaseMember);
           }
         }, REALTIME_LIVE_LEASE_HEARTBEAT_MS);
 

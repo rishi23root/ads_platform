@@ -12,5 +12,6 @@ declare namespace NodeJS {
     ADMIN_PASSWORD?: string;
     ENDUSER_SESSION_DAYS?: string;
     REALTIME_LIVE_HEARTBEAT_MS?: string;
+    REALTIME_LEASE_MAX_STALE_MS?: string;
   }
 }

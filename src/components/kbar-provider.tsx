@@ -17,6 +17,7 @@ import {
 import {
   IconAd2,
   IconBell,
+  IconBroadcast,
   IconDashboard,
   IconDeviceDesktop,
   IconChartBar,
@@ -93,6 +94,15 @@ function buildActions(role: Role, router: ReturnType<typeof useRouter>): Action[
       section: "Delivery",
       icon: <IconListCheck className="size-4" />,
       perform: () => router.push("/target-lists"),
+    },
+    {
+      id: "delivery-live",
+      name: "Live",
+      shortcut: ["d", "l"],
+      keywords: "live connections sse extension realtime sessions online heartbeat",
+      section: "Delivery",
+      icon: <IconBroadcast className="size-4" />,
+      perform: () => router.push("/delivery/live"),
     },
   ]
 

@@ -20,6 +20,8 @@ This README is the **front door**: deeper behavior lives in [`docs/`](./docs/) a
 | Realtime / cache (optional) | [Redis](https://redis.io/) — live SSE, rate limits, hot-path caches ([`src/lib/redis.ts`](./src/lib/redis.ts)) |
 | Tests | [Vitest](https://vitest.dev/) |
 
+**Extension JSON caches:** When `REDIS_URL` is set, active campaign rows, platform lists, and derived campaign-domain lists for extension hot paths are cached as JSON in Redis with a **12-hour TTL** (`EXTENSION_JSON_CACHE_TTL_SEC` in [`src/lib/redis.ts`](./src/lib/redis.ts)); admin mutations still invalidate keys immediately. If you change Postgres **outside** those APIs, stale reads can persist until TTL expiry or manual `DEL` on `extension:*` keys.
+
 ---
 
 ## High-level architecture

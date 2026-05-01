@@ -374,8 +374,8 @@ export function buildCampaignUsedDomains(
  * Fetches active campaign rows + all platforms from DB/cache, then derives campaign-used domains.
  * Exported for use by the SSE `platforms_updated` handler in the live route.
  *
- * The result is itself cached with a short TTL so that SSE fan-out to many subscribers
- * doesn't recompute it N times per admin edit.
+ * The result is cached in Redis (`extension:campaigns:domains`) so SSE fan-out to many subscribers
+ * does not recompute it on every message until invalidation or optional TTL expiry (see `redis.ts`).
  */
 export async function buildCampaignUsedDomainsFromDB(): Promise<string[]> {
   const cached = await getCachedCampaignDomains();

@@ -3,38 +3,46 @@ import { logger } from '@/lib/logger';
 import { env } from '@/lib/config/env';
 
 const REALTIME_CHANNEL = 'realtime:notifications';
-/** @deprecated Legacy string counter; removed on reset. Active count uses REALTIME_LEASES_KEY. */
-const REALTIME_COUNT_KEY = 'realtime:connections';
-/** Sorted set: member = lease id, score = last heartbeat unix ms */
+/** Sorted set: member = `${endUserId}|${leaseId}`, score = last heartbeat unix ms */
 const REALTIME_LEASES_KEY = 'realtime:connections:leases';
-/** If no heartbeat refresh in this window, the lease is dropped (crashed server / lost TCP). */
-const REALTIME_LEASE_MAX_STALE_MS = 120_000;
+
+/** Separator for composite lease member ({@link formatLiveLeaseMember}). */
+export const LIVE_LEASE_MEMBER_SEP = '|' as const;
+/** No heartbeat in this window → lease removed from Redis (override via `REALTIME_LEASE_MAX_STALE_MS`). */
+const REALTIME_LEASE_MAX_STALE_MS = env.REALTIME_LEASE_MAX_STALE_MS;
 
 /**
  * Interval for `/api/extension/live` to send an SSE keep-alive comment and refresh the Redis lease.
  *
- * Default 15 s — many reverse proxies (ALB/Cloudflare/Nginx) idle-close at 30–60 s; a 15 s
- * heartbeat stays comfortably under the tightest default. Override with `REALTIME_LIVE_HEARTBEAT_MS`.
+ * Default 1 min — fewer pings than the old 15 s default. Some proxies idle-close around 30–60 s;
+ * if SSE drops behind certain CDNs/LBs, lower `REALTIME_LIVE_HEARTBEAT_MS` (e.g. 15000).
  */
 export const REALTIME_LIVE_LEASE_HEARTBEAT_MS = env.REALTIME_LIVE_HEARTBEAT_MS;
 const REALTIME_COUNT_CHANNEL = 'realtime:connection_count';
 
 /** JSON list of `{ id, domain }` for platforms; used by extension serve/live hot path */
 const EXTENSION_PLATFORMS_KEY = 'extension:platforms:list';
-const EXTENSION_PLATFORMS_TTL_SEC = 60;
 
 /** Cached active campaign rows for extension serve/live paths */
 const EXTENSION_CAMPAIGNS_KEY_ALL = 'extension:campaigns:active:all';
 const EXTENSION_CAMPAIGNS_KEY_REDIRECTS = 'extension:campaigns:active:redirects';
-const EXTENSION_CAMPAIGNS_TTL_SEC = 20;
 
 /**
  * Shared domains list cache — the campaign-referenced canonical domains emitted in SSE `init.domains`
- * and `platforms_updated` / `campaign_updated` payloads. TTL is intentionally short: fan-out to many
- * SSE subscribers is the problem, not coherency.
+ * and `platforms_updated` / `campaign_updated` payloads.
  */
+
 const EXTENSION_DOMAINS_KEY = 'extension:campaigns:domains';
-const EXTENSION_DOMAINS_TTL_SEC = 5;
+
+/**
+ * Redis `EX` TTL (seconds) for extension JSON caches — campaign rows, platforms list, domains list.
+ * Twelve hours caps staleness if invalidation is missed; admin APIs still `DEL` keys on mutation.
+ */
+export const EXTENSION_JSON_CACHE_TTL_SEC = 12 * 60 * 60;
+
+const EXTENSION_CAMPAIGNS_CACHE_TTL_SEC = EXTENSION_JSON_CACHE_TTL_SEC;
+const EXTENSION_DOMAINS_CACHE_TTL_SEC = EXTENSION_JSON_CACHE_TTL_SEC;
+const EXTENSION_PLATFORMS_CACHE_TTL_SEC = EXTENSION_JSON_CACHE_TTL_SEC;
 
 export const EXTENSION_CAMPAIGNS_KEYS = {
   all: EXTENSION_CAMPAIGNS_KEY_ALL,
@@ -84,6 +92,24 @@ export async function getRedisClient(): Promise<RedisClient | null> {
   return _clientPromise;
 }
 
+async function setExtensionJsonCache(
+  key: string,
+  json: string,
+  ttlSec: number | undefined
+): Promise<void> {
+  const client = await getRedisClient();
+  if (!client) return;
+  try {
+    if (ttlSec !== undefined && ttlSec > 0) {
+      await client.set(key, json, { EX: ttlSec });
+    } else {
+      await client.set(key, json);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Creates a new Redis client for long-lived connections (e.g. SSE subscribe).
  * Caller must call client.destroy() when done.
@@ -125,7 +151,7 @@ export async function invalidatePlatformListCache(): Promise<void> {
 }
 
 /**
- * Read active platforms from short-lived cache (extension serve/live).
+ * Read active platforms from extension JSON cache (extension serve/live).
  * Returns null on miss or if Redis unavailable.
  */
 export async function getCachedPlatformList(): Promise<CachedPlatformRow[] | null> {
@@ -143,18 +169,14 @@ export async function getCachedPlatformList(): Promise<CachedPlatformRow[] | nul
 }
 
 /**
- * Store active platforms in Redis with TTL.
+ * Store active platforms in Redis (optional TTL; see extension cache TTL constants in `redis.ts`).
  */
 export async function setCachedPlatformList(rows: CachedPlatformRow[]): Promise<void> {
-  const client = await getRedisClient();
-  if (!client) return;
-  try {
-    await client.set(EXTENSION_PLATFORMS_KEY, JSON.stringify(rows), {
-      EX: EXTENSION_PLATFORMS_TTL_SEC,
-    });
-  } catch {
-    /* ignore */
-  }
+  await setExtensionJsonCache(
+    EXTENSION_PLATFORMS_KEY,
+    JSON.stringify(rows),
+    EXTENSION_PLATFORMS_CACHE_TTL_SEC
+  );
 }
 
 /**
@@ -189,16 +211,10 @@ export async function getCachedActiveCampaigns<T>(key: string): Promise<T[] | nu
 }
 
 /**
- * Store active campaign rows in Redis with a short TTL.
+ * Store active campaign rows in Redis (optional TTL via extension cache TTL constants).
  */
 export async function setCachedActiveCampaigns<T>(key: string, rows: T[]): Promise<void> {
-  const client = await getRedisClient();
-  if (!client) return;
-  try {
-    await client.set(key, JSON.stringify(rows), { EX: EXTENSION_CAMPAIGNS_TTL_SEC });
-  } catch {
-    /* ignore */
-  }
+  await setExtensionJsonCache(key, JSON.stringify(rows), EXTENSION_CAMPAIGNS_CACHE_TTL_SEC);
 }
 
 /**
@@ -221,7 +237,7 @@ export async function invalidateActiveCampaignCache(): Promise<void> {
 /**
  * Shared cache for the campaign-used canonical domain list. This is user-agnostic,
  * so SSE fan-out for `platforms_updated` / `campaign_updated` can reuse one DB read
- * across every connected extension stream during the TTL window.
+ * across connected extension streams until invalidated or TTL expiry (when configured).
  */
 export async function getCachedCampaignDomains(): Promise<string[] | null> {
   const client = await getRedisClient();
@@ -238,15 +254,11 @@ export async function getCachedCampaignDomains(): Promise<string[] | null> {
 }
 
 export async function setCachedCampaignDomains(domains: string[]): Promise<void> {
-  const client = await getRedisClient();
-  if (!client) return;
-  try {
-    await client.set(EXTENSION_DOMAINS_KEY, JSON.stringify(domains), {
-      EX: EXTENSION_DOMAINS_TTL_SEC,
-    });
-  } catch {
-    /* ignore */
-  }
+  await setExtensionJsonCache(
+    EXTENSION_DOMAINS_KEY,
+    JSON.stringify(domains),
+    EXTENSION_DOMAINS_CACHE_TTL_SEC
+  );
 }
 
 /**
@@ -279,6 +291,37 @@ export async function publishConnectionCount(count: number): Promise<void> {
   await client.publish(REALTIME_COUNT_CHANNEL, String(count));
 }
 
+/** Builds Redis sorted-set member for `/api/extension/live` leases. */
+export function formatLiveLeaseMember(endUserId: string, leaseId: string): string {
+  return `${endUserId}${LIVE_LEASE_MEMBER_SEP}${leaseId}`;
+}
+
+export type ParsedLiveLeaseMember =
+  | { kind: 'full'; endUserId: string; leaseId: string }
+  | { kind: 'legacy'; leaseId: string };
+
+/**
+ * Parses lease member strings: composite `userId|sessionId` or legacy single UUID before rollout.
+ */
+export function parseLiveLeaseMember(member: string): ParsedLiveLeaseMember | null {
+  const trimmed = member.trim();
+  if (!trimmed) return null;
+  const idx = trimmed.indexOf(LIVE_LEASE_MEMBER_SEP);
+  if (idx === -1) {
+    return { kind: 'legacy', leaseId: trimmed };
+  }
+  const endUserId = trimmed.slice(0, idx).trim();
+  const leaseId = trimmed.slice(idx + LIVE_LEASE_MEMBER_SEP.length).trim();
+  if (!endUserId || !leaseId) return null;
+  return { kind: 'full', endUserId, leaseId };
+}
+
+export type LiveConnectionSessionRow = {
+  endUserId: string | null;
+  leaseId: string;
+  lastHeartbeatMs: number;
+};
+
 async function pruneStaleLiveLeases(client: RedisClient): Promise<void> {
   const cutoff = Date.now() - REALTIME_LEASE_MAX_STALE_MS;
   await client.zRemRangeByScore(REALTIME_LEASES_KEY, 0, cutoff);
@@ -294,8 +337,8 @@ async function liveLeaseCountAfterPrune(
 }
 
 /**
- * Register one extension live SSE connection. Heartbeat with {@link refreshLiveConnectionLease}
- * until {@link removeLiveConnectionLease} or the lease goes stale.
+ * Register one extension live SSE connection (`member` = {@link formatLiveLeaseMember}).
+ * Heartbeat with {@link refreshLiveConnectionLease} until {@link removeLiveConnectionLease} or stale.
  */
 export async function registerLiveConnectionLease(connectionId: string): Promise<number> {
   const client = await getRedisClient();
@@ -355,15 +398,49 @@ export async function getConnectionCount(): Promise<number> {
 }
 
 /**
- * Clear all connection leases and the legacy counter key; publish 0 to dashboard subscribers.
+ * Clear all connection leases; publish 0 to dashboard subscribers.
  */
 export async function resetConnectionCount(): Promise<void> {
   const client = await getRedisClient();
   if (!client) return;
   try {
-    await client.del([REALTIME_LEASES_KEY, REALTIME_COUNT_KEY]);
+    await client.del(REALTIME_LEASES_KEY);
   } catch {
     /* ignore */
   }
   await publishConnectionCount(0);
+}
+
+/**
+ * Snapshot of active extension SSE sessions (after pruning stale heartbeats).
+ */
+export async function listLiveConnectionSessions(): Promise<LiveConnectionSessionRow[]> {
+  const client = await getRedisClient();
+  if (!client) return [];
+  try {
+    await pruneStaleLiveLeases(client);
+    const rows = await client.zRangeWithScores(REALTIME_LEASES_KEY, 0, -1);
+    const result: LiveConnectionSessionRow[] = [];
+    for (const row of rows) {
+      const member = typeof row.value === 'string' ? row.value : String(row.value);
+      const parsed = parseLiveLeaseMember(member);
+      if (!parsed) continue;
+      if (parsed.kind === 'full') {
+        result.push({
+          endUserId: parsed.endUserId,
+          leaseId: parsed.leaseId,
+          lastHeartbeatMs: Number(row.score),
+        });
+      } else {
+        result.push({
+          endUserId: null,
+          leaseId: parsed.leaseId,
+          lastHeartbeatMs: Number(row.score),
+        });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
 }
