@@ -19,7 +19,7 @@ export function TargetListLinkedCampaigns({
 }) {
   return (
     <section
-      aria-label="Campaigns using this target list"
+      aria-label="Campaigns using this audience list"
       className={cn('flex min-h-0 flex-col bg-muted/20 px-5 py-5', className)}
     >
       <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

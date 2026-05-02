@@ -1,9 +1,9 @@
 /**
- * Campaign qualification rules for POST /api/extension/ad-block (and matching SSE init windows).
+ * Campaign qualification rules applied by the extension serve and SSE live flows.
  *
  * Filters applied IN ORDER (all must pass for a campaign to qualify):
  * 1. Schedule: status === 'active', now within startDate/endDate if set
- * 2. Audience: targetAudience === 'new_users' → end-user must be "new" (see isExtensionUserNewForAdBlock)
+ * 2. Audience: targetAudience === 'new_users' → end-user must be "new" (see isExtensionUserNew)
  * 3. Time-of-day (frequencyType === 'time_based'): local server time must fall in timeStart/timeEnd window
  *    (supports overnight windows when timeStart > timeEnd)
  * 4. Frequency caps (only for frequencyType === 'only_once' | 'specific_count'):
@@ -32,7 +32,7 @@ export type ExtensionCampaignRuleFields = {
 
 export type ExtensionCampaignQualifyContext = {
   now: Date;
-  /** Minutes since midnight 0–1440 style (same as ad-block: hours*60 + minutes) */
+  /** Minutes since midnight in range 0–1440 (hours*60 + minutes). */
   currentMinutes: number;
   isNewUser: boolean;
   /** Uppercase ISO2 from request geo headers, or null */
@@ -43,8 +43,8 @@ export type ExtensionCampaignQualifyContext = {
   targetListMembership: Set<string>;
 };
 
-/** "New" = first enduser event OR end_users.startDate is within 7 days (same as ad-block). */
-export function isExtensionUserNewForAdBlock(firstEventOrAccountStart: Date, withinDays = 7): boolean {
+/** "New" = first enduser event OR end_users.startDate is within `withinDays` days of now. */
+export function isExtensionUserNew(firstEventOrAccountStart: Date, withinDays = 7): boolean {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - withinDays);
   return new Date(firstEventOrAccountStart) >= cutoff;
@@ -115,9 +115,7 @@ function passesCountryTarget(
   return set.has(endUserGeoCountry);
 }
 
-/**
- * Returns campaigns that pass all serving filters (same semantics as ad-block qualifyingCampaigns loop).
- */
+/** Returns campaigns that pass all serving filters. */
 export function filterQualifyingExtensionCampaigns<T extends ExtensionCampaignRuleFields>(
   campaigns: T[],
   ctx: ExtensionCampaignQualifyContext

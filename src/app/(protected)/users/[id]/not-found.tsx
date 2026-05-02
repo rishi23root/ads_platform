@@ -33,8 +33,8 @@ export default function EndUserNotFound() {
                 This user doesn&apos;t exist
               </h1>
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-                They may have been deleted, or the ID in the link is wrong. If you opened this from
-                the event log or another screen, that end user may no longer be in the system.
+                They may have been deleted, or the ID in the link is wrong. If you opened this
+                from the events page or another screen, that app user may no longer be here.
               </p>
             </div>
 

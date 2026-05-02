@@ -216,11 +216,11 @@ export function TargetListForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error('Name is required');
+      toast.error('Give this audience list a name.');
       return;
     }
     if (!canSubmit) {
-      toast.error('Add at least one filter criterion or one explicit member');
+      toast.error('Add at least one filter, or pick at least one user to include.');
       return;
     }
     setIsLoading(true);
@@ -239,7 +239,7 @@ export function TargetListForm({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Save failed');
-      toast.success(mode === 'create' ? 'Target list created' : 'Target list updated');
+      toast.success(mode === 'create' ? 'Audience list created' : 'Audience list updated');
       router.push('/target-lists');
       router.refresh();
     } catch (err) {
@@ -465,7 +465,7 @@ export function TargetListForm({
                 Explicit members
               </h2>
               <p className="max-w-2xl text-pretty text-xs leading-relaxed text-muted-foreground">
-                Pin specific extension users by search. They always qualify in addition to anyone who
+                Pin specific app users by search. They always qualify in addition to anyone who
                 matches the filter.
               </p>
             </div>
@@ -476,7 +476,7 @@ export function TargetListForm({
                 id="tl-user-search"
                 value={userQuery}
                 onChange={(e) => setUserQuery(e.target.value)}
-                placeholder="Email, identifier, name, or UUID…"
+                placeholder="Email, name, or app user ID…"
                 disabled={isLoading}
                 autoComplete="off"
                 className="max-w-xl"

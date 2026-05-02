@@ -28,7 +28,10 @@ export const user = pgTable('user', {
   image: varchar('image', { length: 255 }),
   banned: boolean('banned').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
   role: userRoleEnum('role').notNull().default('user'),
 });
 
@@ -42,7 +45,10 @@ export const session = pgTable('session', {
   ipAddress: varchar('ip_address', { length: 255 }),
   userAgent: varchar('user_agent', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 export const account = pgTable('account', {
@@ -60,7 +66,10 @@ export const account = pgTable('account', {
   idToken: text('id_token'),
   password: varchar('password', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 export const verification = pgTable('verification', {
@@ -69,7 +78,10 @@ export const verification = pgTable('verification', {
   value: varchar('value', { length: 255 }).notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 // ============ Platforms ============
@@ -78,7 +90,10 @@ export const platforms = pgTable('platforms', {
   name: varchar('name', { length: 255 }).notNull(),
   domain: varchar('domain', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 // ============ Ads (content only, no platform/status/dates) ============
@@ -90,7 +105,10 @@ export const ads = pgTable('ads', {
   targetUrl: text('target_url'),
   htmlCode: text('html_code'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 // ============ Notifications (content only, no dates) ============
@@ -100,7 +118,10 @@ export const notifications = pgTable('notifications', {
   message: text('message').notNull(),
   ctaLink: text('cta_link'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 // ============ Redirects (content: source domain + destination URL) ============
@@ -111,7 +132,10 @@ export const redirects = pgTable('redirects', {
   includeSubdomains: boolean('include_subdomains').notNull().default(false),
   destinationUrl: text('destination_url').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 /** Reusable audience segments (filter and/or explicit end_user ids). */
@@ -129,7 +153,10 @@ export const targetLists = pgTable('target_lists', {
     .notNull()
     .default(sql`'{}'::uuid[]`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 /** Placeholder Better Auth user id: campaigns reassigned here when creator is deleted */
@@ -185,13 +212,21 @@ export const campaigns = pgTable(
       .notNull()
       .default(SYSTEM_USER_ID),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
   },
   (t) => [
     index('campaigns_ad_id_idx').on(t.adId),
     index('campaigns_notification_id_idx').on(t.notificationId),
     index('campaigns_redirect_id_idx').on(t.redirectId),
     index('campaigns_target_list_id_idx').on(t.targetListId),
+    // Partial index for the extension hot path (active campaigns in their date window).
+    // Materialised by migration 0006_hotpath_indexes.
+    index('campaigns_active_window_idx')
+      .on(t.startDate, t.endDate)
+      .where(sql`${t.status} = 'active'`),
   ]
 );
 
@@ -227,7 +262,10 @@ export const endUsers = pgTable('end_users', {
   /** Access end; set by admin (e.g. via payment). Nullable = open-ended. */
   endDate: timestamp('end_date', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date()),
 });
 
 export const enduserSessions = pgTable(
@@ -243,7 +281,11 @@ export const enduserSessions = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('idx_enduser_sessions_end_user_id').on(t.endUserId)]
+  (t) => [
+    index('idx_enduser_sessions_end_user_id').on(t.endUserId),
+    // Session sweeper scans by expires_at; declared in migration 0006_hotpath_indexes.
+    index('enduser_sessions_expires_at_idx').on(t.expiresAt),
+  ]
 );
 
 export const payments = pgTable(
@@ -284,6 +326,9 @@ export const enduserEvents = pgTable(
     index('enduser_events_user_identifier_created_idx').on(t.userIdentifier, t.createdAt),
     index('enduser_events_campaign_created_idx').on(t.campaignId, t.createdAt),
     index('enduser_events_user_identifier_campaign_idx').on(t.userIdentifier, t.campaignId),
+    // Dashboard analytics filter by domain / country; declared in migration 0006_hotpath_indexes.
+    index('enduser_events_domain_idx').on(t.domain),
+    index('enduser_events_country_idx').on(t.country),
   ]
 );
 

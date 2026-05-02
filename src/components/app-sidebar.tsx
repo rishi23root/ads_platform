@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   IconAd2,
   IconBell,
+  IconBroadcast,
   IconCreditCard,
   IconDashboard,
   IconDeviceDesktop,
@@ -33,6 +34,15 @@ import {
 
 type Role = "user" | "admin"
 
+// UI label glossary — keep sidebar, breadcrumbs, and PageHeader titles in sync.
+// Internal name (route) -> user-facing label shown in the UI.
+//   /target-lists  -> Audience lists   (Groups of users your campaigns can target)
+//   /platforms     -> Sites & apps     (Websites and apps where your ads can appear)
+//   /redirects     -> URL redirects    (Send visitors from one link to another)
+//   /delivery/live -> Live (sidebar); breadcrumbs "Live sessions"; page header "Live connections"
+//   Extension user -> App user         (People using your extension)
+// Update this glossary when dashboard routes are added or renamed.
+
 const overviewItems = [
   { title: "Dashboard", url: "/", icon: IconDashboard },
   { title: "Users", url: "/users", icon: IconUserSearch },
@@ -41,14 +51,15 @@ const overviewItems = [
 
 const deliveryItems = [
   { title: "Campaigns", url: "/campaigns", icon: IconTargetArrow },
-  { title: "Target lists", url: "/target-lists", icon: IconListCheck },
+  { title: "Audience lists", url: "/target-lists", icon: IconListCheck },
+  { title: "Live", url: "/delivery/live", icon: IconBroadcast },
 ]
 
 const contentItems = [
-  { title: "Platforms", url: "/platforms", icon: IconDeviceDesktop },
+  { title: "Sites & apps", url: "/platforms", icon: IconDeviceDesktop },
   { title: "Ads", url: "/ads", icon: IconAd2 },
   { title: "Notifications", url: "/notifications", icon: IconBell },
-  { title: "Redirects", url: "/redirects", icon: IconRoute },
+  { title: "URL redirects", url: "/redirects", icon: IconRoute },
 ]
 
 function getNavSections(role: Role) {

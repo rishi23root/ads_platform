@@ -3,6 +3,7 @@ import { desc } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { targetLists } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
+import { parsePagination } from '@/lib/pagination';
 import {
   assertAllEndUsersExist,
   normalizeExcludedIds,
@@ -14,12 +15,18 @@ import { serializeTargetListRow } from '@/lib/target-list-api-response';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const s = await getSessionWithRole();
     if (!s) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const rows = await db.select().from(targetLists).orderBy(desc(targetLists.updatedAt));
+    const { limit, offset } = parsePagination(request);
+    const rows = await db
+      .select()
+      .from(targetLists)
+      .orderBy(desc(targetLists.updatedAt))
+      .limit(limit)
+      .offset(offset);
     const result = rows.map(serializeTargetListRow);
     return NextResponse.json(result);
   } catch (e) {

@@ -15,6 +15,8 @@ import { ExtensionEventsChartTooltip } from "@/components/extension-events-chart
 import {
   extensionEventChartAllZeros,
   extensionEventsChartConfig,
+  formatExtensionChartYAxisTick,
+  niceExtensionChartYAxisTicks,
   type ExtensionEventChartRow,
 } from "@/lib/extension-events-chart"
 import {
@@ -31,32 +33,6 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
-
-function formatYAxisTick(value: number): string {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "0"
-  const abs = Math.abs(n)
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (abs >= 10_000) return `${Math.round(n / 1_000)}k`
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return String(Math.round(n))
-}
-
-/** Even integer ticks that hug the data closely (~3% headroom, 4-5 ticks). */
-function niceYAxisTicks(stackMax: number): number[] {
-  if (!Number.isFinite(stackMax) || stackMax <= 0) return [0]
-  const ceil = Math.ceil(stackMax * 1.03)
-  const candidates = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000]
-  let step = 1
-  for (const c of candidates) {
-    if (Math.ceil(ceil / c) <= 5) { step = c; break }
-  }
-  if (step === 1 && ceil > 50000) step = Math.ceil(ceil / 5 / 1000) * 1000
-  const top = Math.ceil(ceil / step) * step
-  const ticks: number[] = []
-  for (let v = 0; v <= top; v += step) ticks.push(v)
-  return ticks
-}
 
 const rangeLabels: Record<string, string> = {
   "90d": "Last 3 months",
@@ -123,7 +99,7 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
   }, [chartData])
 
   const yAxisTicks = React.useMemo(
-    () => niceYAxisTicks(singleSeriesMax),
+    () => niceExtensionChartYAxisTicks(singleSeriesMax),
     [singleSeriesMax]
   )
   const yAxisTop = yAxisTicks[yAxisTicks.length - 1] ?? 100
@@ -137,10 +113,10 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
     >
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between space-y-0 pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-sm font-medium">Extension events</CardTitle>
+          <CardTitle className="text-sm font-medium">User activity</CardTitle>
           <CardDescription className="text-xs leading-relaxed">
             <span className="hidden @[540px]/card:block">
-              {descriptionText}. Hover for daily totals. Visits have no campaign; other types do.
+              {descriptionText}. Hover for daily totals. Visits aren&apos;t tied to a campaign; other types are.
             </span>
             <span className="@[540px]/card:hidden">{descriptionText} — hover for detail</span>
           </CardDescription>
@@ -267,12 +243,13 @@ export function ChartAreaInteractive({ className }: ChartAreaInteractiveProps) {
                 }}
               />
               <YAxis
-                width={48}
+                width={44}
                 allowDecimals={false}
+                interval={0}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                tickFormatter={formatYAxisTick}
+                tickFormatter={formatExtensionChartYAxisTick}
                 domain={[0, yAxisTop]}
                 ticks={yAxisTicks}
               />

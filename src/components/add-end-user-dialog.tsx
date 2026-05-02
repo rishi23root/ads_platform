@@ -169,13 +169,13 @@ export function AddEndUserDialog() {
             </Button>
           </DialogTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Add a new extension user</TooltipContent>
+        <TooltipContent side="bottom">Add a new app user</TooltipContent>
       </Tooltip>
       <DialogContent className="gap-6 sm:max-w-md">
         <DialogHeader className="space-y-1 text-left">
-          <DialogTitle>Add extension user</DialogTitle>
+          <DialogTitle>Add app user</DialogTitle>
           <DialogDescription className="sr-only">
-            Create a registered extension account with email and password. Name, country, plan, and banned
+            Create a registered app account with email and password. Name, country, plan, and banned
             status are optional.
           </DialogDescription>
         </DialogHeader>

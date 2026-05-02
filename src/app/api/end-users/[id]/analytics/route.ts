@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionWithRole } from '@/lib/dal';
+import { requireApiSession } from '@/lib/dal';
 import {
   END_USER_ANALYTICS_RANGE_DAYS,
   type EndUserAnalyticsRange,
@@ -15,10 +15,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     if (!isValidEndUserUuid(id)) {
@@ -30,8 +28,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const range = VALID_RANGE.includes(rangeRaw) ? rangeRaw : '7d';
 
     const payload = await getEndUserAnalyticsBundle(
-      sessionWithRole.role,
-      sessionWithRole.user.id,
+      gate.session.role,
+      gate.session.user.id,
       id,
       range
     );

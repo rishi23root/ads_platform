@@ -89,5 +89,5 @@ After running, check the dashboard:
 ## Notes
 
 - **`pnpm db:truncate:enduser-events`** truncates only `enduser_events`.
-- **`pnpm redis:reset-live-count`** clears the live connection counter in Redis.
+- **`pnpm redis:reset-live-count`** clears extension live SSE leases in Redis (`realtime:connections:leases`) and resets the published dashboard count.
 - The authenticated user is always the `end_users` row tied to your extension login; rows use that client's identifier in `enduser_events`.

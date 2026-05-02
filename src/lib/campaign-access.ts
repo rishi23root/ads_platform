@@ -9,11 +9,14 @@ export type CampaignRow = typeof campaigns.$inferSelect;
 
 /** Full row or null if missing or caller is not allowed (use 404 for both to avoid IDOR). */
 export async function getAccessibleCampaignById(
-  _session: NonNullable<SessionWithRole>,
+  session: NonNullable<SessionWithRole>,
   campaignId: string
 ): Promise<CampaignRow | null> {
   const [row] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
-  return row ?? null;
+  if (!row) return null;
+  if (session.role === 'admin') return row;
+  if (row.createdBy === session.user.id) return row;
+  return null;
 }
 
 export function formatCampaignResponse(c: CampaignRow) {

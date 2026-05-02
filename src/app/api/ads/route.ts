@@ -3,18 +3,19 @@ import { database as db } from '@/db';
 import { ads } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
 import { getLinkedCampaignCountByAdId } from '@/lib/campaign-linked-counts';
-import { publishAdsUpdated } from '@/lib/redis';
+import { parsePagination } from '@/lib/pagination';
 
 // GET all ads (content-only, no platform/status/dates)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const sessionWithRole = await getSessionWithRole();
     if (!sessionWithRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { limit, offset } = parsePagination(request);
     const [allAds, linkedByAdId] = await Promise.all([
-      db.select().from(ads).orderBy(ads.createdAt),
+      db.select().from(ads).orderBy(ads.createdAt).limit(limit).offset(offset),
       getLinkedCampaignCountByAdId(),
     ]);
 
@@ -58,7 +59,6 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    await publishAdsUpdated();
     return NextResponse.json(newAd, { status: 201 });
   } catch (error) {
     console.error('Error creating ad:', error);

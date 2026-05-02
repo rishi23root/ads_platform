@@ -107,7 +107,7 @@ export function AddPaymentDialog({ userId, onCreated }: AddPaymentDialogProps) {
           <DialogHeader>
             <DialogTitle>Add payment</DialogTitle>
             <DialogDescription>
-              Record a payment for this extension user (manual bookkeeping).
+              Record a payment for this app user (manual bookkeeping).
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

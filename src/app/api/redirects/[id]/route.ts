@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { redirects } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { normalizeDomainForRedirectStorage } from '@/lib/domain-utils';
 import { getSessionWithRole } from '@/lib/dal';
 import { queryPlatformConflictForRedirect } from '@/lib/redirect-platform-conflict-queries';
 import { getLinkedCampaignCountForRedirectId } from '@/lib/campaign-linked-counts';
 import { publishRedirectsUpdated } from '@/lib/redis';
+import { publishCampaignUpdatedForLinkedRedirect } from '@/lib/campaign-linked-counts';
+// NOTE: On a redirect UPDATE we publish ONLY `redirects_updated`. The SSE handler
+// for that event already rebuilds this user's full qualifying redirect list, so
+// also firing `campaign_updated` for a linked campaign would deliver the same data
+// twice. `publishCampaignUpdatedForLinkedRedirect` is kept for DELETE, where the
+// linked campaign's effective redirect reference disappears and we want extensions
+// to invalidate any per-campaign caches beyond just the redirect rules.
 
 export const dynamic = 'force-dynamic';
 
@@ -56,9 +64,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const trimmedSource = String(sourceDomain).trim();
     const includeSub = Boolean(includeSubdomains);
-    const conflictHost = await queryPlatformConflictForRedirect(trimmedSource, includeSub);
+    const normalizedSource = normalizeDomainForRedirectStorage(String(sourceDomain), includeSub);
+    const conflictHost = await queryPlatformConflictForRedirect(normalizedSource, includeSub);
     if (conflictHost !== undefined) {
       return NextResponse.json(
         {
@@ -72,7 +80,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .update(redirects)
       .set({
         name,
-        sourceDomain: trimmedSource,
+        sourceDomain: normalizedSource,
         includeSubdomains: includeSub,
         destinationUrl: String(destinationUrl).trim(),
         updatedAt: new Date(),
@@ -84,6 +92,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Redirect not found' }, { status: 404 });
     }
 
+    // Single event per UI update action. `redirects_updated` is a strict superset
+    // of what a linked `campaign_updated` would contribute here (the redirect list
+    // for this user is rebuilt on the extension side), so we do not double-publish.
     await publishRedirectsUpdated();
     return NextResponse.json(updated);
   } catch (error) {
@@ -120,6 +131,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Redirect not found' }, { status: 404 });
     }
 
+    await publishCampaignUpdatedForLinkedRedirect(id);
     await publishRedirectsUpdated();
     return NextResponse.json({ success: true });
   } catch (error) {

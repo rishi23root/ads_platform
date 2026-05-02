@@ -1,10 +1,10 @@
 import 'server-only';
 
 /**
- * Structured error for extension serve / ad-block flows.
+ * Structured error for extension serve / live flows.
  * Route handlers catch this and return `error.body` with HTTP `error.status`.
  */
-export class ExtensionAdBlockError extends Error {
+export class ExtensionServeError extends Error {
   readonly status: number;
   readonly body: Record<string, unknown>;
 
@@ -14,9 +14,9 @@ export class ExtensionAdBlockError extends Error {
         ? body.error
         : typeof body.message === 'string'
           ? body.message
-          : 'Extension ad block';
+          : 'Extension serve error';
     super(message);
-    this.name = 'ExtensionAdBlockError';
+    this.name = 'ExtensionServeError';
     this.body = body;
     this.status = status;
   }

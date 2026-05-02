@@ -21,6 +21,7 @@ import {
   computeTrialEndDateFromStart,
   formatExtensionDaysLeftCell,
 } from '@/lib/extension-user-subscription';
+import { EmptyTableRow } from '@/components/ui/empty-table-row';
 import { cn } from '@/lib/utils';
 
 function rowPlan(plan: string): ExtensionPlanValue {
@@ -102,11 +103,11 @@ export function UsersTable({ rows, isAdmin = false, selection }: UsersTableProps
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={colCount} className="text-center py-12 text-muted-foreground">
-                No users match your filters. Try adjusting your filters or removing them.
-              </TableCell>
-            </TableRow>
+            <EmptyTableRow
+              colSpan={colCount}
+              title="No users match your filters"
+              description="Try changing the search or loosening the filters."
+            />
           ) : (
             rows.map((v) => {
               const plan = rowPlan(v.plan);

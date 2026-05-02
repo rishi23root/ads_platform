@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { database as db } from '@/db';
 import { user } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
+import { parsePagination } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
 // GET list members (admin only)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const sessionWithRole = await getSessionWithRole();
     if (!sessionWithRole) {
@@ -16,6 +17,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const { limit, offset } = parsePagination(request);
     const users = await db
       .select({
         id: user.id,
@@ -27,7 +29,9 @@ export async function GET() {
         updatedAt: user.updatedAt,
       })
       .from(user)
-      .orderBy(user.createdAt);
+      .orderBy(user.createdAt)
+      .limit(limit)
+      .offset(offset);
 
     return NextResponse.json(users);
   } catch (error) {

@@ -8,6 +8,7 @@ import { PaymentsFilters } from '@/components/payments-filters';
 import { PaymentsPageLayout } from '@/components/payments-page-layout';
 import { RefreshDataButton } from '@/components/refresh-data-button';
 import { KpiCard } from '@/components/dashboard/KpiCard';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
   countPaymentsListQuery,
@@ -89,6 +90,10 @@ export default async function PaymentsPage({
               summary.totalPriorMonthCents
             )}
             changeHint="Completed revenue vs. prior calendar month"
+            footerLink={{
+              href: '#payments-table-heading',
+              label: 'View payments table',
+            }}
           />
           <KpiCard
             label="All-time"
@@ -98,6 +103,10 @@ export default async function PaymentsPage({
               summary.completedPaymentsPriorMonthCount
             )}
             changeHint="Completed payment count vs. prior month"
+            footerLink={{
+              href: '#payments-table-heading',
+              label: 'View payments table',
+            }}
           />
           <KpiCard
             label="Paid users"
@@ -107,6 +116,10 @@ export default async function PaymentsPage({
               summary.distinctPayersPriorMonthCount
             )}
             changeHint="Distinct payers this month vs. prior month"
+            footerLink={{
+              href: '#payments-table-heading',
+              label: 'View payments table',
+            }}
           />
         </div>
       </section>
@@ -142,9 +155,9 @@ export default async function PaymentsPage({
             />
           </div>
         </div>
-        <div className="rounded-md border min-w-0">
+        <DataTableSurface className="min-w-0">
           <AllPaymentsTable rows={rows} />
-        </div>
+        </DataTableSurface>
       </section>
     </PaymentsPageLayout>
   );

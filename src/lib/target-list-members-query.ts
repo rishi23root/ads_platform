@@ -20,6 +20,12 @@ import {
   isTargetListFilterEmpty,
   type TargetListFilterJson,
 } from '@/lib/target-list-filter';
+import {
+  computeExtensionDaysLeft,
+  computeTrialEndDateFromStart,
+  formatExtensionDaysLeftCell,
+} from '@/lib/extension-user-subscription';
+import { escapeCsvCell } from '@/lib/utils';
 
 const sessionStats = db
   .select({
@@ -164,16 +170,17 @@ function memberSourceSelect(list: TargetListMembersListInput, source: TargetList
 
 const listOrderBy = desc(sql`coalesce(${sessionStats.lastSessionAt}, ${endUsers.createdAt})`);
 
-export async function listTargetListMembers(
-  list: TargetListMembersListInput,
-  opts: { source: TargetListMemberTabSource; page: number; pageSize: number }
-): Promise<TargetListMemberRow[]> {
-  const page = Math.max(1, opts.page);
-  const pageSize = Math.min(100, Math.max(1, opts.pageSize));
-  const offset = (page - 1) * pageSize;
+/** Max rows returned by CSV export (single query). */
+export const TARGET_LIST_MEMBERS_EXPORT_MAX = 50_000;
 
-  const whereClause = buildTargetListMemberWhere(list, opts.source);
-  const sourceCol = memberSourceSelect(list, opts.source);
+async function queryTargetListMembersPage(
+  list: TargetListMembersListInput,
+  source: TargetListMemberTabSource,
+  limit: number,
+  offset: number
+): Promise<TargetListMemberRow[]> {
+  const whereClause = buildTargetListMemberWhere(list, source);
+  const sourceCol = memberSourceSelect(list, source);
 
   let q = db
     .select({
@@ -197,13 +204,85 @@ export async function listTargetListMembers(
     .$dynamic();
 
   if (whereClause) q = q.where(whereClause);
-  const rows = await q.orderBy(listOrderBy).limit(pageSize).offset(offset);
+  const rows = await q.orderBy(listOrderBy).limit(limit).offset(offset);
 
   return rows.map((r) => ({
     ...r,
     impressionCount: Number(r.impressionCount ?? 0),
     memberSource: r.memberSource as TargetListMemberSourceKind,
   })) as TargetListMemberRow[];
+}
+
+export async function listTargetListMembers(
+  list: TargetListMembersListInput,
+  opts: { source: TargetListMemberTabSource; page: number; pageSize: number }
+): Promise<TargetListMemberRow[]> {
+  const page = Math.max(1, opts.page);
+  const pageSize = Math.min(100, Math.max(1, opts.pageSize));
+  const offset = (page - 1) * pageSize;
+  return queryTargetListMembersPage(list, opts.source, pageSize, offset);
+}
+
+/** Full tab export (admin CSV). Capped at {@link TARGET_LIST_MEMBERS_EXPORT_MAX}. */
+export async function listTargetListMembersForExport(
+  list: TargetListMembersListInput,
+  source: TargetListMemberTabSource
+): Promise<TargetListMemberRow[]> {
+  return queryTargetListMembersPage(list, source, TARGET_LIST_MEMBERS_EXPORT_MAX, 0);
+}
+
+export function targetListMembersToCsvLines(rows: TargetListMemberRow[]): string[] {
+  const header = [
+    'UUID',
+    'Identifier',
+    'Email',
+    'Name',
+    'Impressions',
+    'Plan',
+    'Member source',
+    'Banned',
+    'Country',
+    'Days left',
+    'Start date',
+    'End date',
+    'Last session',
+    'Created',
+  ];
+  const lines = [header.map(escapeCsvCell).join(',')];
+  for (const row of rows) {
+    const plan = row.plan === 'paid' ? 'paid' : 'trial';
+    const daysLeft = formatExtensionDaysLeftCell(
+      computeExtensionDaysLeft({
+        endDate: row.endDate,
+        plan,
+        startDate: row.startDate,
+      })
+    );
+    const effectiveEnd =
+      row.endDate != null
+        ? new Date(row.endDate)
+        : plan === 'trial'
+          ? computeTrialEndDateFromStart(row.startDate)
+          : null;
+    const cells: string[] = [
+      row.id,
+      row.identifier ?? '',
+      row.email ?? '',
+      row.name ?? '',
+      String(row.impressionCount),
+      row.plan,
+      row.memberSource,
+      row.banned ? 'true' : 'false',
+      row.country ?? '',
+      daysLeft === '—' ? '' : daysLeft,
+      new Date(row.startDate).toISOString(),
+      effectiveEnd ? effectiveEnd.toISOString() : '',
+      row.lastSessionAt ? new Date(row.lastSessionAt).toISOString() : '',
+      new Date(row.createdAt).toISOString(),
+    ];
+    lines.push(cells.map(escapeCsvCell).join(','));
+  }
+  return lines;
 }
 
 export async function countTargetListMembers(

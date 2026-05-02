@@ -60,7 +60,7 @@ export function UsersBulkToolbar({
         raw.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))
       );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load target lists');
+      toast.error(e instanceof Error ? e.message : 'Failed to load audience lists');
       setLists([]);
     } finally {
       setListsLoading(false);
@@ -73,7 +73,7 @@ export function UsersBulkToolbar({
 
   const runAdd = async () => {
     if (!addListId) {
-      toast.error('Choose a target list');
+      toast.error('Choose an audience list');
       return;
     }
     setPending(true);
@@ -99,7 +99,7 @@ export function UsersBulkToolbar({
 
   const runRemove = async () => {
     if (!removeListId) {
-      toast.error('Choose a target list');
+      toast.error('Choose an audience list');
       return;
     }
     setPending(true);
@@ -159,7 +159,7 @@ export function UsersBulkToolbar({
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="default" size="sm" className="h-8" onClick={() => setAddOpen(true)}>
-            Add to target list
+            Add to audience list
           </Button>
           <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setRemoveOpen(true)}>
             Remove from list
@@ -182,7 +182,7 @@ export function UsersBulkToolbar({
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add to target list</DialogTitle>
+            <DialogTitle>Add to audience list</DialogTitle>
             <DialogDescription>
               Add {selectedIds.length} selected user(s) as explicit members. They will be removed from the
               list&apos;s exclusions if present.
@@ -220,7 +220,7 @@ export function UsersBulkToolbar({
       <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Remove from target list</DialogTitle>
+            <DialogTitle>Remove from audience list</DialogTitle>
             <DialogDescription>
               Users who still match the list filter will be excluded from the list so they no longer qualify.
               Explicit members are removed from the member list.
@@ -260,7 +260,7 @@ export function UsersBulkToolbar({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedIds.length} user(s)?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes these extension users and related data. This cannot be undone.
+              This permanently removes these app users and related data. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

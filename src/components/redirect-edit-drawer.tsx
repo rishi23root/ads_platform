@@ -10,7 +10,7 @@ import {
 } from '@/components/crud-resource-drawer';
 import { IconLoader2, IconPencil } from '@tabler/icons-react';
 import { RedirectForm } from '@/app/(protected)/redirects/redirect-form';
-import { LinkedCampaigns } from '@/components/linked-campaigns';
+import { LinkedCampaignsSection } from '@/components/linked-campaigns';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Redirect } from '@/db/schema';
 
@@ -22,8 +22,6 @@ interface RedirectEditDrawerProps {
   initialMode?: 'view' | 'edit';
   /** When false, view mode has no Edit control. Use only when `session.role === 'admin'`. Default true */
   showEditAction?: boolean;
-  /** Hide Linked campaigns when opened from a campaign detail view. Default false */
-  hideLinkedCampaigns?: boolean;
 }
 
 const detailRow =
@@ -35,13 +33,11 @@ function RedirectEditDrawerContent({
   redirectId,
   initialMode,
   showEditAction = true,
-  hideLinkedCampaigns = false,
 }: {
   redirect?: Redirect | null;
   redirectId?: string;
   initialMode: 'view' | 'edit';
   showEditAction?: boolean;
-  hideLinkedCampaigns?: boolean;
 }) {
   const router = useRouter();
   const [fetched, setFetched] = useState<Redirect | null>(null);
@@ -195,19 +191,7 @@ function RedirectEditDrawerContent({
                   </dl>
                 </div>
               </section>
-              {!hideLinkedCampaigns ? (
-                <section className="min-w-0 space-y-3" aria-labelledby="redirect-campaigns-heading">
-                  <h3
-                    id="redirect-campaigns-heading"
-                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
-                    Linked campaigns
-                  </h3>
-                  <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
-                    <LinkedCampaigns type="redirect" entityId={resolved.id} embedded />
-                  </div>
-                </section>
-              ) : null}
+              <LinkedCampaignsSection type="redirect" entityId={resolved.id} />
             </div>
           ) : (
             <RedirectForm redirect={resolved} mode="edit" onSuccess={handleSuccess} onCancel={handleCancel} />
@@ -225,7 +209,6 @@ export function RedirectEditDrawer({
   redirectId,
   initialMode = 'view',
   showEditAction = true,
-  hideLinkedCampaigns = false,
 }: RedirectEditDrawerProps) {
   return (
     <CrudResourceDrawerRoot open={open} onOpenChange={onOpenChange} direction="right">
@@ -236,7 +219,6 @@ export function RedirectEditDrawer({
           redirectId={redirectId}
           initialMode={initialMode}
           showEditAction={showEditAction}
-          hideLinkedCampaigns={hideLinkedCampaigns}
         />
       ) : null}
     </CrudResourceDrawerRoot>

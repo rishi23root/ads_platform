@@ -1,10 +1,33 @@
 # Extension Client Contract
 
-This document describes every API the browser extension must interact with. It is the authoritative reference for the extension team. For migration context from the legacy `ad-block` endpoint, see `[EXTENSION_LEGACY_REMOVAL_MIGRATION.md](./EXTENSION_LEGACY_REMOVAL_MIGRATION.md)`.
+This document describes every API the browser extension must interact with. It is the authoritative reference for the extension team.
 
 ## Contract change log (sessions)
 
 Append-only revision history. Newest session first.
+
+### 2026-04-25 — SSE redirect items: time window for `time_based`
+
+- **Additive — `init.redirects` / `redirects_updated` / `campaign_updated` redirect items.** Each item now includes **`timeStart`** and **`timeEnd`** (strings or `null`). When `frequencyType === "time_based"`, use the same daily window semantics as the server (minutes since midnight; overnight when the start time is later in the day than the end time, e.g. 22:00–06:00). For any other `frequencyType`, both are `null` (stale values are not sent). The extension can enforce or double-check the window locally. See [Redirect rules (SSE only)](#redirect-rules-sse-only).
+
+### 2026-04-21 — Hardening pass: Content-Type, rate limits, CORS, SSE heartbeat
+
+- **Additive — `415 Unsupported Media Type`.** `POST /api/extension/serve` and `POST /api/extension/events` now require `Content-Type: application/json`. A missing or wrong header returns `415 { "error": "Content-Type must be application/json" }` instead of the old `400 { "error": "Invalid JSON" }`. The extension already sends the correct header; no client change needed.
+- **Additive — `429 Too Many Requests`.** Rate limiting is now enforced per client on extension endpoints. Limits are generous for normal traffic:
+  - `POST /api/extension/auth/login` — 10 / min / IP
+  - `POST /api/extension/auth/register` — 5 / min / IP
+  - `POST /api/extension/serve` — 300 / min / end-user (≈5 req/s)
+  - `POST /api/extension/events` — 120 / min / end-user (=120 batches/min)
+
+  On throttle, the server returns `429` with `Retry-After` (seconds) and `X-RateLimit-{Limit,Remaining,Reset}` headers. **Client action:** on `429`, sleep for `Retry-After` seconds and retry; never retry in a tight loop.
+- **Additive — CORS on `/api/extension/*`.** Every extension route now accepts `OPTIONS` preflight and responds with `Access-Control-Allow-Origin` mirroring the request `Origin` (no credentials, since Bearer auth). `Authorization, Content-Type, Accept` are allowed headers.
+- **SSE keep-alive cadence:** `GET /api/extension/live` sends an SSE comment ping on this interval (default **60 s**, configurable via `REALTIME_LIVE_HEARTBEAT_MS`). Lower it if your proxy idle-closes SSE sooner. **Client action:** none — comment lines are ignored by `EventSource`.
+- **Correctness — `events` response `skipped` is now deduped.** The `skipped` count no longer inflates when the same invalid `campaignId` appears multiple times in a batch. Only distinct campaign ids count.
+- **Correctness — `events` `visitedAt` clock-skew guard.** A `visitedAt` more than 7 days in the past or 1 day in the future is clamped to the server receive time instead of rejecting the whole batch. The batch still succeeds.
+- **Behaviour change — `campaign_updated` event.** The server-side gate on the Redis payload was simplified. The SSE payload is now `{ domains: [...], redirects: [...] }` — a full replacement list (no differential `redirect` / `redirectRemoval` patching). The extension should replace both caches in one step.
+- **Behaviour change — redirect edits propagate to SSE.** Updating a redirect row (source domain, destination URL) now also publishes `campaign_updated` for campaigns linked to that redirect. Previously, only `redirects_updated` fired and linked campaigns were not notified.
+- **Removed — `ads_updated` / `notifications_updated` SSE events.** These events are no longer sent. Ads and notifications are resolved server-side on every `POST /api/extension/serve` call; the extension never caches them, so no SSE invalidation was needed.
+- **Fix — campaign delete ordering.** Soft-delete and permanent-delete now publish `campaign_updated` **after** the DB mutation completes, fixing a race condition where SSE handlers could read stale (still-active) campaign data.
 
 ### 2026-04-17 — Minimal `serve` payloads; no creative caching of `serve`
 
@@ -14,6 +37,24 @@ Append-only revision history. Newest session first.
 - **Client actions:** Parse only `id` plus `ad` or `notification` from serve responses. Use the array bucket to distinguish inline ad vs popup vs notification. Do **not** persist or reuse serve JSON across navigations, tabs, or sessions as a creative cache (see [Per-domain creative serving](#per-domain-creative-serving--post-apiextensionserve)).
 
 ---
+
+## Response codes, rate limits & CORS
+
+Shared behaviour across `/api/extension/*`:
+
+- **`Content-Type: application/json` required on POSTs.** Missing/wrong → `415 { "error": "Content-Type must be application/json" }`.
+- **Rate limits.** The server returns `429 { "error": "Too Many Requests" }` with `Retry-After` (seconds) and `X-RateLimit-{Limit,Remaining,Reset}` response headers. Per-endpoint ceilings:
+
+  | Endpoint | Key | Limit |
+  |---|---|---|
+  | `POST /auth/login` | client IP | 10 / min |
+  | `POST /auth/register` | client IP | 5 / min |
+  | `POST /serve` | end-user id (Bearer) | 300 / min |
+  | `POST /events` | end-user id (Bearer) | 120 / min |
+
+  On `429`, back off for `Retry-After` seconds and retry — never spin.
+- **CORS.** Every route accepts `OPTIONS` preflight and reflects the request `Origin`. Allowed methods: `GET, POST, OPTIONS`. Allowed headers: `Authorization, Content-Type, Accept`. No credentials (Bearer auth is header-only).
+- **Prod error details.** Server-side exceptions return `500 { "error": "Internal server error" }` in production; details only surface in non-prod.
 
 ## Authentication
 
@@ -95,12 +136,14 @@ Sent as soon as the connection is established. Shape:
   "redirects": [
     {
       "campaignId": "<uuid>",
-      "domain_regex": "^(www\\.)?instagram\\.com$",
+      "domain_regex": "^(?:.+\\.)?instagram\\.com$",
       "target_url": "https://example.com/landing",
       "date_till": "2026-12-31T23:59:59.000Z",  // null = no end date
       "count": 3,          // this user's prior event count for this campaign
-      "frequencyType": "specific_count",   // "always" | "only_once" | "specific_count" | "time_based"
-      "frequencyCount": 10  // null unless frequencyType === "specific_count"
+      "frequencyType": "specific_count",   // "always" | "only_once" | "specific_count" | "time_based" | "full_day"
+      "frequencyCount": 10,  // null unless frequencyType === "specific_count"
+      "timeStart": null,   // null unless frequencyType === "time_based" (daily window start, e.g. "09:00:00")
+      "timeEnd": null      // null unless frequencyType === "time_based" (daily window end; if start > end, window spans midnight)
     }
   ]
 }
@@ -120,9 +163,7 @@ Sent as soon as the connection is established. Shape:
 | ----------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `platforms_updated`     | `{ "domains": [...] }`                                      | Replace cached `domains` with the new list.                                              |
 | `redirects_updated`     | `{ "type": "redirects_updated", "redirects": [ … ] }`        | Replace cached redirect rules with `redirects` (same items as `init.redirects`).          |
-| `ads_updated`           | `{ "type": "ads_updated" }`                                 | Invalidate any locally cached ad creatives.                                              |
-| `notifications_updated` | `{ "type": "notifications_updated" }`                       | Invalidate cached notification creatives.                                                |
-| `campaign_updated`      | `{ "domains", "redirect"?, "redirectRemoval"? }` | Replace cached `domains` with `domains` (same derivation as `init`). If `redirect` is present: upsert that `ExtensionInitRedirectItem` into the local redirect cache. If `redirect` is `null`, remove the cached rule whose `domain_regex` equals `redirectRemoval.domain_regex` (omit `redirectRemoval` only when the server could not resolve it—then refresh from a following `redirects_updated` if any). If `redirect` is omitted, leave redirect rules unchanged (ads / notification / popup changes). |
+| `campaign_updated`      | `{ "domains": [...], "redirects": [...] }` | Replace cached `domains` with the new `domains` list (same derivation as `init`). Replace cached redirect rules with `redirects` (same shape as `init.redirects`). This event fires whenever a campaign, redirect, or platform changes on the server. The payload always contains the complete, qualifying domain list and redirect rules for this user — no differential patching needed. |
 
 
 ### Reconnect behaviour
@@ -139,7 +180,7 @@ Call this on each navigation when the visited hostname is in `domains` (from `in
 
 - **No creative caching of `serve`:** Do not store serve response bodies in `chrome.storage` (or equivalent) or reuse a previous serve result on a later navigation to avoid network calls. For each visit where you need creatives, call `serve` and render from **that** response only. Targeting, geo, audience, schedule, and frequency caps are evaluated on the server at request time; caching would desync behavior from dashboard rules.
 - **Allowed state:** Keep SSE-derived data (`domains`, redirect rules from `init` / `redirects_updated`), auth tokens, and normal extension preferences. Those are not “serve creative caches.”
-- **SSE invalidation:** On `ads_updated` / `notifications_updated`, assume previously returned creatives may be stale; the next `serve` for an eligible visit is authoritative.
+- **No SSE events for ad / notification content.** Ads and notifications are resolved server-side on every `serve` call. There are no `ads_updated` or `notifications_updated` SSE events — the extension never caches serve creatives, so no invalidation is needed.
 
 Send the end-user **browser user agent on the `User-Agent` request header** (standard for HTTP clients). Do **not** put user agent in the JSON body — the body is strict and only allows `domain` and optional `type`.
 
@@ -159,7 +200,7 @@ Response `200`:
 
 The server writes one **`enduser_events` row per creative returned** (`type`: `ad`, `popup`, or `notification`) using the request domain and campaign id, so the dashboard reflects serves without relying on the extension to report them. Optional `type` in the request body only affects which buckets are populated; empty buckets are `[]`.
 
-**Targeting and caps are server-only:** Do not expect `targetAudience`, `platformIds`, `countryCodes`, `frequencyType`, schedule fields, or similar on each item — only qualifying rows are returned. **Redirects** are not in this response; they are delivered over SSE (`init.redirects`, `redirects_updated`, etc.) and still include per-rule cap metadata (`frequencyType`, `frequencyCount`, `count`) because the client applies those rules without calling `serve` on each navigation.
+**Targeting and caps are server-only:** Do not expect `targetAudience`, `platformIds`, `countryCodes`, `frequencyType`, schedule fields, or similar on each item — only qualifying rows are returned. **Redirects** are not in this response; they are delivered over SSE (`init.redirects`, `redirects_updated`, etc.) and still include per-rule cap metadata (`frequencyType`, `frequencyCount`, `count`, and for `time_based` also `timeStart` / `timeEnd`) because the client applies those rules without calling `serve` on each navigation.
 
 ```jsonc
 {
@@ -209,6 +250,10 @@ You may still use `POST /api/extension/events` with `type: "notification"` for c
 ## Redirect rules (SSE only)
 
 Qualifying redirect rows are **only** on the live stream: `init.redirects`, the full list again on `redirects_updated`, and optional single-rule patches on `campaign_updated`. There is **no** dedicated HTTP route for redirect rules—only these SSE payloads. Unlike `POST /api/extension/serve`, each redirect item includes **`frequencyType`**, **`frequencyCount`**, and **`count`** so the extension can enforce caps locally while matching the hostname without a round-trip.
+
+When `frequencyType === "time_based"`, items also include **`timeStart`** and **`timeEnd`**: time-of-day strings in the same form the server uses (see campaign `time_start` / `time_end` in the dashboard), typically `HH:MM` or `HH:MM:SS`. Parse each to *minutes since local midnight* (0–1440) and test inclusion in \[`timeStart`, `timeEnd`\]. If `timeStart` ≤ `timeEnd`, the window is same calendar day; if `timeStart` \> `timeEnd`, the window is overnight (in-window when current minutes ≥ `timeStart` **or** ≤ `timeEnd`). For any other `frequencyType`, `timeStart` and `timeEnd` are `null`. Use the same rules as the server’s `passesTimeBasedWindow` / `parseCampaignTimeToMinutes` logic (see `src/lib/extension-campaign-qualify.ts` in this repo) so behavior stays aligned.
+
+**Note:** The server also pre-filters `time_based` campaigns by *its* clock when building the list; the extension can still use `timeStart` / `timeEnd` to enforce or re-check the window on the user’s side when a rule is present.
 
 Match the visited hostname locally with `new RegExp(domain_regex, 'i')` and navigate immediately when matched. Do **not** wait for a server round-trip before navigating.
 
@@ -269,6 +314,7 @@ Response `200`:
 
 ## Removed endpoints
 
+These routes are **not** part of the current contract. For background on why they existed and how to migrate, see [`EXTENSION_LEGACY_REMOVAL_MIGRATION.md`](./EXTENSION_LEGACY_REMOVAL_MIGRATION.md) (historical).
 
 | Endpoint                       | Replacement                                                 |
 | ------------------------------ | ----------------------------------------------------------- |
@@ -312,7 +358,9 @@ On SSE platforms_updated { domains }
 On SSE redirects_updated { redirects }
   → replace cached redirect rules with the new array
 
-On SSE campaign_updated { domains, redirect?, redirectRemoval? }
-  → replace cached domains; if `redirect` is set, patch that rule; if `redirect` is null, drop the rule matching `redirectRemoval.domain_regex`; refresh ad/notification creatives via serve (or existing ads_updated / notifications_updated) as needed
+On SSE campaign_updated { domains, redirects }
+  → replace cached domains with `domains`
+  → replace cached redirect rules with `redirects` (full list)
+  → consider serve responses for active domains stale; the next navigation will fetch fresh creatives
 ```
 

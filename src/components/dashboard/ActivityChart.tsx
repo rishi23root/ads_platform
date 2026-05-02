@@ -74,7 +74,10 @@ export function ActivityChart({ data, loading, error, fillHeight = false }: Acti
 
   return (
     <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      className={cn(
+        'flex min-h-0 min-w-0 flex-1 flex-col',
+        fillHeight && 'min-h-[220px] lg:min-h-0'
+      )}
       role="region"
       aria-label="Daily campaign activity chart: events and unique users per UTC day"
     >

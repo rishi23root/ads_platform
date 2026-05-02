@@ -129,7 +129,7 @@ export function CampaignConfigCard({ campaign, targetList }: CampaignConfigCardP
         </CollapsibleTrigger>
         <CollapsibleContent id={contentId}>
           <CardContent className="px-4 py-4 sm:px-5 sm:py-5 space-y-5">
-            <p className="sr-only">Full schedule, frequency, and target list for this campaign.</p>
+            <p className="sr-only">Full schedule, frequency, and audience list for this campaign.</p>
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
                 Schedule &amp; rules
@@ -137,7 +137,7 @@ export function CampaignConfigCard({ campaign, targetList }: CampaignConfigCardP
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <FactBlock
                   icon={IconUsers}
-                  label={targetList ? 'Target list' : 'Audience'}
+                  label={targetList ? 'Audience list' : 'Audience'}
                   value={audienceDetail}
                 />
                 <FactBlock

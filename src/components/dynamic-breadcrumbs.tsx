@@ -14,12 +14,16 @@ import {
 
 const routeLabels: Record<string, string> = {
   "/": "Dashboard",
+  "/delivery": "Delivery",
+  "/delivery/live": "Live sessions & ctions" ,
   "/campaigns": "Campaigns",
-  "/platforms": "Platforms",
+  "/users": "Users",
+  "/platforms": "Sites & apps",
   "/ads": "Ads",
   "/notifications": "Notifications",
   "/events": "Events",
-  "/target-lists": "Target lists",
+  "/target-lists": "Audience lists",
+  "/redirects": "URL redirects",
   "/new": "New",
   "/edit": "Edit",
 }
@@ -68,8 +72,11 @@ export function DynamicBreadcrumbs() {
   segments.forEach((segment, index) => {
     currentPath += `/${segment}`
 
-    // Check if it's a dynamic route (UUID or ID)
-    const isDynamicRoute = UUID_RE.test(segment) || Boolean(segment.match(/^\d+$/))
+    // Check if it's a dynamic route (UUID, numeric id, or extension user id)
+    const isDynamicRoute =
+      UUID_RE.test(segment) ||
+      Boolean(segment.match(/^\d+$/)) ||
+      segment.startsWith("ext_")
 
     let label: string
     if (isDynamicRoute) {
@@ -86,9 +93,13 @@ export function DynamicBreadcrumbs() {
             : "…"
           label = display
         } else if (parentSegment === "campaigns") {
-          label = "Campaign Details"
+          label = "Campaign details"
+        } else if (parentSegment === "users") {
+          label = "User details"
         } else {
-          const parentLabel = routeLabels[`/${parentSegment}`] || parentSegment
+          const parentLabel =
+            routeLabels[`/${parentSegment}`] ||
+            parentSegment.charAt(0).toUpperCase() + parentSegment.slice(1)
           label = `${parentLabel} Details`
         }
       } else {

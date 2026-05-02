@@ -40,7 +40,7 @@ export function TargetListDetailAdminActions({
       const res = await fetch(`/api/target-lists/${listId}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Delete failed');
-      toast.success('Target list deleted');
+      toast.success('Audience list deleted');
       setOpen(false);
       router.push('/target-lists');
       router.refresh();
@@ -78,11 +78,11 @@ export function TargetListDetailAdminActions({
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete target list?</AlertDialogTitle>
+            <AlertDialogTitle>Delete audience list?</AlertDialogTitle>
             <AlertDialogDescription>
               Delete &quot;{listName}&quot;? {campaignsUsing} campaign
-              {campaignsUsing === 1 ? '' : 's'} currently reference this list; their target list will be
-              cleared (audience falls back to the campaign&apos;s other rules).
+              {campaignsUsing === 1 ? '' : 's'} currently reference this list; their audience list will be
+              cleared (the campaign&apos;s other rules still apply).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

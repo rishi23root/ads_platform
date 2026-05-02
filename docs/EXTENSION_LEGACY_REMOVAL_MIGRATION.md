@@ -1,5 +1,7 @@
 # Extension migration: legacy API removal (handoff for extension / client teams)
 
+> **Historical — not the live contract.** This is a migration handoff for teams updating old clients. The **current** extension API is defined in [`EXTENSION_CLIENT_CONTRACT.md`](./EXTENSION_CLIENT_CONTRACT.md).
+
 This document explains **what the admin dashboard removed**, **why**, and **exactly what the browser extension (or any other client) must do instead**. Share it with the team that owns the extension codebase so they can plan releases and QA.
 
 ---

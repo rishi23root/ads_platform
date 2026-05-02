@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { CampaignSelectRow } from '@/lib/extension-live-init';
-import type { ExtensionCampaignRuleFields } from '@/lib/extension-ad-block-qualify';
+import type { ExtensionCampaignRuleFields } from '@/lib/extension-campaign-qualify';
 import { formatExtensionCampaignScalar } from '@/lib/extension-campaign-scalars';
 
 function toDateOrNull(value: Date | string | null | undefined): Date | null {

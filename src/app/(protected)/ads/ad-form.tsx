@@ -64,7 +64,7 @@ export function AdForm({ ad, mode, onSuccess, onCancel }: AdFormProps) {
         router.refresh();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save ad');
+      toast.error(error instanceof Error ? error.message : 'Could not save this ad. Please try again.');
     } finally {
       setIsLoading(false);
     }

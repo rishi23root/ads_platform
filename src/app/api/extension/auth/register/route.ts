@@ -16,12 +16,23 @@ import {
   endUserPublicPayload,
   hashEnduserPassword,
 } from '@/lib/enduser-auth';
+import {
+  clientIpFromRequest,
+  consumeRateLimit,
+  maskEmailForLog,
+  rateLimitResponse,
+} from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
+/** Register is much cheaper for us than for an attacker (bcrypt is the hot spot), so this limit
+ * is tighter than login to keep sustained floods from pegging CPU. */
+const REGISTER_RATE = { name: 'ext-register', limit: 5, windowSec: 60 } as const;
+
 function logRegisterConflict(message: string, meta?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'development') {
-    console.warn(`[api/extension/auth/register] ${message}`, meta ?? '');
+    logger.debug(`[api/extension/auth/register] ${message}`, meta);
   }
 }
 
@@ -61,6 +72,10 @@ const registerSchema = z
  */
 export async function POST(request: NextRequest) {
   try {
+    const ip = clientIpFromRequest(request);
+    const rl = await consumeRateLimit(ip, REGISTER_RATE);
+    if (!rl.allowed) return rateLimitResponse(rl);
+
     let raw: unknown;
     try {
       raw = await request.json();
@@ -100,7 +115,7 @@ export async function POST(request: NextRequest) {
             .limit(1);
           if (emailOwner && emailOwner.id !== anonByDevice.id) {
             logRegisterConflict('409: email belongs to a different user than this identifier', {
-              email: normalizedEmail,
+              email: maskEmailForLog(normalizedEmail),
             });
             return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
           }
@@ -139,7 +154,7 @@ export async function POST(request: NextRequest) {
         if (anonByDevice && anonByDevice.email !== null) {
           if (anonByDevice.email.toLowerCase() === normalizedEmail) {
             logRegisterConflict('409: email already registered on holder of this identifier', {
-              email: normalizedEmail,
+              email: maskEmailForLog(normalizedEmail),
             });
             return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
           }
@@ -227,7 +242,7 @@ export async function POST(request: NextRequest) {
             .limit(1);
           if (emailOwner) {
             logRegisterConflict('409: email already exists (insert race or duplicate)', {
-              email: normalizedEmail,
+              email: maskEmailForLog(normalizedEmail),
             });
             return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
           }
@@ -283,7 +298,7 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-    console.error('[api/extension/auth/register]', error);
+    logger.error('[api/extension/auth/register] failed', error);
     return NextResponse.json({ error: 'Failed to register' }, { status: 500 });
   }
 }

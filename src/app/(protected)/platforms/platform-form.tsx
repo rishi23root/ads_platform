@@ -78,7 +78,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
     }
     const hit = findRedirectConflictForPlatform(extracted, redirectRules);
     if (hit !== undefined) {
-      const msg = `This domain is already covered by a redirect rule (source: ${hit.sourceDomain}). Change or remove the redirect first.`;
+      const msg = `This domain is already covered by a URL redirect (source: ${hit.sourceDomain}). Change or remove the redirect first.`;
       setDomainFieldError(msg);
       toast.error(msg);
     } else {
@@ -106,7 +106,9 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
 
       if (!response.ok) {
         const msg =
-          typeof data.error === 'string' ? data.error : 'Failed to save platform';
+          typeof data.error === 'string'
+            ? data.error
+            : 'Could not save this site or app. Please try again.';
         if (response.status === 409) {
           if (msg.includes('name already exists')) {
             setNameFieldError(msg);
@@ -118,7 +120,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
         throw new Error(msg);
       }
 
-      toast.success(mode === 'create' ? 'Platform created successfully' : 'Platform updated successfully');
+      toast.success(mode === 'create' ? 'Site or app added' : 'Site or app updated');
       if (onSuccess) {
         await onSuccess(data as Platform);
       } else {
@@ -126,7 +128,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
         router.refresh();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save platform');
+      toast.error(error instanceof Error ? error.message : 'Could not save this site or app. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +145,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
             setName(e.target.value);
             setNameFieldError(null);
           }}
-          placeholder="Platform name"
+          placeholder="e.g. Instagram web"
           required
           disabled={isLoading}
           aria-invalid={nameFieldError ? true : undefined}
@@ -182,8 +184,7 @@ export function PlatformForm({ platform, mode, onSuccess, onCancel }: PlatformFo
           </p>
         ) : (
           <p id="platform-domain-hint" className="text-sm text-muted-foreground">
-            Enter domain or subdomain (e.g., instagram.com, www.instagram.com). Full URLs will be
-            automatically extracted.
+            Enter a website address like <code>instagram.com</code> or <code>www.instagram.com</code>. You can paste a full URL and we&apos;ll pick out the domain.
           </p>
         )}
       </div>

@@ -69,7 +69,7 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
     }
     const hit = findPlatformDomainConflictForRedirect(host, includeSubdomainsValue, platformRows);
     if (hit !== undefined) {
-      const msg = `Source domain overlaps platform hostname “${hit}”. Change this rule or remove the platform first.`;
+      const msg = `This source domain overlaps a registered site or app (${hit}). Change this redirect or remove the site first.`;
       setSourceDomainFieldError(msg);
       toast.error(msg);
     } else {
@@ -109,7 +109,9 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
 
       if (!response.ok) {
         const msg =
-          typeof data.error === 'string' ? data.error : 'Failed to save redirect';
+          typeof data.error === 'string'
+            ? data.error
+            : 'Could not save this URL redirect. Please try again.';
         if (response.status === 409) {
           setSourceDomainFieldError(msg);
           return;
@@ -117,7 +119,7 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
         throw new Error(msg);
       }
 
-      toast.success(mode === 'create' ? 'Redirect created successfully' : 'Redirect updated successfully');
+      toast.success(mode === 'create' ? 'URL redirect created' : 'URL redirect updated');
       if (onSuccess) {
         await onSuccess(data as Redirect);
       } else {
@@ -125,7 +127,7 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
         router.refresh();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save redirect');
+      toast.error(error instanceof Error ? error.message : 'Could not save this URL redirect. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -170,7 +172,7 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
           </p>
         ) : (
           <p id="source-domain-hint" className="text-xs text-muted-foreground">
-            Hostname to match (no protocol). Enable &quot;Include subdomains&quot; to match *.example.com.
+            The website to match — no http:// or https://. Turn on &quot;Include subdomains&quot; to also match app.example.com, www.example.com, etc.
           </p>
         )}
       </div>
@@ -205,6 +207,9 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
           required
           disabled={isLoading}
         />
+        <p className="text-xs text-muted-foreground">
+          Enter the full web address starting with <code>https://</code>.
+        </p>
       </div>
 
       <div className="flex gap-2 pt-2">
@@ -215,9 +220,9 @@ export function RedirectForm({ redirect: redirectRow, mode, onSuccess, onCancel 
               Saving...
             </>
           ) : mode === 'create' ? (
-            'Create Redirect'
+            'Create URL redirect'
           ) : (
-            'Update Redirect'
+            'Update URL redirect'
           )}
         </Button>
         <Button

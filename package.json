@@ -7,7 +7,8 @@
     "build": "next build",
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "db:generate": "drizzle-kit generate",
     "db:squash": "rm -f drizzle/migrations/*.sql drizzle/migrations/meta/*_snapshot.json && node -e \"require('fs').writeFileSync('drizzle/migrations/meta/_journal.json', JSON.stringify({version:'7',dialect:'postgresql',entries:[]},null,2)+'\\n')\" && pnpm db:generate",
     "db:migrate": "NODE_OPTIONS='--dns-result-order=ipv4first' drizzle-kit migrate",
@@ -28,7 +29,7 @@
     "test:frequency-load": "EXTENSION_INTEGRATION=1 vitest run tests/user-flow/extension/extension-multi-user-frequency-load.integration.test.ts --no-file-parallelism",
     "test:unit": "vitest run tests/task-based/auth-scope.test.ts",
     "test:watch": "vitest",
-    "test:extension": "vitest run tests/function-based/extension-ad-block-qualify.test.ts",
+    "test:extension": "vitest run tests/function-based/extension-campaign-qualify.test.ts",
     "test:extension-log": "bash docs/test-extension-log.sh",
     "load-test:extension": "npx tsx scripts/load-test-extension.ts"
   },

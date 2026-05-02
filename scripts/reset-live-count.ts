@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
- * Reset the live extension connection count to 0 in Redis.
- * Use when the dashboard shows an incorrect count (e.g. always 1 with no extension users).
+ * Reset live extension connection leases in Redis (sorted set of SSE sessions).
+ * Use when the dashboard shows an incorrect count (e.g. drift after deploy).
  *
  * Run: npx tsx scripts/reset-live-count.ts
  */
@@ -11,7 +11,7 @@ dotenv.config({ path: '.env.local' });
 async function main() {
   const { resetConnectionCount } = await import('../src/lib/redis');
   await resetConnectionCount();
-  console.log('✓ Live connection count reset to 0');
+  console.log('✓ Live connection leases cleared (count reset to 0)');
 }
 
 main().catch((err) => {

@@ -4,19 +4,23 @@ import { redirects } from '@/db/schema';
 import { getSessionWithRole } from '@/lib/dal';
 import { queryPlatformConflictForRedirect } from '@/lib/redirect-platform-conflict-queries';
 import { getLinkedCampaignCountByRedirectId } from '@/lib/campaign-linked-counts';
+import { normalizeDomainForRedirectStorage } from '@/lib/domain-utils';
+import { parsePagination } from '@/lib/pagination';
 import { publishRedirectsUpdated } from '@/lib/redis';
+import { publishCampaignUpdatedForLinkedRedirect } from '@/lib/campaign-linked-counts';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const sessionWithRole = await getSessionWithRole();
     if (!sessionWithRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { limit, offset } = parsePagination(request);
     const [allRedirects, linkedByRedirectId] = await Promise.all([
-      db.select().from(redirects).orderBy(redirects.createdAt),
+      db.select().from(redirects).orderBy(redirects.createdAt).limit(limit).offset(offset),
       getLinkedCampaignCountByRedirectId(),
     ]);
 
@@ -52,9 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const trimmedSource = String(sourceDomain).trim();
     const includeSub = Boolean(includeSubdomains);
-    const conflictHost = await queryPlatformConflictForRedirect(trimmedSource, includeSub);
+    const normalizedSource = normalizeDomainForRedirectStorage(String(sourceDomain), includeSub);
+    const conflictHost = await queryPlatformConflictForRedirect(normalizedSource, includeSub);
     if (conflictHost !== undefined) {
       return NextResponse.json(
         {
@@ -68,13 +72,14 @@ export async function POST(request: NextRequest) {
       .insert(redirects)
       .values({
         name,
-        sourceDomain: trimmedSource,
+        sourceDomain: normalizedSource,
         includeSubdomains: includeSub,
         destinationUrl: String(destinationUrl).trim(),
       })
       .returning();
 
     await publishRedirectsUpdated();
+    await publishCampaignUpdatedForLinkedRedirect(created.id);
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error('Error creating redirect:', error);

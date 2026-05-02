@@ -22,7 +22,10 @@ In **Project → Settings → Environment Variables**, add (Production / Preview
 | `DATABASE_URL` | Yes | Postgres URL (e.g. Supabase, Neon, RDS). Use a **pooler** URL if your provider recommends it for serverless. |
 | `BETTER_AUTH_SECRET` | Yes | Min 32 characters. |
 | `BETTER_AUTH_BASE_URL` | Yes (prod) | Your live URL, e.g. `https://your-app.vercel.app` or custom domain — **no trailing slash**. |
-| `REDIS_URL` | No | e.g. Upstash `rediss://...` for realtime. **Recommended in production:** without Redis, per-IP rate limits for extension **ad-block**, **sync**, and **live** are skipped (traffic is still allowed). |
+| `REDIS_URL` | No | e.g. Upstash `rediss://...` for realtime (SSE) and rate limiting. **Recommended in production:** without Redis, rate limits fall back to an in-memory counter (per-Lambda instance, not shared across regions), and SSE fan-out degrades to single-instance broadcast. |
+| `ENDUSER_SESSION_DAYS` | No | Extension `Bearer` token lifetime in days. Defaults to `30`. Must be a positive integer. |
+| `REALTIME_LIVE_HEARTBEAT_MS` | No | SSE keep-alive interval in ms for `GET /api/extension/live`. Defaults to `60000` (1 min). Lower (e.g. `15000`) if your proxy/CDN idle-closes the stream sooner. |
+| `REALTIME_LEASE_MAX_STALE_MS` | No | Milliseconds without a heartbeat before Redis drops the live SSE lease (live counts / Delivery Live table). Defaults to `300000` (5 min). Range `30000`–`3600000`. |
 | `DOMAIN` | No | If you use it in `next.config` / CORS; set to your production host if applicable. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Only for seeding the first admin (`pnpm db:seed-admin` run locally against prod DB, or a one-off job). |
 
@@ -128,8 +131,17 @@ Or use a process manager (e.g. systemd, PM2) and load env from `.env.local`.
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `BETTER_AUTH_SECRET` | Yes | Min 32 characters |
 | `BETTER_AUTH_BASE_URL` | Yes (prod) | e.g. `https://dashboard.example.com` |
-| `REDIS_URL` | No | Realtime features degrade gracefully if missing |
+| `REDIS_URL` | No | Realtime (SSE) + rate limiting. In-memory fallback per instance if missing. |
+| `ENDUSER_SESSION_DAYS` | No | Extension Bearer token lifetime in days (default `30`). |
+| `REALTIME_LIVE_HEARTBEAT_MS` | No | SSE heartbeat interval in ms (default `60000` = 1 min). |
+| `REALTIME_LEASE_MAX_STALE_MS` | No | Lease TTL without heartbeat in ms (default `300000` = 5 min). |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | For seeding first admin user |
+
+---
+
+## Redis extension caches
+
+With `REDIS_URL` set, the app caches extension hot-path JSON in Redis (`extension:campaigns:*`, `extension:platforms:list`, `extension:campaigns:domains`; see [`src/lib/redis.ts`](../src/lib/redis.ts)). Keys use a **12-hour TTL** as a safety net; admin mutations **invalidate** (`DEL`) them on change. **Manual SQL or external DB edits** can still serve stale reads until TTL expiry or `DEL`.
 
 ---
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { IconFilter } from '@tabler/icons-react';
 
@@ -13,10 +14,11 @@ export function PaymentsPageLayout({ filterContent, children }: PaymentsPageLayo
   const [showFilters, setShowFilters] = useState(false);
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-row items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight min-w-0">Payments</h1>
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Payments"
+        description="Revenue and payment history from your users."
+        actions={
           <Button
             type="button"
             variant={showFilters ? 'secondary' : 'outline'}
@@ -29,9 +31,8 @@ export function PaymentsPageLayout({ filterContent, children }: PaymentsPageLayo
             <IconFilter className="h-4 w-4 mr-2" aria-hidden="true" />
             {showFilters ? 'Hide filters' : 'Filters'}
           </Button>
-        </div>
-        <p className="text-sm text-muted-foreground leading-snug">Revenue and payment history.</p>
-      </header>
+        }
+      />
 
       <div
         id="payments-filters-panel"

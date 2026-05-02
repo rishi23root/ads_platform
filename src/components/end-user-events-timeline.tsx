@@ -2,24 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { CopyableIdCell } from "@/components/copyable-id-cell"
 import { DateDisplayToggleButton } from "@/components/date-display-toggle-button"
+import { ExtensionEventsLogTable } from "@/components/extension-events-log-table"
 import { ExportEventsCsvButton } from "@/components/export-events-csv-button"
-import { HumanReadableDate } from "@/components/human-readable-date"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { DataTableSurface } from "@/components/ui/data-table-surface"
 import { TablePagination } from "@/components/ui/table-pagination"
-import { getCountryName } from "@/lib/countries"
-import { IconChartBar } from "@tabler/icons-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { IconChartBar, IconExternalLink, IconRefresh } from "@tabler/icons-react"
 
 const PAGE_SIZE = 25
 
@@ -44,15 +39,6 @@ type ApiResponse = {
   pageSize: number
 }
 
-const typeColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  ad: "default",
-  notification: "secondary",
-  popup: "outline",
-  request: "secondary",
-  redirect: "outline",
-  visit: "secondary",
-}
-
 function eventsDeepLink(endUserUuid: string): string {
   const q = new URLSearchParams({ endUserIdExact: endUserUuid })
   return `/events?${q.toString()}`
@@ -65,6 +51,7 @@ export type EndUserEventsTimelineProps = {
 
 export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTimelineProps) {
   const [page, setPage] = useState(1)
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [payload, setPayload] = useState<ApiResponse | null>(null)
@@ -92,7 +79,7 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, refreshNonce])
 
   const totalPages =
     payload && payload.total > 0 ? Math.ceil(payload.total / payload.pageSize) : 0
@@ -112,39 +99,63 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
     ) : null
 
   return (
-    <section aria-label="Extension events for this user" className={className}>
+    <section aria-label="Activity for this app user" className={className}>
       <div className="space-y-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold flex items-center gap-2">
-              <IconChartBar className="h-5 w-5 shrink-0" aria-hidden />
+            <h2 className="text-base font-semibold flex items-center gap-2 tracking-tight">
+              <IconChartBar className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="truncate">
                 Event log ({loading ? "…" : totalCount.toLocaleString()})
               </span>
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Newest first.{" "}
-              <Link
-                href={eventsDeepLink(endUserId)}
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                Open full Events log
-              </Link>{" "}
-              for filters and cross-user views.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Newest first.</p>
           </div>
-          <div className="shrink-0 flex flex-wrap items-center gap-2">
+          <div className="shrink-0 flex flex-wrap items-center justify-end gap-2">
             {paginationEl}
             <ExportEventsCsvButton filterParams={csvFilterParams} />
             <DateDisplayToggleButton />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setRefreshNonce((n) => n + 1)}
+              disabled={loading}
+              aria-label="Refresh events"
+              className="h-9 w-9 min-h-9 min-w-9"
+            >
+              <IconRefresh className="h-4 w-4" aria-hidden />
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="h-9 w-9 min-h-9 min-w-9"
+                  asChild
+                >
+                  <Link
+                    href={eventsDeepLink(endUserId)}
+                    aria-label="View in Events"
+                  >
+                    <IconExternalLink className="h-4 w-4" aria-hidden />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Opens Events with this user pre-selected
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
         {loading && (
-          <div className="space-y-2 rounded-lg bg-muted/10 p-4">
-            <Skeleton className="h-10 w-full rounded-md" />
-            <Skeleton className="h-40 w-full rounded-md" />
-          </div>
+          <DataTableSurface variant="embedded" className="min-w-0">
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-10 w-full rounded-md" />
+              <Skeleton className="h-40 w-full rounded-md" />
+            </div>
+          </DataTableSurface>
         )}
 
         {error && !loading && (
@@ -157,116 +168,17 @@ export function EndUserEventsTimeline({ endUserId, className }: EndUserEventsTim
         )}
 
         {!loading && !error && payload && totalCount === 0 && (
-          <div className="rounded-lg bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            No events recorded for this user yet.
-          </div>
+          <DataTableSurface variant="embedded" className="min-w-0">
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+              No events recorded for this user yet.
+            </div>
+          </DataTableSurface>
         )}
 
         {!loading && !error && payload && totalCount > 0 && (
-          <div className="min-w-0">
-            <div className="w-full overflow-x-auto">
-              <Table className="w-full table-auto">
-                <colgroup>
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: "auto" }} />
-                  <col style={{ width: "80px" }} />
-                  <col style={{ width: "minmax(120px, 1fr)" }} />
-                  <col style={{ width: "90px" }} />
-                  <col style={{ width: "170px" }} />
-                </colgroup>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-muted-foreground text-xs font-normal">
-                      User identifier
-                    </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Email</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Plan</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Campaign</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Domain</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Country</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">User agent</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Type</TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-normal">Timestamp</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="py-2 overflow-hidden">
-                        <CopyableIdCell
-                          value={log.userIdentifier}
-                          truncateLength={12}
-                          copyLabel="User identifier copied to clipboard"
-                          href={log.endUserUuid ? `/users/${log.endUserUuid}` : undefined}
-                        />
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm">
-                        {log.email ? (
-                          <span className="truncate block max-w-[180px]" title={log.email}>
-                            {log.email}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm">
-                        {log.plan ? (
-                          <Badge variant="outline" className="font-normal capitalize">
-                            {log.plan}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        {log.campaignId ? (
-                          <CopyableIdCell
-                            value={log.campaignId}
-                            href={`/campaigns/${log.campaignId}`}
-                            truncateLength={8}
-                            copyLabel="Campaign ID copied to clipboard"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        <span className="truncate block" title={log.domain ?? ""}>
-                          {log.domain ?? "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        {log.country ? (
-                          <span title={getCountryName(log.country)} className="uppercase text-sm">
-                            {log.country}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden text-sm text-muted-foreground max-w-[220px]">
-                        <span
-                          className="line-clamp-2 font-mono text-xs"
-                          title={log.userAgent ?? undefined}
-                        >
-                          {log.userAgent ?? "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 overflow-hidden">
-                        <Badge variant={typeColors[log.type] ?? "secondary"}>{log.type}</Badge>
-                      </TableCell>
-                      <TableCell className="py-2 text-sm text-muted-foreground min-w-0">
-                        <HumanReadableDate date={new Date(log.createdAt)} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+          <DataTableSurface variant="embedded" className="min-w-0">
+            <ExtensionEventsLogTable rows={rows} headerRowClassName="hover:bg-transparent" />
+          </DataTableSurface>
         )}
       </div>
     </section>

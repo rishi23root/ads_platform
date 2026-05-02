@@ -3,11 +3,11 @@ import {
   currentLocalMinutesSinceMidnight,
   filterQualifyingExtensionCampaigns,
   isCampaignScheduleActive,
-  isExtensionUserNewForAdBlock,
+  isExtensionUserNew,
   parseCampaignTimeToMinutes,
   type ExtensionCampaignRuleFields,
   type ExtensionCampaignQualifyContext,
-} from '@/lib/extension-ad-block-qualify';
+} from '@/lib/extension-campaign-qualify';
 
 function baseCampaign(overrides: Partial<ExtensionCampaignRuleFields> = {}): ExtensionCampaignRuleFields {
   return {
@@ -39,7 +39,7 @@ function baseCtx(overrides: Partial<ExtensionCampaignQualifyContext> = {}): Exte
   };
 }
 
-describe('extension-ad-block-qualify', () => {
+describe('extension-campaign-qualify', () => {
   describe('isCampaignScheduleActive', () => {
     it('requires active status', () => {
       const now = new Date('2026-06-01T12:00:00Z');
@@ -59,14 +59,13 @@ describe('extension-ad-block-qualify', () => {
     });
   });
 
-  describe('isExtensionUserNewForAdBlock', () => {
-    /** Mirrors ad-block: "new" from first event or `end_users.startDate` within window. */
+  describe('isExtensionUserNew', () => {
     it('returns true when account start / first event is within 7 days', () => {
       const today = new Date();
-      expect(isExtensionUserNewForAdBlock(today)).toBe(true);
+      expect(isExtensionUserNew(today)).toBe(true);
       const eightDaysAgo = new Date();
       eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
-      expect(isExtensionUserNewForAdBlock(eightDaysAgo)).toBe(false);
+      expect(isExtensionUserNew(eightDaysAgo)).toBe(false);
     });
   });
 

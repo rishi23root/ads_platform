@@ -4,6 +4,7 @@ import { desc } from 'drizzle-orm';
 import { getSessionWithRole } from '@/lib/dal';
 import { database as db } from '@/db';
 import { targetLists } from '@/db/schema';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { TargetListsTable } from '@/components/target-lists-table';
@@ -13,7 +14,7 @@ import { countTargetListMembers } from '@/lib/target-list-members-query';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Target lists',
+  title: 'Audience lists',
 };
 
 export const dynamic = 'force-dynamic';
@@ -50,21 +51,21 @@ export default async function TargetListsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Target lists</h1>
-          <p className="text-muted-foreground">Reusable audience definitions for campaigns</p>
-        </div>
-        {isAdmin ? (
-          <Button asChild>
-            <Link href="/target-lists/new">
-              <IconPlus className="mr-2 h-4 w-4" />
-              New list
-            </Link>
-          </Button>
-        ) : null}
-      </div>
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Audience lists"
+        description="Groups of users your campaigns can target."
+        actions={
+          isAdmin ? (
+            <Button asChild>
+              <Link href="/target-lists/new">
+                <IconPlus className="mr-2 h-4 w-4" />
+                New audience list
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
       <TargetListsTable rows={data} isAdmin={isAdmin} />
     </div>
   );

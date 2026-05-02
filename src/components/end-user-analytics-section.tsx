@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { IconChartBar, IconExternalLink } from "@tabler/icons-react"
+import { IconArrowRight, IconChartBar } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -39,6 +39,8 @@ import { ExtensionEventsChartTooltip } from "@/components/extension-events-chart
 import {
   extensionEventChartAllZeros,
   extensionEventsChartConfig,
+  formatExtensionChartYAxisTick,
+  niceExtensionChartYAxisTicks,
   type ExtensionEventChartRow,
 } from "@/lib/extension-events-chart"
 import { cn } from "@/lib/utils"
@@ -82,41 +84,6 @@ const rangeLabels: Record<string, string> = {
   "90d": "Last 90 days",
   "30d": "Last 30 days",
   "7d": "Last 7 days",
-}
-
-function formatYAxisTick(value: number): string {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "0"
-  const abs = Math.abs(n)
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (abs >= 10_000) return `${Math.round(n / 1_000)}k`
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return String(Math.round(n))
-}
-
-function niceYAxisTicks(max: number): number[] {
-  if (!Number.isFinite(max) || max <= 0) return [0]
-  /** Tight ceiling so sparse spikes don’t leave a huge empty band above the peak. */
-  const ceil = Math.ceil(max * 1.01)
-  const candidates = [
-    1, 2, 4, 5, 7, 8, 10, 15, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000,
-  ]
-  let best: { step: number; top: number } | null = null
-  for (const c of candidates) {
-    const intervals = Math.ceil(ceil / c)
-    if (intervals > 6) continue
-    const top = intervals * c
-    if (!best || top < best.top) best = { step: c, top }
-  }
-  if (!best) {
-    let step = 1
-    while (Math.ceil(ceil / step) > 6) step *= 2
-    const top = Math.ceil(ceil / step) * step
-    best = { step, top }
-  }
-  const ticks: number[] = []
-  for (let v = 0; v <= best.top; v += best.step) ticks.push(v)
-  return ticks
 }
 
 function eventsDeepLink(endUserUuid: string, startIso: string, endIso: string): string {
@@ -261,7 +228,7 @@ export function EndUserAnalyticsSection({
     return max
   }, [chartRows])
 
-  const yAxisTicks = useMemo(() => niceYAxisTicks(singleSeriesMax), [singleSeriesMax])
+  const yAxisTicks = useMemo(() => niceExtensionChartYAxisTicks(singleSeriesMax), [singleSeriesMax])
   const yAxisTop = yAxisTicks[yAxisTicks.length - 1] ?? 100
 
   const summary = data?.summary
@@ -277,23 +244,30 @@ export function EndUserAnalyticsSection({
           <div className="space-y-1.5 min-w-0">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <IconChartBar className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              Extension activity
+              User activity
             </CardTitle>
             <CardDescription className="text-xs leading-relaxed max-w-lg">
-              Daily event breakdown by type for this user. Hover the chart for daily totals.
+              Daily activity by type for this user. Hover the chart for daily totals.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto">
             {deepLink ? (
               <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 w-full border-0 bg-muted/35 text-foreground hover:bg-muted/50 dark:bg-muted/25 dark:hover:bg-muted/40 sm:w-auto"
+                variant="outline"
+                size="default"
+                className="h-auto min-h-11 w-full justify-center gap-2 border-border/80 bg-background/60 px-4 py-2.5 text-sm font-medium shadow-none hover:bg-muted/50 sm:min-h-9 sm:w-auto sm:py-0"
                 asChild
               >
-                <Link href={deepLink}>
+                <Link
+                  href={deepLink}
+                  title="Opens Events with this user and the chart date range pre-filled as filters"
+                  aria-label="Open Events log filtered to this user and the current chart date range"
+                >
                   View in Events
-                  <IconExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden />
+                  <IconArrowRight
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
                 </Link>
               </Button>
             ) : null}
@@ -353,7 +327,7 @@ export function EndUserAnalyticsSection({
               className={cn(
                 "w-full rounded-lg",
                 embedded
-                  ? "flex-1"
+                  ? "h-[min(14rem,38vh)] min-h-[180px] max-lg:flex-none sm:min-h-[200px] lg:min-h-0 lg:flex-1"
                   : "h-[min(22rem,45vh)] min-h-[240px]",
               )}
             />
@@ -372,8 +346,8 @@ export function EndUserAnalyticsSection({
             <>
               {summary.total === 0 ? (
                 <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                  No extension events in this range. The user may not have used the extension yet, or
-                  activity may fall outside logging paths.
+                  No activity in this range. This user may not have used the app yet, or the
+                  events aren&apos;t tracked.
                 </div>
               ) : (
                 <>
@@ -389,9 +363,9 @@ export function EndUserAnalyticsSection({
                       <ChartContainer
                         config={extensionEventsChartConfig as ChartConfig}
                         className={cn(
-                          "aspect-auto w-full",
+                          "aspect-auto w-full min-w-0 justify-start [&_.recharts-responsive-container]:!w-full [&_.recharts-wrapper]:!max-w-none",
                           embedded
-                            ? "min-h-0 flex-1"
+                            ? "h-[min(14rem,38vh)] min-h-[180px] max-lg:shrink-0 sm:min-h-[200px] lg:min-h-0 lg:flex-1"
                             : "h-[min(22rem,45vh)] min-h-[240px]",
                         )}
                       >
@@ -438,12 +412,13 @@ export function EndUserAnalyticsSection({
                               }}
                             />
                             <YAxis
-                              width={48}
+                              width={44}
                               allowDecimals={false}
+                              interval={0}
                               tickLine={false}
                               axisLine={false}
                               tickMargin={8}
-                              tickFormatter={formatYAxisTick}
+                              tickFormatter={formatExtensionChartYAxisTick}
                               domain={[0, yAxisTop]}
                               ticks={yAxisTicks}
                             />
@@ -505,7 +480,7 @@ export function EndUserAnalyticsSection({
   if (embedded) {
     return (
       <div
-        aria-label="Extension activity analytics"
+        aria-label="User activity analytics"
         className={cn(
           "@container/analytics flex h-full min-h-0 flex-col gap-3 overflow-hidden",
           className,
@@ -519,7 +494,7 @@ export function EndUserAnalyticsSection({
 
   return (
     <Card
-      aria-label="Extension activity analytics"
+      aria-label="User activity analytics"
       className={cn(
         "@container/analytics gap-3 overflow-hidden border-border bg-card/40 py-4 shadow-none",
         className,

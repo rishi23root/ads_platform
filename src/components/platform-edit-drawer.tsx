@@ -10,7 +10,7 @@ import {
   CrudResourceDrawerHeader,
   CrudResourceDrawerBody,
 } from '@/components/crud-resource-drawer';
-import { LinkedCampaigns } from '@/components/linked-campaigns';
+import { LinkedCampaignsSection } from '@/components/linked-campaigns';
 import { formatDateTimeUtcEnGb } from '@/lib/utils';
 import type { Platform } from '@/db/schema';
 
@@ -178,17 +178,11 @@ function PlatformEditDrawerContent({
                   ) : null}
                 </dl>
               </section>
-              <section className="min-w-0 space-y-3" aria-labelledby="platform-campaigns-heading">
-                <h3
-                  id="platform-campaigns-heading"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Targeted by campaigns
-                </h3>
-                <div className="overflow-hidden rounded-lg border border-border/80 bg-card/40">
-                  <LinkedCampaigns type="platform" entityId={resolvedPlatform.id} embedded />
-                </div>
-              </section>
+              <LinkedCampaignsSection
+                type="platform"
+                entityId={resolvedPlatform.id}
+                heading="Targeted by campaigns"
+              />
             </div>
           ) : (
             <PlatformForm

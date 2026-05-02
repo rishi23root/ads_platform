@@ -107,7 +107,6 @@ export function LinkedContentCard({ linkedContent, isAdmin = false, campaignType
           onOpenChange={setDrawerOpen}
           adId={linkedContent.id}
           showEditAction={isAdmin}
-          hideLinkedCampaigns
         />
       )}
       {linkedContent.type === 'notification' && (
@@ -116,7 +115,6 @@ export function LinkedContentCard({ linkedContent, isAdmin = false, campaignType
           onOpenChange={setDrawerOpen}
           notificationId={linkedContent.id}
           showEditAction={isAdmin}
-          hideLinkedCampaigns
         />
       )}
       {linkedContent.type === 'redirect' && (
@@ -125,7 +123,6 @@ export function LinkedContentCard({ linkedContent, isAdmin = false, campaignType
           onOpenChange={setDrawerOpen}
           redirectId={linkedContent.id}
           showEditAction={isAdmin}
-          hideLinkedCampaigns
         />
       )}
     </>

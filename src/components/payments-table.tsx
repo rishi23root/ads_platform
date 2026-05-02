@@ -9,6 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
+import { dataTableHeadMutedClassName } from '@/lib/admin-ui';
 import { HumanReadableDate } from '@/components/human-readable-date';
 import { Button } from '@/components/ui/button';
 import type { PaymentRow } from '@/db/schema';
@@ -68,17 +70,19 @@ export function PaymentsTable({
     );
   }
 
-  const headClass = 'text-muted-foreground text-xs font-normal';
-
   const table = (
     <Table className={embedded ? 'w-full table-auto' : undefined}>
       <TableHeader>
         <TableRow className={embedded ? 'hover:bg-transparent' : undefined}>
-          <TableHead className={embedded ? headClass : undefined}>Date</TableHead>
-          <TableHead className={embedded ? headClass : undefined}>Amount</TableHead>
-          <TableHead className={embedded ? headClass : undefined}>Status</TableHead>
-          <TableHead className={embedded ? headClass : undefined}>Description</TableHead>
-          {allowDelete ? <TableHead className={embedded ? `${headClass} w-[72px]` : 'w-[72px]'} /> : null}
+          <TableHead className={embedded ? dataTableHeadMutedClassName : undefined}>Date</TableHead>
+          <TableHead className={embedded ? dataTableHeadMutedClassName : undefined}>Amount</TableHead>
+          <TableHead className={embedded ? dataTableHeadMutedClassName : undefined}>Status</TableHead>
+          <TableHead className={embedded ? dataTableHeadMutedClassName : undefined}>Description</TableHead>
+          {allowDelete ? (
+            <TableHead
+              className={embedded ? `${dataTableHeadMutedClassName} w-[72px]` : 'w-[72px]'}
+            />
+          ) : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -117,5 +121,9 @@ export function PaymentsTable({
     return <div className="w-full overflow-x-auto">{table}</div>;
   }
 
-  return <div className="rounded-md border overflow-x-auto">{table}</div>;
+  return (
+    <DataTableSurface>
+      <div className="overflow-x-auto">{table}</div>
+    </DataTableSurface>
+  );
 }

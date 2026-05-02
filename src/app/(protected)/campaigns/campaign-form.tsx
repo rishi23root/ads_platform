@@ -30,7 +30,7 @@ import {
 } from '@/lib/campaign-display';
 
 type CampaignType = 'ads' | 'popup' | 'notification' | 'redirect';
-type FrequencyType = 'full_day' | 'time_based' | 'only_once' | 'always' | 'specific_count';
+type FrequencyType = 'time_based' | 'always' | 'specific_count';
 
 function initialTargetListId(
   campaign: CampaignFormInitial | undefined,
@@ -134,8 +134,16 @@ export function CampaignForm({
     setCampaignType(v);
     if (v === 'redirect') setPlatformIds([]);
   };
-  const [frequencyType, setFrequencyType] = useState<FrequencyType>((campaign?.frequencyType as FrequencyType) ?? 'always');
-  const [frequencyCount, setFrequencyCount] = useState(campaign?.frequencyCount?.toString() ?? '');
+  const [frequencyType, setFrequencyType] = useState<FrequencyType>(() => {
+    const t = campaign?.frequencyType;
+    if (t === 'full_day') return 'always';
+    if (t === 'only_once') return 'specific_count';
+    return (t as FrequencyType) ?? 'always';
+  });
+  const [frequencyCount, setFrequencyCount] = useState(() => {
+    if (campaign?.frequencyType === 'only_once') return '1';
+    return campaign?.frequencyCount?.toString() ?? '';
+  });
   const [timeStart, setTimeStart] = useState(campaign?.timeStart ?? '');
   const [timeEnd, setTimeEnd] = useState(campaign?.timeEnd ?? '');
   const [platformIds, setPlatformIds] = useState<string[]>(campaign?.platformIds ?? []);
@@ -162,35 +170,44 @@ export function CampaignForm({
   );
   const [addPlatformDrawerOpen, setAddPlatformDrawerOpen] = useState(false);
 
+  /** Full width in all modes so Frequency aligns with the date row; 2-col when a companion field shows. */
+  const scheduleFrequencyGroupClass =
+    frequencyType === 'time_based' || frequencyType === 'specific_count'
+      ? 'grid w-full grid-cols-1 gap-4 md:grid-cols-2 md:items-start'
+      : 'grid w-full grid-cols-1 gap-4';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation: at least one domain (platform) for ads/popup; optional for notifications
 
     if (campaignType !== 'notification' && campaignType !== 'redirect' && !platformIds.length) {
-      toast.error('Select at least one domain (platform)');
+      toast.error('Pick at least one site or app where this campaign can run.');
       return;
     }
 
     if (!targetListId?.trim()) {
-      toast.error('Select a target list');
+      toast.error('Pick an audience list so the campaign knows who to reach.');
       return;
     }
 
-    // Validation: at least one content item based on campaign type
     if (campaignType === 'ads' || campaignType === 'popup') {
       if (!adId?.trim()) {
-        toast.error(`Select an ${campaignType === 'popup' ? 'pop up' : 'ad'}`);
+        toast.error(
+          campaignType === 'popup'
+            ? 'Pick a pop-up for this campaign.'
+            : 'Pick an ad for this campaign.'
+        );
         return;
       }
     } else if (campaignType === 'notification') {
       if (!notificationId?.trim()) {
-        toast.error('Select a notification');
+        toast.error('Pick a notification for this campaign.');
         return;
       }
     } else if (campaignType === 'redirect') {
       if (!redirectId?.trim()) {
-        toast.error('Select a redirect');
+        toast.error('Pick a URL redirect for this campaign.');
         return;
       }
     }
@@ -225,7 +242,7 @@ export function CampaignForm({
       router.push(targetId ? `/campaigns/${targetId}` : '/campaigns');
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save');
+      toast.error(err instanceof Error ? err.message : 'Could not save this campaign. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -282,15 +299,15 @@ export function CampaignForm({
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Target list</Label>
+                      <Label>Audience list</Label>
                       {targetListSelectOptions.length === 0 ? (
                         <InfoHint>
-                          No target lists exist yet. Create one under Target lists, then refresh this page.
+                          No audience lists exist yet. Create one under Audience lists, then refresh this page.
                         </InfoHint>
                       ) : (
                         <Select value={targetListId || undefined} onValueChange={setTargetListId}>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a target list" />
+                            <SelectValue placeholder="Select an audience list" />
                           </SelectTrigger>
                           <SelectContent>
                             {targetListSelectOptions.map((l) => (
@@ -325,15 +342,14 @@ export function CampaignForm({
                       </Select>
                       {wasDeleted && isAdmin && (
                         <InfoHint>
-                          This campaign is <strong className="text-foreground">deleted</strong> and does not
-                          serve in the extension. Saving with Active or Inactive restores it (soft-delete is
-                          cleared).
+                          This campaign is <strong className="text-foreground">deleted</strong> and
+                          isn&apos;t being delivered. Saving it as Active or Inactive will restore it.
                         </InfoHint>
                       )}
                       {legacyScheduleStatus && (
                         <InfoHint>
-                          This campaign had status &quot;{campaign?.status}&quot; in the database. On save it
-                          will be stored as {status === 'active' ? 'active' : 'inactive'}.
+                          This campaign&apos;s saved status was &quot;{campaign?.status}&quot;. On
+                          save it will change to {status === 'active' ? 'Active' : 'Inactive'}.
                         </InfoHint>
                       )}
                     </div>
@@ -345,61 +361,65 @@ export function CampaignForm({
 
               <FormSection id="campaign-form-schedule-heading" title="Schedule & frequency">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Frequency</Label>
+                  <div className={scheduleFrequencyGroupClass}>
+                    <div className="min-w-0 space-y-2">
+                      <Label htmlFor="campaign-frequency-type">Frequency</Label>
                       <Select value={frequencyType} onValueChange={(v) => setFrequencyType(v as FrequencyType)}>
-                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="campaign-frequency-type" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="always">Always</SelectItem>
-                          <SelectItem value="full_day">Full day</SelectItem>
                           <SelectItem value="time_based">Time based</SelectItem>
-                          <SelectItem value="only_once">Only once</SelectItem>
                           <SelectItem value="specific_count">Specific count</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {frequencyType === 'specific_count' && (
+                      <div className="min-w-0 space-y-2">
+                        <Label htmlFor="frequencyCount">Max views per visitor</Label>
+                        <Input
+                          id="frequencyCount"
+                          type="number"
+                          min={1}
+                          inputMode="numeric"
+                          value={frequencyCount}
+                          onChange={(e) => setFrequencyCount(e.target.value)}
+                          disabled={isLoading}
+                          className="tabular-nums"
+                        />
+                      </div>
+                    )}
+
+                    {frequencyType === 'time_based' && (
+                      <div className="min-w-0">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start sm:gap-3">
+                          <div className="min-w-0 space-y-2">
+                            <Label htmlFor="timeStart">Start time</Label>
+                            <TimeSelect
+                              id="timeStart"
+                              value={timeStart}
+                              onChange={setTimeStart}
+                              disabled={isLoading}
+                            />
+                          </div>
+                          <div className="min-w-0 space-y-2">
+                            <Label htmlFor="timeEnd">End time</Label>
+                            <TimeSelect
+                              id="timeEnd"
+                              value={timeEnd}
+                              onChange={setTimeEnd}
+                              disabled={isLoading}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {frequencyType === 'specific_count' && (
-                    <div className="space-y-2 max-w-xs">
-                      <Label htmlFor="frequencyCount">Max views per visitor</Label>
-                      <Input
-                        id="frequencyCount"
-                        type="number"
-                        min={1}
-                        value={frequencyCount}
-                        onChange={(e) => setFrequencyCount(e.target.value)}
-                        disabled={isLoading}
-                      />
-                    </div>
-                  )}
-
-                  {frequencyType === 'time_based' && (
-                    <div className="grid grid-cols-2 gap-4 max-w-md">
-                      <div className="space-y-2">
-                        <Label htmlFor="timeStart">Start time</Label>
-                        <TimeSelect
-                          id="timeStart"
-                          value={timeStart}
-                          onChange={setTimeStart}
-                          disabled={isLoading}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="timeEnd">End time</Label>
-                        <TimeSelect
-                          id="timeEnd"
-                          value={timeEnd}
-                          onChange={setTimeEnd}
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+                    <div className="min-w-0 space-y-2">
                       <Label htmlFor="startDate">Start date & time</Label>
                       <DateTimePicker
                         id="startDate"
@@ -409,7 +429,7 @@ export function CampaignForm({
                         placeholder="Pick start date & time"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label htmlFor="endDate">End date & time</Label>
                       <DateTimePicker
                         id="endDate"
@@ -753,7 +773,7 @@ export function CampaignForm({
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Target list
+                  Audience list
                 </p>
                 <p className="leading-relaxed">
                   {targetListSelectOptions.find((l) => l.id === targetListId)?.name ?? '—'}

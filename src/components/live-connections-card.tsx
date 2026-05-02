@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Card,
@@ -9,6 +10,7 @@ import {
   CardContent,
 } from '@/components/ui/card';
 import { IconUsers } from '@tabler/icons-react';
+import { cn } from '@/lib/utils';
 
 // IMPORTANT: Must use /api/realtime/stream (auth-required, read-only). Do NOT use
 // /api/extension/live — that endpoint increments the connection count, so dashboard
@@ -61,34 +63,48 @@ export function LiveConnectionsCard() {
   }, [onDashboard]);
 
   return (
-    <Card className="border-border bg-card/40 py-4 shadow-none">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Live connections</CardTitle>
-        {displayCount != null && displayCount > 0 ? (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              className="size-2 rounded-full bg-red-500 motion-safe:animate-[live-blink_1.5s_ease-in-out_infinite]"
-              aria-hidden
-            />
-            Live
-          </span>
-        ) : (
-          <IconUsers className="h-4 w-4 text-muted-foreground" aria-hidden />
+    <Link
+      href="/delivery/live"
+      className={cn(
+        'block h-full rounded-xl text-inherit no-underline outline-none ring-offset-background',
+        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+      )}
+      aria-label="Open Live — sessions connected via extension"
+    >
+      <Card
+        className={cn(
+          'h-full cursor-pointer border-border bg-card/40 py-4 shadow-none',
+          'transition-colors hover:bg-accent/15 dark:hover:bg-accent/10'
         )}
-      </CardHeader>
-      <CardContent>
-        <div
-          className="text-2xl font-bold tabular-nums"
-          aria-live="polite"
-          aria-busy={displayCount === null && !displayError}
-          aria-atomic="true"
-        >
-          {displayCount === null ? (displayError ? '—' : '…') : displayCount}
-        </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Live browser connections
-        </p>
-      </CardContent>
-    </Card>
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-foreground">Live</CardTitle>
+          {displayCount != null && displayCount > 0 ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className="size-2 rounded-full bg-red-500 motion-safe:animate-[live-blink_1.5s_ease-in-out_infinite]"
+                aria-hidden
+              />
+              Live
+            </span>
+          ) : (
+            <IconUsers className="h-4 w-4 text-muted-foreground" aria-hidden />
+          )}
+        </CardHeader>
+        <CardContent>
+          <div
+            className="text-2xl font-bold tabular-nums text-foreground"
+            aria-live="polite"
+            aria-busy={displayCount === null && !displayError}
+            aria-atomic="true"
+          >
+            {displayCount === null ? (displayError ? '—' : '…') : displayCount}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Live -&gt;  ping ~1 min · stale ~5 min
+          </p>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

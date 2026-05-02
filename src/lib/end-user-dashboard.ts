@@ -3,22 +3,48 @@ import 'server-only';
 import { database as db } from '@/db';
 import { campaigns, endUsers, enduserEvents, enduserSessions, payments } from '@/db/schema';
 import type { EndUserDashboardSnapshot } from '@/lib/end-user-dashboard-types';
-import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { eventsAccessScopeForRole } from '@/lib/events-dashboard';
+import { and, desc, eq, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 
 export type { EndUserDashboardSnapshot } from '@/lib/end-user-dashboard-types';
 
+export type EndUserDashboardViewer = { id: string; role: 'user' | 'admin' };
+
+function endUserEventsWhereForViewer(
+  userIdent: string | null,
+  viewer?: EndUserDashboardViewer
+): SQL {
+  const userPart = userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`;
+  if (!viewer || viewer.role === 'admin') {
+    return userPart;
+  }
+  const scope = eventsAccessScopeForRole('user', viewer.id);
+  return scope ? and(userPart, scope)! : userPart;
+}
+
 /**
  * Lifetime aggregates for the admin extension user dashboard (events keyed by `end_users.identifier`).
+ * Non-admins only see payment/session totals and event rows scoped to campaigns they created.
  */
 export async function getEndUserDashboardSnapshot(
-  endUserUuidString: string
+  endUserUuidString: string,
+  viewer?: EndUserDashboardViewer
 ): Promise<EndUserDashboardSnapshot> {
+  const isAdmin = !viewer || viewer.role === 'admin';
+
   const [userRow] = await db
     .select({ identifier: endUsers.identifier })
     .from(endUsers)
     .where(eq(endUsers.id, endUserUuidString))
     .limit(1);
   const userIdent = userRow?.identifier ?? null;
+
+  const eventWhere = endUserEventsWhereForViewer(userIdent, viewer);
+  const eventWhereWithCountry = and(
+    eventWhere,
+    isNotNull(enduserEvents.country),
+    ne(enduserEvents.country, '')
+  )!;
 
   const [
     paymentRow,
@@ -27,26 +53,29 @@ export async function getEndUserDashboardSnapshot(
     campaignRows,
     countryRows,
   ] = await Promise.all([
-    // Aggregate + latest currency in one query using a window function.
-    db
-      .select({
-        completedCount: sql<number>`count(*)::int`,
-        completedSumAmount: sql<number>`coalesce(sum(${payments.amount}), 0)::int`,
-        lastPaymentAt: sql<Date | null>`max(${payments.paymentDate})`,
-        currency: sql<string>`(array_agg(${payments.currency} order by ${payments.paymentDate} desc))[1]`,
-      })
-      .from(payments)
-      .where(and(eq(payments.endUserId, endUserUuidString), eq(payments.status, 'completed')))
-      .then((rows) => rows[0]),
+    isAdmin
+      ? db
+          .select({
+            completedCount: sql<number>`count(*)::int`,
+            completedSumAmount: sql<number>`coalesce(sum(${payments.amount}), 0)::int`,
+            lastPaymentAt: sql<Date | null>`max(${payments.paymentDate})`,
+            currency: sql<string>`(array_agg(${payments.currency} order by ${payments.paymentDate} desc))[1]`,
+          })
+          .from(payments)
+          .where(and(eq(payments.endUserId, endUserUuidString), eq(payments.status, 'completed')))
+          .then((rows) => rows[0])
+      : Promise.resolve(null),
 
-    db
-      .select({
-        total: sql<number>`count(*)::int`,
-        active: sql<number>`coalesce(sum(case when ${enduserSessions.expiresAt} > now() then 1 else 0 end), 0)::int`,
-      })
-      .from(enduserSessions)
-      .where(eq(enduserSessions.endUserId, endUserUuidString))
-      .then((rows) => rows[0]),
+    isAdmin
+      ? db
+          .select({
+            total: sql<number>`count(*)::int`,
+            active: sql<number>`coalesce(sum(case when ${enduserSessions.expiresAt} > now() then 1 else 0 end), 0)::int`,
+          })
+          .from(enduserSessions)
+          .where(eq(enduserSessions.endUserId, endUserUuidString))
+          .then((rows) => rows[0])
+      : Promise.resolve(null),
 
     db
       .select({
@@ -57,7 +86,7 @@ export async function getEndUserDashboardSnapshot(
         distinctCampaignsWithEvents: sql<number>`count(distinct ${enduserEvents.campaignId})::int`,
       })
       .from(enduserEvents)
-      .where(userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`)
+      .where(eventWhere)
       .then((rows) => rows[0]),
 
     db
@@ -68,7 +97,7 @@ export async function getEndUserDashboardSnapshot(
       })
       .from(enduserEvents)
       .innerJoin(campaigns, eq(campaigns.id, enduserEvents.campaignId))
-      .where(userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`)
+      .where(eventWhere)
       .groupBy(enduserEvents.campaignId, campaigns.name)
       .orderBy(desc(sql`count(*)`))
       .limit(20),
@@ -79,13 +108,7 @@ export async function getEndUserDashboardSnapshot(
         eventCount: sql<number>`count(*)::int`,
       })
       .from(enduserEvents)
-      .where(
-        and(
-          userIdent ? eq(enduserEvents.userIdentifier, userIdent) : sql`1 = 0`,
-          isNotNull(enduserEvents.country),
-          ne(enduserEvents.country, ''),
-        ),
-      )
+      .where(eventWhereWithCountry)
       .groupBy(enduserEvents.country)
       .orderBy(desc(sql`count(*)`)),
   ]);

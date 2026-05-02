@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
 import { database as db } from '@/db';
 import { endUsers, payments } from '@/db/schema';
-import { getSessionWithRole } from '@/lib/dal';
+import { requireApiSession } from '@/lib/dal';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +22,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     const [user] = await db.select({ id: endUsers.id }).from(endUsers).where(eq(endUsers.id, id)).limit(1);
@@ -40,20 +39,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: rows });
   } catch (error) {
-    console.error('[api/end-users/[id]/payments GET]', error);
+    logger.error('[api/end-users/[id]/payments GET] failed', error);
     return NextResponse.json({ error: 'Failed to load payments' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const sessionWithRole = await getSessionWithRole();
-    if (!sessionWithRole) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (sessionWithRole.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requireApiSession({ role: 'admin' });
+    if ('response' in gate) return gate.response;
 
     const { id } = await context.params;
     const [user] = await db.select({ id: endUsers.id }).from(endUsers).where(eq(endUsers.id, id)).limit(1);
@@ -77,32 +71,38 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const p = parsed.data;
-    const [row] = await db
-      .insert(payments)
-      .values({
-        endUserId: id,
-        amount: p.amount,
-        currency: p.currency.toUpperCase(),
-        status: p.status,
-        description: p.description ?? null,
-        paymentDate: p.paymentDate ? new Date(p.paymentDate) : new Date(),
-      })
-      .returning();
 
-    if (p.endDate) {
-      await db
-        .update(endUsers)
-        .set({
-          endDate: new Date(p.endDate),
-          updatedAt: new Date(),
-          ...(p.status === 'completed' && { plan: 'paid' as const }),
+    // Atomic: payment insert + optional end-user endDate/plan update land together or not at all.
+    const row = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(payments)
+        .values({
+          endUserId: id,
+          amount: p.amount,
+          currency: p.currency.toUpperCase(),
+          status: p.status,
+          description: p.description ?? null,
+          paymentDate: p.paymentDate ? new Date(p.paymentDate) : new Date(),
         })
-        .where(eq(endUsers.id, id));
-    }
+        .returning();
+
+      if (p.endDate) {
+        await tx
+          .update(endUsers)
+          .set({
+            endDate: new Date(p.endDate),
+            updatedAt: new Date(),
+            ...(p.status === 'completed' && { plan: 'paid' as const }),
+          })
+          .where(eq(endUsers.id, id));
+      }
+
+      return inserted;
+    });
 
     return NextResponse.json({ payment: row }, { status: 201 });
   } catch (error) {
-    console.error('[api/end-users/[id]/payments POST]', error);
+    logger.error('[api/end-users/[id]/payments POST] failed', error);
     return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 });
   }
 }

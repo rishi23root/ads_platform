@@ -139,8 +139,8 @@ export function EventsFilters({
           Filters
         </CardTitle>
         <CardDescription>
-          Narrow the event log and exported CSV; Summary uses the same filters when you open it.
-          Clearing filters resets the URL.
+          Narrow the activity list and CSV export. The Summary panel uses the same filters.
+          Clearing filters also clears the link in the address bar.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -198,7 +198,7 @@ export function EventsFilters({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="events-country">Country (ISO-2)</Label>
+              <Label htmlFor="events-country">Country code</Label>
               <Input
                 id="events-country"
                 name="country"
@@ -212,12 +212,12 @@ export function EventsFilters({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="events-enduser">End-user ID contains</Label>
+              <Label htmlFor="events-enduser">App user ID contains</Label>
               <Input
                 id="events-enduser"
                 name="endUserId"
                 type="text"
-                placeholder="Partial user id (UUID)"
+                placeholder="Any part of the user ID"
                 value={endUserIdValue}
                 onChange={(e) => setEndUserIdValue(e.target.value)}
                 className="w-full text-sm font-mono"
@@ -238,7 +238,7 @@ export function EventsFilters({
               />
             </div>
             <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-              <Label htmlFor="events-campaign">Campaign ID (UUID)</Label>
+              <Label htmlFor="events-campaign">Campaign ID</Label>
               <Input
                 id="events-campaign"
                 name="campaignId"

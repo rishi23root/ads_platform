@@ -2,6 +2,7 @@ import { database as db } from '@/db';
 import { campaigns } from '@/db/schema';
 import { and, arrayContains, count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
+import { publishCampaignUpdated } from '@/lib/redis';
 
 function rowsToMap(
   rows: { id: string | null; linkedCampaignCount: number | bigint }[]
@@ -153,4 +154,25 @@ export async function getLinkedCampaignCountForPlatformId(platformId: string): P
     .from(campaigns)
     .where(and(arrayContains(campaigns.platformIds, [platformId]), campaignRowNotSoftDeleted));
   return Number(row?.c ?? 0);
+}
+
+/**
+ * Find a campaign linked to the given redirect and publish `campaign_updated`
+ * so every SSE-connected extension rebuilds its cached state.
+ *
+ * The SSE `campaign_updated` handler always rebuilds the full payload,
+ * so a single publish covers all affected campaigns.
+ */
+export async function publishCampaignUpdatedForLinkedRedirect(
+  redirectId: string
+): Promise<void> {
+  const rows = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(and(eq(campaigns.redirectId, redirectId), campaignRowNotSoftDeleted))
+    .limit(1);
+
+  if (rows.length > 0) {
+    await publishCampaignUpdated(rows[0].id);
+  }
 }

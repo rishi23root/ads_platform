@@ -5,6 +5,7 @@ import { database as db } from '@/db';
 import { campaigns as campaignsTable, targetLists } from '@/db/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { campaignRowNotSoftDeleted } from '@/lib/campaign-soft-delete-sql';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { IconPlus } from '@tabler/icons-react';
 import { CampaignsListTable } from '@/components/campaigns-list-table';
@@ -69,23 +70,25 @@ export default async function CampaignsPage() {
   const campaigns = await getCampaignsWithDetails(undefined, isAdmin);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Campaigns</h1>
-          <p className="text-muted-foreground">
-            {isAdmin ? 'Create and manage campaigns' : 'View campaigns'}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button asChild>
-            <Link href="/campaigns/new">
-              <IconPlus className="mr-2 h-4 w-4" />
-              New Campaign
-            </Link>
-          </Button>
-        )}
-      </div>
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Campaigns"
+        description={
+          isAdmin
+            ? 'Choose what to show, who sees it, and when.'
+            : 'Browse campaigns running on your extension.'
+        }
+        actions={
+          isAdmin ? (
+            <Button asChild>
+              <Link href="/campaigns/new">
+                <IconPlus className="mr-2 h-4 w-4" />
+                New campaign
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
       <CampaignsListTable campaigns={campaigns} isAdmin={isAdmin} />
     </div>

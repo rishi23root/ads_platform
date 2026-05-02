@@ -23,6 +23,7 @@ import {
   computeTrialEndDateFromStart,
   formatExtensionDaysLeftCell,
 } from '@/lib/extension-user-subscription';
+import { DataTableSurface } from '@/components/ui/data-table-surface';
 import { cn } from '@/lib/utils';
 import { IconFilter, IconUserMinus, IconUserPlus } from '@tabler/icons-react';
 import { toast } from 'sonner';
@@ -182,28 +183,6 @@ export function TargetListMembersTable({
     }
   };
 
-  const runBulkDelete = async () => {
-    if (selectedArr.length === 0) return;
-    setPending(true);
-    try {
-      const res = await fetch('/api/end-users/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds: selectedArr }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Delete failed');
-      const n = typeof data.deletedCount === 'number' ? data.deletedCount : selectedArr.length;
-      toast.success(`Deleted ${n} user(s)`);
-      setSelectedIds(new Set());
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Delete failed');
-    } finally {
-      setPending(false);
-    }
-  };
-
   const colCount = selection ? 12 : 11;
 
   const showBulk = isAdmin && selectedArr.length > 0;
@@ -212,7 +191,7 @@ export function TargetListMembersTable({
     <div className="space-y-3">
       {showBulk ? (
         <div
-          className="motion-safe:transition-opacity flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm"
+          className="motion-safe:transition-opacity flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
           role="region"
           aria-label="Bulk actions for selected members"
         >
@@ -241,16 +220,6 @@ export function TargetListMembersTable({
                 {pending ? '…' : 'Remove from list'}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-destructive hover:text-destructive"
-              disabled={pending}
-              onClick={() => void runBulkDelete()}
-            >
-              Delete users
-            </Button>
             <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setSelectedIds(new Set())}>
               Clear
             </Button>
@@ -258,7 +227,7 @@ export function TargetListMembersTable({
         </div>
       ) : null}
 
-      <div className="w-full overflow-x-auto rounded-md border">
+      <DataTableSurface variant="delivery" className="w-full">
         <Table className="w-full">
           <TableHeader>
             <TableRow>
@@ -273,18 +242,34 @@ export function TargetListMembersTable({
                   </span>
                 </TableHead>
               ) : null}
-              <TableHead className={cn(cell, 'text-left font-medium')}>User</TableHead>
-              <TableHead className={cn(cell, 'font-medium')}>Plan</TableHead>
-              <TableHead className={cn(cell, 'font-medium')}>Source</TableHead>
-              <TableHead className={cn(cell, 'font-medium')}>Banned</TableHead>
-              <TableHead className={cn(cell, tightCol, 'font-medium')}>Country</TableHead>
-              <TableHead className={cn(cell, tightCol, 'text-right font-medium tabular-nums')}>
+              <TableHead className={cn(cell, 'text-left text-muted-foreground text-xs font-normal')}>
+                User
+              </TableHead>
+              <TableHead className={cn(cell, 'text-muted-foreground text-xs font-normal')}>Plan</TableHead>
+              <TableHead className={cn(cell, 'text-muted-foreground text-xs font-normal')}>Source</TableHead>
+              <TableHead className={cn(cell, 'text-muted-foreground text-xs font-normal')}>Banned</TableHead>
+              <TableHead className={cn(cell, tightCol, 'text-muted-foreground text-xs font-normal')}>
+                Country
+              </TableHead>
+              <TableHead
+                className={cn(cell, tightCol, 'text-right text-muted-foreground text-xs font-normal tabular-nums')}
+              >
                 Impressions
               </TableHead>
-              <TableHead className={cn(cell, 'text-left font-medium')}>Start date</TableHead>
-              <TableHead className={cn(cell, 'text-left font-medium')}>End date</TableHead>
-              <TableHead className={cn(cell, 'text-left font-medium')}>Last session</TableHead>
-              <TableHead className={cn(cell, 'text-right font-medium tabular-nums')}>Days left</TableHead>
+              <TableHead className={cn(cell, 'text-left text-muted-foreground text-xs font-normal')}>
+                Start date
+              </TableHead>
+              <TableHead className={cn(cell, 'text-left text-muted-foreground text-xs font-normal')}>
+                End date
+              </TableHead>
+              <TableHead className={cn(cell, 'text-left text-muted-foreground text-xs font-normal')}>
+                Last session
+              </TableHead>
+              <TableHead
+                className={cn(cell, 'text-right text-muted-foreground text-xs font-normal tabular-nums')}
+              >
+                Days left
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -301,7 +286,7 @@ export function TargetListMembersTable({
                     </span>
                   ) : source === 'explicit' ? (
                     <span>
-                      No explicit members. Add users from the Users page using &quot;Add to target list&quot;.
+                      No explicit members. Add users from the Users page using &quot;Add to audience list&quot;.
                     </span>
                   ) : source === 'filter' ? (
                     <span>No users match the filter. Try widening the filter on Edit.</span>
@@ -393,7 +378,7 @@ export function TargetListMembersTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableSurface>
     </div>
   );
 }

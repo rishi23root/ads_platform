@@ -21,6 +21,20 @@ export function campaignAudienceLabel(audience: string): string {
   return 'All users';
 }
 
+/** DB/API time-of-day is often `HH:mm:ss`; show `HH:mm` in UI. */
+function timeOfDayDisplay(value: string): string {
+  const t = value.trim();
+  if (!t) return t;
+  const parts = t.split(':');
+  if (parts.length < 2) return t;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return t;
+  const hh = Math.min(23, Math.max(0, h));
+  const mm = Math.min(59, Math.max(0, m));
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
 /** Use from campaign form local state (strings from inputs). */
 export function campaignFrequencyFromFormState(
   frequencyType: string,
@@ -45,9 +59,11 @@ export function campaignFrequencyLabel(c: Pick<
     case 'always':
       return 'Always';
     case 'full_day':
-      return 'Full day';
+      // Legacy DB value; same delivery rules as always — show unified label
+      return 'Always';
     case 'only_once':
-      return 'Once per visitor';
+      // Legacy; same cap as specific_count 1
+      return 'Up to 1 time per visitor';
     case 'specific_count': {
       const n = c.frequencyCount;
       return typeof n === 'number' && n > 0
@@ -55,8 +71,10 @@ export function campaignFrequencyLabel(c: Pick<
         : 'Specific count (set max views)';
     }
     case 'time_based': {
-      const a = c.timeStart?.trim() || '—';
-      const b = c.timeEnd?.trim() || '—';
+      const rawA = c.timeStart?.trim() ?? '';
+      const rawB = c.timeEnd?.trim() ?? '';
+      const a = rawA ? timeOfDayDisplay(rawA) : '—';
+      const b = rawB ? timeOfDayDisplay(rawB) : '—';
       return `Between ${a} and ${b}`;
     }
     default:
@@ -141,6 +159,13 @@ export function campaignScheduleTableTextColorClass(
   return isCampaignActiveButScheduleEnded(status, endDate, now)
     ? SCHEDULE_ACTIVE_PAST_END_TEXT_CLASS
     : 'text-muted-foreground';
+}
+
+/** Human label for list/detail when showing raw `frequency_type` (legacy full_day / only_once). */
+export function campaignFrequencyTypeDisplayName(frequencyType: string): string {
+  if (frequencyType === 'full_day') return 'always';
+  if (frequencyType === 'only_once') return 'specific count';
+  return frequencyType.replace(/_/g, ' ');
 }
 
 export function campaignStatusBadgeVariant(

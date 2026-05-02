@@ -189,7 +189,7 @@ async function getOrCreateSharedRedirect(): Promise<{ id: string; destinationUrl
   return { id: row!.id, destinationUrl: row!.destinationUrl };
 }
 
-integration('extension ad-block event typing + frequency cap', () => {
+integration('extension serve/events event typing + frequency cap', () => {
   it('caps campaign delivery at 10 and persists typed event rows', async () => {
     const email = EXTENSION_SHARED_USER_EMAILS[0];
 
